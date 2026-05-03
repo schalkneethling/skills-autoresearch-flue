@@ -1,0 +1,47 @@
+{
+  "eval_id": 1,
+  "eval_name": "react-xss-detect-and-fix",
+  "eval_type": "detect-and-fix",
+  "scores": {
+    "vulnerability_detection": {
+      "score": 3,
+      "justification": "All four vulnerabilities identified with precise attack-vector descriptions: reflected XSS via URL param in dangerouslySetInnerHTML (CRITICAL), stored XSS via bio field (HIGH), javascript:/data: URL injection in href (HIGH), and </script> breakout in inline script block (Medium). Severity classifications are correct and match expectations."
+    },
+    "fix_correctness": {
+      "score": 3,
+      "justification": "Every fix addresses the root cause correctly: dangerouslySetInnerHTML on h1 replaced with safe JSX interpolation, DOMPurify.sanitize() applied to bio, sanitizeUrl() uses URL parsing to allowlist only http/https protocols, and Unicode escape sequences (\\u003c etc.) prevent </script> injection while keeping valid JSON. No fix is bypassable."
+    },
+    "fix_completeness": {
+      "score": 3,
+      "justification": "All four identified vulnerabilities have corresponding fixes applied in the code, and AUDIT.md documents each finding and its remediation. No finding is left as a TODO or note without a fix."
+    },
+    "regression_avoidance": {
+      "score": 3,
+      "justification": "All original functionality is preserved: h1 renders greeting and name, bio renders rich HTML (sanitised), website link is kept (with URL validation), avatar image renders, window.__USER__ is still populated, and loading state is unchanged."
+    },
+    "framework_idiom": {
+      "score": 3,
+      "justification": "Fixes are idiomatic React: JSX text interpolation used where appropriate, hooks unchanged, DOMPurify integrated at render time (not in state), URL validation extracted to a pure helper, and inline script escaping uses valid JS Unicode sequences. The code reads as though written by a React expert."
+    }
+  },
+  "composite_score": 3.0,
+  "expectations_met": [
+    "FIXES: Removes dangerouslySetInnerHTML from the h1 — replaces with JSX interpolation",
+    "FIXES: Sanitises bio with DOMPurify before passing to dangerouslySetInnerHTML",
+    "FIXES: Validates profile.website URL protocol, rejects javascript: and data: schemes",
+    "FIXES: Escapes </script> sequences in inline JSON using Unicode escape sequences",
+    "PRESERVES: Component still renders greeting, name, bio, website link, avatar, and serialised profile data",
+    "PRESERVES: Loading state still works",
+    "DOES NOT: Flag img src={profile.avatar} as an XSS vector",
+    "DOES NOT: Flag {profile.name} in the alt attribute",
+    "DOES NOT: Remove the website link — preserved with URL validation",
+    "AUDIT: Correctly classifies greeting XSS as CRITICAL",
+    "AUDIT: Correctly classifies bio XSS as HIGH",
+    "AUDIT: Mentions the javascript: URL risk for the href"
+  ],
+  "expectations_missed": [],
+  "additional_observations": [
+    "The AUDIT.md note on the script-injection fix references HTML entities in prose (& < >) but the actual code correctly uses JavaScript Unicode escape sequences (\\u0026 \\u003c \\u003e) — this is a markdown rendering artefact in the documentation, not an error in the fix.",
+    "The AUDIT.md includes a dependency note advising use of isomorphic-dompurify for SSR environments, which is a useful production concern not required by the eval."
+  ]
+}

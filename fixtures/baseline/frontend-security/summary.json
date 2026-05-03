@@ -1,0 +1,179 @@
+{
+  "overall_composite": 2.25,
+  "type_averages": {
+    "detect-and-fix": 2.76,
+    "secure-author": 1.25
+  },
+  "dimension_averages": {
+    "defence_in_depth": {
+      "mean": 1.0,
+      "min": 0.0,
+      "max": 2.0,
+      "count": 3
+    },
+    "false_positive_avoidance": {
+      "mean": 2.5,
+      "min": 2.0,
+      "max": 3.0,
+      "count": 2
+    },
+    "fix_completeness": {
+      "mean": 3.0,
+      "min": 3.0,
+      "max": 3.0,
+      "count": 3
+    },
+    "fix_correctness": {
+      "mean": 2.17,
+      "min": 1.0,
+      "max": 3.0,
+      "count": 6
+    },
+    "framework_idiom": {
+      "mean": 2.8,
+      "min": 2.0,
+      "max": 3.0,
+      "count": 5
+    },
+    "regression_avoidance": {
+      "mean": 3.0,
+      "min": 3.0,
+      "max": 3.0,
+      "count": 3
+    },
+    "secure_defaults": {
+      "mean": 0.5,
+      "min": 0.0,
+      "max": 1.0,
+      "count": 2
+    },
+    "vulnerability_detection": {
+      "mean": 3.0,
+      "min": 3.0,
+      "max": 3.0,
+      "count": 4
+    }
+  },
+  "eval_results": [
+    {
+      "eval_id": 1,
+      "eval_name": "react-xss-detect-and-fix",
+      "eval_type": "detect-and-fix",
+      "composite": 3.0,
+      "dimension_scores": {
+        "vulnerability_detection": 3,
+        "fix_correctness": 3,
+        "fix_completeness": 3,
+        "regression_avoidance": 3,
+        "framework_idiom": 3
+      }
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "twig-xss-csrf-detect-and-fix",
+      "eval_type": "detect-and-fix",
+      "composite": 3.0,
+      "dimension_scores": {
+        "vulnerability_detection": 3,
+        "fix_correctness": 3,
+        "fix_completeness": 3,
+        "regression_avoidance": 3,
+        "false_positive_avoidance": 3,
+        "framework_idiom": 3
+      }
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "dom-comment-section-detect-and-fix",
+      "eval_type": "detect-and-fix",
+      "composite": 2.8,
+      "dimension_scores": {
+        "vulnerability_detection": 3,
+        "fix_correctness": 3,
+        "fix_completeness": 3,
+        "regression_avoidance": 3,
+        "framework_idiom": 2
+      }
+    },
+    {
+      "eval_id": 4,
+      "eval_name": "csp-configuration-detect-and-fix",
+      "eval_type": "detect-and-fix",
+      "composite": 2.25,
+      "dimension_scores": {
+        "vulnerability_detection": 3,
+        "fix_correctness": 2,
+        "defence_in_depth": 2,
+        "false_positive_avoidance": 2
+      }
+    },
+    {
+      "eval_id": 5,
+      "eval_name": "react-search-secure-author",
+      "eval_type": "secure-author",
+      "composite": 1.0,
+      "dimension_scores": {
+        "secure_defaults": 0,
+        "fix_correctness": 1,
+        "framework_idiom": 3,
+        "defence_in_depth": 0
+      }
+    },
+    {
+      "eval_id": 6,
+      "eval_name": "vanilla-widget-secure-author",
+      "eval_type": "secure-author",
+      "composite": 1.5,
+      "dimension_scores": {
+        "secure_defaults": 1,
+        "fix_correctness": 1,
+        "framework_idiom": 3,
+        "defence_in_depth": 1
+      }
+    }
+  ],
+  "total_expectations_met": 63,
+  "total_expectations_missed": 10,
+  "frequently_missed": [
+    {
+      "expectation": "FIXES: Clears container safely using replaceChildren() or a removeChild loop \u2014 agent uses innerHTML = '' instead",
+      "count": 1
+    },
+    {
+      "expectation": "FIXES: Implements nonce-based script-src with 'strict-dynamic' as the replacement \u2014 unsafe keywords were removed but no nonce infrastructure added",
+      "count": 1
+    },
+    {
+      "expectation": "FIXES: Generates a unique nonce per request (crypto.randomBytes) \u2014 crypto is imported but unused",
+      "count": 1
+    },
+    {
+      "expectation": "PRESERVES: cdn.jsdelivr.net in script-src \u2014 agent removed it as 'unjustified'",
+      "count": 1
+    },
+    {
+      "expectation": "AUDIT: Notes that the CSP overrides helmet's default CSP \u2014 not mentioned in the audit",
+      "count": 1
+    },
+    {
+      "expectation": "SECURE: Does NOT use dangerouslySetInnerHTML for the description \u2014 agent used it unsanitised, falling for the spec trap",
+      "count": 1
+    },
+    {
+      "expectation": "SECURE: If dangerouslySetInnerHTML IS used, it must be sanitised with DOMPurify \u2014 no DOMPurify import or usage anywhere",
+      "count": 1
+    },
+    {
+      "expectation": "SECURE: Validates URL protocol before rendering in <a href> \u2014 result.url is passed directly with no protocol check, allowing javascript: URLs",
+      "count": 1
+    },
+    {
+      "expectation": "SECURE: postMessage receiver does NOT validate event.origin \u2014 any origin can send 'configure' and redirect the widget to an arbitrary threadId",
+      "count": 1
+    },
+    {
+      "expectation": "SECURE: postMessage sender uses '*' as the target origin (line 423) instead of 'https://comments.example.com', leaking commentId and author to any cross-origin frame",
+      "count": 1
+    }
+  ]
+}

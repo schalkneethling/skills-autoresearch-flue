@@ -1,0 +1,22 @@
+{# templates/contact.html.twig #}
+{% extends 'base.html.twig' %}
+
+{% block content %}
+<form action="/contact" method="POST">
+  <label for="name">Name</label>
+  <input type="text" id="name" name="name" value="{{ app.request.get('name') }}">
+
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email" value="{{ app.request.get('email') }}">
+
+  <label for="message">Message</label>
+  <textarea id="message" name="message">{{ app.request.get('message') }}</textarea>
+
+  <div class="preview">
+    <h3>Preview:</h3>
+    {{ app.request.get('message')|raw }}
+  </div>
+
+  <button type="submit">Send</button>
+</form>
+{% endblock %}

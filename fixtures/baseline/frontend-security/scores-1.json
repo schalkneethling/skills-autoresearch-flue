@@ -1,0 +1,48 @@
+{
+  "eval_id": 2,
+  "eval_name": "twig-xss-csrf-detect-and-fix",
+  "eval_type": "detect-and-fix",
+  "scores": {
+    "vulnerability_detection": {
+      "score": 3,
+      "justification": "Both vulnerabilities identified precisely: XSS via the |raw filter (critical) and missing CSRF token (high). The audit correctly names the attack vector — attacker-controlled URL/form submission injecting HTML via the unescaped preview — and shows clear understanding of why |raw is dangerous while Twig's default auto-escaping is not."
+    },
+    "fix_correctness": {
+      "score": 3,
+      "justification": "XSS fix removes |raw and relies on Twig's built-in auto-escaping — addresses the root cause, not just the symptom. CSRF fix uses Symfony's csrf_token() function and correctly advises server-side validation with isCsrfTokenValid(), which is the complete, correct fix. Both fixes would pass a security review."
+    },
+    "fix_completeness": {
+      "score": 3,
+      "justification": "Every identified vulnerability has a corresponding fix in the output file: |raw removed on line 19, CSRF hidden field added on line 6. AUDIT.md documents both changes with before/after context."
+    },
+    "regression_avoidance": {
+      "score": 3,
+      "justification": "All existing functionality preserved: the preview div still renders the message (now escaped), form pre-population from query params is intact for all three fields, and the form structure, labels, action, and method are unchanged."
+    },
+    "false_positive_avoidance": {
+      "score": 3,
+      "justification": "No false positives. The three auto-escaped expressions — name in input value, email in input value, message in textarea — are all explicitly called out as safe in AUDIT.md. The agent correctly understands that Twig auto-escapes by default and only |raw is the actual danger."
+    },
+    "framework_idiom": {
+      "score": 3,
+      "justification": "Fixes are idiomatic Symfony/Twig throughout: uses Twig's native auto-escaping (simply dropping |raw rather than adding a manual sanitiser), uses Symfony's built-in csrf_token() Twig function, and references the correct controller-side validation API. An expert in this stack would write it exactly this way."
+    }
+  },
+  "composite_score": 3.0,
+  "expectations_met": [
+    "FIXES: Removes the |raw filter from the preview — output line 19 uses auto-escaped {{ app.request.get('message') }}",
+    "FIXES: Adds CSRF token to the form — <input type=\"hidden\" name=\"_token\" value=\"{{ csrf_token('contact') }}\"> present on line 6",
+    "PRESERVES: Message preview feature still works (now shows escaped text)",
+    "PRESERVES: Form pre-population from query params still works for name, email, and message",
+    "PRESERVES: Form structure and labels remain intact",
+    "DOES NOT: Flag {{ app.request.get('name') }} as XSS — AUDIT.md explicitly marks it safe",
+    "DOES NOT: Flag {{ app.request.get('email') }} as XSS — AUDIT.md explicitly marks it safe",
+    "DOES NOT: Flag {{ app.request.get('message') }} in the textarea as XSS — AUDIT.md explicitly marks it safe",
+    "AUDIT: Correctly identifies |raw as the XSS vector, not the auto-escaped expressions",
+    "AUDIT: Explains that Twig auto-escapes by default, making |raw (and autoescape false) the only dangerous patterns"
+  ],
+  "expectations_missed": [],
+  "additional_observations": [
+    "The audit also advises the controller-side CSRF validation call (isCsrfTokenValid), which is necessary for the CSRF fix to be complete end-to-end — a good proactive detail."
+  ]
+}

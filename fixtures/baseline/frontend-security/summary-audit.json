@@ -1,0 +1,99 @@
+{
+  "eval_type": "detect-and-fix",
+  "overall_composite": 2.8,
+  "by_dimension": {
+    "vulnerability_detection": 3.0,
+    "fix_correctness": 2.75,
+    "fix_completeness": 3.0,
+    "regression_avoidance": 3.0,
+    "framework_idiom": 2.67,
+    "false_positive_avoidance": 2.5,
+    "defence_in_depth": 2.0
+  },
+  "by_eval": [
+    {
+      "eval_id": 1,
+      "eval_name": "react-xss-detect-and-fix",
+      "composite": 3.0,
+      "expectations_met": [
+        "FIXES: Removes dangerouslySetInnerHTML from the h1 \u2014 replaces with JSX interpolation",
+        "FIXES: Sanitises bio with DOMPurify before passing to dangerouslySetInnerHTML",
+        "FIXES: Validates profile.website URL protocol, rejects javascript: and data: schemes",
+        "FIXES: Escapes </script> sequences in inline JSON using Unicode escape sequences",
+        "PRESERVES: Component still renders greeting, name, bio, website link, avatar, and serialised profile data",
+        "PRESERVES: Loading state still works",
+        "DOES NOT: Flag img src={profile.avatar} as an XSS vector",
+        "DOES NOT: Flag {profile.name} in the alt attribute",
+        "DOES NOT: Remove the website link \u2014 preserved with URL validation",
+        "AUDIT: Correctly classifies greeting XSS as CRITICAL",
+        "AUDIT: Correctly classifies bio XSS as HIGH",
+        "AUDIT: Mentions the javascript: URL risk for the href"
+      ],
+      "expectations_missed": []
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "twig-xss-csrf-detect-and-fix",
+      "composite": 3.0,
+      "expectations_met": [
+        "FIXES: Removes the |raw filter from the preview \u2014 output line 19 uses auto-escaped {{ app.request.get('message') }}",
+        "FIXES: Adds CSRF token to the form \u2014 <input type=\"hidden\" name=\"_token\" value=\"{{ csrf_token('contact') }}\"> present on line 6",
+        "PRESERVES: Message preview feature still works (now shows escaped text)",
+        "PRESERVES: Form pre-population from query params still works for name, email, and message",
+        "PRESERVES: Form structure and labels remain intact",
+        "DOES NOT: Flag {{ app.request.get('name') }} as XSS \u2014 AUDIT.md explicitly marks it safe",
+        "DOES NOT: Flag {{ app.request.get('email') }} as XSS \u2014 AUDIT.md explicitly marks it safe",
+        "DOES NOT: Flag {{ app.request.get('message') }} in the textarea as XSS \u2014 AUDIT.md explicitly marks it safe",
+        "AUDIT: Correctly identifies |raw as the XSS vector, not the auto-escaped expressions",
+        "AUDIT: Explains that Twig auto-escapes by default, making |raw (and autoescape false) the only dangerous patterns"
+      ],
+      "expectations_missed": []
+    },
+    {
+      "eval_id": 3,
+      "eval_name": "dom-comment-section-detect-and-fix",
+      "composite": 2.8,
+      "expectations_met": [
+        "FIXES: Replaces innerHTML concatenation in render() with DOM APIs (createElement, textContent, appendChild)",
+        "FIXES: Replaces innerHTML in search() with DOM APIs / textContent",
+        "FIXES: Replaces inline onclick handler with addEventListener",
+        "PRESERVES: All comment fields (author, date, body) still render",
+        "PRESERVES: Delete button still works with addEventListener",
+        "PRESERVES: Search still filters and shows result count",
+        "PRESERVES: Class structure and API interface remain the same",
+        "DOES NOT: Suggest DOMPurify as the primary fix \u2014 DOM APIs used throughout",
+        "DOES NOT: Flag the fetch GET request as a vulnerability",
+        "AUDIT: Identifies render() innerHTML as stored XSS (server data rendered as HTML)",
+        "AUDIT: Identifies search() innerHTML as reflected XSS (user query rendered as HTML)",
+        "AUDIT: Identifies inline onclick as a JavaScript injection vector"
+      ],
+      "expectations_missed": [
+        "FIXES: Clears container safely using replaceChildren() or a removeChild loop \u2014 agent uses innerHTML = '' instead"
+      ]
+    },
+    {
+      "eval_id": 4,
+      "eval_name": "csp-configuration-detect-and-fix",
+      "composite": 2.25,
+      "expectations_met": [
+        "FIXES: Removes 'unsafe-inline' from script-src",
+        "FIXES: Removes 'unsafe-eval' from script-src",
+        "FIXES: Restricts frame-src from * to 'none'",
+        "FIXES: Restricts base-uri from * to 'self'",
+        "FIXES: Restricts form-action from * to 'self'",
+        "FIXES: Updates font-src to include fonts.gstatic.com",
+        "FIXES: Narrows img-src from * to 'self' https://images.example.com",
+        "PRESERVES: helmet() usage \u2014 it remains untouched",
+        "DOES NOT: Remove the helmet() call or suggest it conflicts with the manual CSP",
+        "AUDIT: Explains why unsafe-inline defeats CSP's XSS protection",
+        "AUDIT: Explains what base-uri * allows (base tag injection)"
+      ],
+      "expectations_missed": [
+        "FIXES: Implements nonce-based script-src with 'strict-dynamic' as the replacement \u2014 unsafe keywords were removed but no nonce infrastructure added",
+        "FIXES: Generates a unique nonce per request (crypto.randomBytes) \u2014 crypto is imported but unused",
+        "PRESERVES: cdn.jsdelivr.net in script-src \u2014 agent removed it as 'unjustified'",
+        "AUDIT: Notes that the CSP overrides helmet's default CSP \u2014 not mentioned in the audit"
+      ]
+    }
+  ]
+}

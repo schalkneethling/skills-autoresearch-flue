@@ -1,0 +1,48 @@
+{
+  "eval_id": 4,
+  "eval_name": "csp-configuration-detect-and-fix",
+  "eval_type": "detect-and-fix",
+  "scores": {
+    "vulnerability_detection": {
+      "score": 3,
+      "justification": "All critical CSP misconfigurations identified with precise attack-vector explanations: unsafe-inline/unsafe-eval defeating XSS protection, frame-src * enabling clickjacking, base-uri * enabling base-tag injection, form-action * enabling phishing via form hijacking, and img-src * enabling cross-origin data exfiltration. The agent also surfaced the missing font-src gstatic.com issue and missing object-src. No critical findings were missed."
+    },
+    "fix_correctness": {
+      "score": 2,
+      "justification": "Most fixes are correct and address root causes (img-src, font-src, frame-src, base-uri, form-action, object-src, upgrade-insecure-requests). However, the key expectation requires replacing unsafe-inline/eval with a nonce-based script-src using 'strict-dynamic', which was not implemented — the fix simply removes the unsafe keywords without adding the stronger nonce-based defense. The crypto import remains unused. Additionally, cdn.jsdelivr.net was removed against the preservation expectation."
+    },
+    "defence_in_depth": {
+      "score": 2,
+      "justification": "Multiple defensive layers applied: tightened img-src, frame-src, base-uri, form-action, corrected font-src, added object-src 'none', and added upgrade-insecure-requests. However, the nonce/'strict-dynamic' approach for script-src — which would provide the strongest script injection defense — was not implemented, leaving a single allowlist-based defense for scripts rather than the layered nonce + strict-dynamic pattern."
+    },
+    "false_positive_avoidance": {
+      "score": 2,
+      "justification": "No safe patterns were incorrectly flagged as vulnerabilities. style-src 'unsafe-inline' was correctly retained with explanation, and helmet() was correctly preserved. However, cdn.jsdelivr.net was flagged as unjustified and removed, contradicting the key expectation to preserve it as potentially needed for third-party scripts — this constitutes one borderline false positive."
+    }
+  },
+  "composite_score": 2.25,
+  "expectations_met": [
+    "FIXES: Removes 'unsafe-inline' from script-src",
+    "FIXES: Removes 'unsafe-eval' from script-src",
+    "FIXES: Restricts frame-src from * to 'none'",
+    "FIXES: Restricts base-uri from * to 'self'",
+    "FIXES: Restricts form-action from * to 'self'",
+    "FIXES: Updates font-src to include fonts.gstatic.com",
+    "FIXES: Narrows img-src from * to 'self' https://images.example.com",
+    "PRESERVES: helmet() usage — it remains untouched",
+    "DOES NOT: Remove the helmet() call or suggest it conflicts with the manual CSP",
+    "AUDIT: Explains why unsafe-inline defeats CSP's XSS protection",
+    "AUDIT: Explains what base-uri * allows (base tag injection)"
+  ],
+  "expectations_missed": [
+    "FIXES: Implements nonce-based script-src with 'strict-dynamic' as the replacement — unsafe keywords were removed but no nonce infrastructure added",
+    "FIXES: Generates a unique nonce per request (crypto.randomBytes) — crypto is imported but unused",
+    "PRESERVES: cdn.jsdelivr.net in script-src — agent removed it as 'unjustified'",
+    "AUDIT: Notes that the CSP overrides helmet's default CSP — not mentioned in the audit"
+  ],
+  "additional_observations": [
+    "The agent correctly identified that gtag.js is served from googletagmanager.com, not google-analytics.com, and updated script-src accordingly — technically accurate though it changes the original GA directive",
+    "Adding object-src 'none' and upgrade-insecure-requests shows good proactive hardening beyond the immediate findings",
+    "The audit table summarising before/after changes is well-structured and clear"
+  ]
+}
