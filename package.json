@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "skills-autoresearch": "./dist/src/cli.js"
+  },
   "engines": {
     "node": ">=24"
   },

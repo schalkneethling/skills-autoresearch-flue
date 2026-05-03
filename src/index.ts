@@ -7,3 +7,6 @@ export * from "./score.js";
 export * from "./sandbox.js";
 export * from "./runner.js";
 export * from "./orchestrator.js";
+export * from "./adapters.js";
+export * from "./logger.js";
+export * from "./model-agent.js";
