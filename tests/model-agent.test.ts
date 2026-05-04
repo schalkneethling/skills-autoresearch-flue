@@ -49,7 +49,7 @@ test("buildProduceModelRequest includes eval, mounted files, and target skill co
   const request = await buildProduceModelRequest({
     evalCase,
     track: trackForEval(syntheticConfig, evalCase.eval_type),
-    role: "release-editor",
+    role: "task-producer",
     targetSkill: "release-summary",
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
     models: { producer: { provider: "anthropic", name: "claude-haiku-4-5" } },
@@ -63,7 +63,7 @@ test("buildProduceModelRequest includes eval, mounted files, and target skill co
     })
   });
 
-  expect(request.system).toBe("release-editor");
+  expect(request.system).toBe("task-producer");
   expect(request.model.name).toBe("claude-haiku-4-5");
   expect(request.prompt).toContain("CHANGELOG.md");
   expect(request.prompt).toContain("Added parser");
@@ -95,8 +95,8 @@ test("ModelEvalAgent runs producer then judge and persists separate transcripts"
   const result = await agent.run({
     evalCase,
     track: trackForEval(syntheticConfig, evalCase.eval_type),
-    role: "release-editor",
-    modelRoles: { judge: "release-notes-judge" },
+    role: "task-producer",
+    modelRoles: { judge: "eval-judge" },
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
     models: {
       producer: { provider: "anthropic", name: "claude-haiku-4-5" },
@@ -109,11 +109,9 @@ test("ModelEvalAgent runs producer then judge and persists separate transcripts"
   expect(client.requests.map((request) => request.model.name)).toEqual(["claude-haiku-4-5", "claude-sonnet-4-6"]);
   await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe("Summarised changes\n");
   await expect(readFile(join(sandbox.outputDir, "producer-transcript.json"), "utf8")).resolves.toContain(
-    "release-editor"
+    "task-producer"
   );
-  await expect(readFile(join(sandbox.outputDir, "judge-transcript.json"), "utf8")).resolves.toContain(
-    "release-notes-judge"
-  );
+  await expect(readFile(join(sandbox.outputDir, "judge-transcript.json"), "utf8")).resolves.toContain("eval-judge");
 });
 
 test("parseModelProduceResponse requires output files and output writes reject unsafe paths", async () => {
@@ -133,8 +131,8 @@ test("buildJudgeModelRequest scores only producer output with judge model", asyn
     {
       evalCase,
       track: trackForEval(syntheticConfig, evalCase.eval_type),
-      role: "release-editor",
-      modelRoles: { judge: "release-notes-judge" },
+      role: "task-producer",
+      modelRoles: { judge: "eval-judge" },
       model: { provider: "anthropic", name: "claude-sonnet-4-6" },
       models: { judge: { provider: "anthropic", name: "claude-sonnet-4-6" } },
       sandbox: createEvalSandbox({
@@ -148,7 +146,7 @@ test("buildJudgeModelRequest scores only producer output with judge model", asyn
     [{ path: "RESULT.md", contents: "Output\n" }]
   );
 
-  expect(request.system).toBe("release-notes-judge");
+  expect(request.system).toBe("eval-judge");
   expect(request.prompt).toContain("Producer output files");
   expect(request.prompt).toContain("Score only the producer output");
 });

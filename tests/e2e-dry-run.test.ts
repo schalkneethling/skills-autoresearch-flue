@@ -65,10 +65,10 @@ test("dry run executes baseline, applies a candidate skill patch, and scores one
   expect(result.aggregate.overall.normalizedScore).toBe(0.9);
   expect(result.events.at(-1)).toMatchObject({ type: "target-score-reached", iteration: 1 });
   expect(client.requests.map((request) => request.system)).toEqual([
-    "release-editor",
+    "task-producer",
     "judge",
     "skill-builder",
-    "release-editor",
+    "task-producer",
     "judge"
   ]);
 

@@ -65,7 +65,7 @@ export const syntheticConfig = {
     {
       id: "summarise",
       eval_type: "summarise-changelog",
-      role: "release-editor",
+      role: "task-producer",
       target_skill: "release-summary",
       requires_description: false
     }
