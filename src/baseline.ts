@@ -130,7 +130,9 @@ export async function importBaselineArtefacts(baselineDir: string, expectedEvalI
   const analyses: Record<string, string> = {};
   const evalArtefacts: Record<string, BaselineEvalArtefact> = {};
   const baselineFiles = await listFiles(baselineDir);
-  const scoreFiles = baselineFiles.filter((file) => /^scores-\d+\.json$/.test(file)).sort((a, b) => scoreFileIndex(a) - scoreFileIndex(b));
+  const scoreFiles = baselineFiles
+    .filter((file) => /^scores-\d+\.json$/.test(file))
+    .sort((a, b) => scoreFileIndex(a) - scoreFileIndex(b));
 
   for (const evalId of expectedEvalIds) {
     const evalDir = join(baselineDir, evalId);

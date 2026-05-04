@@ -4,7 +4,7 @@ import { aggregateScores } from "../src/aggregate.js";
 import { importBaselineArtefacts } from "../src/baseline.js";
 import { parseEvalScore } from "../src/score.js";
 import { trackForEval } from "../src/project.js";
-import { score, securityConfig, securityEvals, syntheticConfig, tempProject } from "./helpers.js";
+import { score, securityConfig, securityEvals, tempProject } from "./helpers.js";
 
 test("imports baseline artefacts and reports missing files without overwriting", async () => {
   const root = await tempProject();
@@ -30,7 +30,14 @@ test("imports baseline artefacts and reports missing files without overwriting",
 
 test("imports the real frontend-security baseline fixture", async () => {
   const baseline = resolve("fixtures", "baseline", "frontend-security");
-  const imported = await importBaselineArtefacts(baseline, ["eval-1", "eval-2", "eval-3", "eval-4", "eval-5", "eval-6"]);
+  const imported = await importBaselineArtefacts(baseline, [
+    "eval-1",
+    "eval-2",
+    "eval-3",
+    "eval-4",
+    "eval-5",
+    "eval-6"
+  ]);
 
   expect(imported.missing).toEqual([]);
   expect(imported.scores).toHaveLength(6);

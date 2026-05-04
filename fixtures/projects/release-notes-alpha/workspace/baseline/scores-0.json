@@ -1,0 +1,16 @@
+{
+  "eval_id": "notes-001",
+  "eval_type": "summarise-changelog",
+  "track_id": "summarise",
+  "total_score": 0.6,
+  "max_score": 1,
+  "dimensions": [
+    {
+      "id": "clarity",
+      "score": 0.6,
+      "max_score": 1,
+      "rationale": "The summary identifies the parser change but omits risk and deprecation details."
+    }
+  ],
+  "summary": "Baseline is understandable but incomplete."
+}

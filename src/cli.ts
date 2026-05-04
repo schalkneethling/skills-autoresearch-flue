@@ -100,7 +100,11 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       : cli.scoreDir
         ? new FileScoreAgent({ scoreDir: cli.scoreDir })
         : undefined,
-    researcher: modelClient ? new ModelSkillResearcher(modelClient) : cli.runResearch ? new SnapshotResearcher() : undefined
+    researcher: modelClient
+      ? new ModelSkillResearcher(modelClient)
+      : cli.runResearch
+        ? new SnapshotResearcher()
+        : undefined
   };
 
   const result = await orchestrateBaseline(options);

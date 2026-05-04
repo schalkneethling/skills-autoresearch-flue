@@ -1,6 +1,13 @@
 import { loadProject, trackForEval } from "../src/project.js";
 import { resolveModel } from "../src/model.js";
-import { securityConfig, securityEvals, syntheticConfig, syntheticEvals, tempProject, writeFixture } from "./helpers.js";
+import {
+  securityConfig,
+  securityEvals,
+  syntheticConfig,
+  syntheticEvals,
+  tempProject,
+  writeFixture
+} from "./helpers.js";
 
 test("loads security and synthetic project fixtures without domain branches", async () => {
   const securityRoot = await tempProject();

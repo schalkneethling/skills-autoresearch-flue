@@ -33,10 +33,7 @@ test("FileScoreAgent returns eval scores from explicit files", async () => {
   const root = await tempProject();
   const scoreDir = join(root, "scores");
   await mkdir(scoreDir, { recursive: true });
-  await writeFile(
-    join(scoreDir, "xss-001.json"),
-    JSON.stringify(score("xss-001", "detect-and-fix", "audit", 2, 2))
-  );
+  await writeFile(join(scoreDir, "xss-001.json"), JSON.stringify(score("xss-001", "detect-and-fix", "audit", 2, 2)));
 
   const evalCase = securityEvals.evals[0];
   const agent = new FileScoreAgent({ scoreDir });

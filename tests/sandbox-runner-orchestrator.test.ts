@@ -125,7 +125,9 @@ test("orchestrator requires complete artefacts when started with withBaseline", 
 
   const missingRoot = await tempProject();
   await writeFixture(missingRoot, syntheticConfig, syntheticEvals);
-  await expect(orchestrateBaseline({ projectRoot: missingRoot, withBaseline: true })).rejects.toThrow(/--with-baseline/);
+  await expect(orchestrateBaseline({ projectRoot: missingRoot, withBaseline: true })).rejects.toThrow(
+    /--with-baseline/
+  );
 });
 
 test("orchestrator generates initial baseline by default without counting it as an iteration", async () => {
@@ -186,9 +188,9 @@ test("orchestrator runs research iterations until target score is reached", asyn
   await expect(readFile(join(root, "workspace", "iterations", "2", "scores-0.json"), "utf8")).resolves.toContain(
     "notes-001"
   );
-  await expect(
-    readFile(join(root, "workspace", "iterations", "2", "skill", "iteration-2.txt"), "utf8")
-  ).resolves.toBe("candidate\n");
+  await expect(readFile(join(root, "workspace", "iterations", "2", "skill", "iteration-2.txt"), "utf8")).resolves.toBe(
+    "candidate\n"
+  );
 });
 
 test("orchestrator stops research at max iterations and keeps the best candidate", async () => {

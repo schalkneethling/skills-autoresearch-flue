@@ -1,12 +1,6 @@
 import { mkdir, readFile, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import {
-  EvalCasesFile,
-  EvalCasesFileSchema,
-  ProjectConfig,
-  ProjectConfigSchema,
-  parseWithSchema
-} from "./schemas.js";
+import { EvalCasesFile, EvalCasesFileSchema, ProjectConfig, ProjectConfigSchema, parseWithSchema } from "./schemas.js";
 
 export interface ProjectInputs {
   root: string;

@@ -10,3 +10,4 @@ export * from "./orchestrator.js";
 export * from "./adapters.js";
 export * from "./logger.js";
 export * from "./model-agent.js";
+export * from "./flue-harness.js";

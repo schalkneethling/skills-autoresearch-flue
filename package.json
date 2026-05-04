@@ -1,6 +1,7 @@
 {
   "name": "skills-autoresearch-flue",
   "version": "0.1.0",
+  "description": "Flue agent harness for autoresearching and evaluating agent skills.",
   "private": true,
   "type": "module",
   "bin": {
@@ -11,15 +12,31 @@
   },
   "scripts": {
     "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "flue:run": "flue run autoresearch --target node --workspace .flue",
+    "flue:build": "flue build --target node --workspace .flue --output .flue-dist",
+    "alpha:smoke": "flue run autoresearch --target node --workspace .flue --id alpha-smoke --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":false,\"sessionId\":\"alpha-smoke\"}'",
+    "alpha:research": "varlock run -- flue run autoresearch --target node --workspace .flue --id alpha-research --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":true,\"seedSkillDir\":\"fixtures/projects/release-notes-alpha/seed-skill\",\"sessionId\":\"alpha-research\"}'",
+    "env:check": "varlock load"
   },
   "dependencies": {
+    "@flue/sdk": "^0.3.10",
     "valibot": "^1.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@flue/cli": "^0.3.10",
     "@types/node": "^24.0.0",
+    "@varlock/1password-plugin": "^1.0.2",
+    "eslint": "^10.3.0",
+    "prettier": "^3.8.3",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.59.1",
+    "varlock": "^1.1.0",
     "vitest": "^3.1.4"
   },
   "packageManager": "pnpm@10.33.2"

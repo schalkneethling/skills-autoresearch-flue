@@ -1,9 +1,20 @@
 import { cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { parseEvalScore } from "./score.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
-import { EvalScore, SkillResearchPatch, SkillResearchPatchSchema, parseWithSchema } from "./schemas.js";
+import {
+  EvalCase,
+  EvalScore,
+  EvalScoreSchema,
+  ModelConfig,
+  ModelProduceResponse,
+  ModelProduceResponseSchema,
+  OutputFile,
+  SkillResearchPatch,
+  SkillResearchPatchSchema,
+  Track,
+  parseWithSchema
+} from "./schemas.js";
 
 export interface ModelRequest {
   system: string;
@@ -86,10 +97,20 @@ export class ModelEvalAgent implements EvalAgent {
   }
 
   async run(request: EvalAgentRequest): Promise<EvalScore> {
-    const modelRequest = await buildEvalModelRequest(request);
-    const response = await this.#client.complete(modelRequest);
-    await persistTranscript(join(request.sandbox.outputDir, "transcript.json"), modelRequest, response);
-    return parseEvalScore(response, request.evalCase, request.track);
+    const produceRequest = await buildProduceModelRequest(request);
+    const produceResponse = await this.#client.complete(produceRequest);
+    await persistTranscript(
+      join(request.sandbox.outputDir, "producer-transcript.json"),
+      produceRequest,
+      produceResponse
+    );
+    const produced = parseModelProduceResponse(produceResponse);
+    await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
+
+    const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
+    const judgeResponse = await this.#client.complete(judgeRequest);
+    await persistTranscript(join(request.sandbox.outputDir, "judge-transcript.json"), judgeRequest, judgeResponse);
+    return parseModelJudgeResponse(judgeResponse, request.evalCase, request.track);
   }
 }
 
@@ -105,7 +126,11 @@ export class ModelSkillResearcher implements SkillResearcher {
     const response = await this.#client.complete(modelRequest);
     const patch = parseSkillResearchPatch(response);
     validateSkillResearchPatch(request.candidateSkillDir, patch);
-    await cp(request.previousSkillDir, request.candidateSkillDir, { recursive: true, errorOnExist: true, force: false });
+    await cp(request.previousSkillDir, request.candidateSkillDir, {
+      recursive: true,
+      errorOnExist: true,
+      force: false
+    });
     await mkdir(request.candidateSkillDir, { recursive: true });
     await applySkillResearchPatch(request.candidateSkillDir, patch);
     await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
@@ -113,18 +138,22 @@ export class ModelSkillResearcher implements SkillResearcher {
   }
 }
 
-export async function buildEvalModelRequest(request: EvalAgentRequest): Promise<ModelRequest> {
-  const inputFiles = await readFilesFromMount(request.sandbox.mounts.find((mount) => mount.target === "/input")?.source);
+export async function buildProduceModelRequest(request: EvalAgentRequest): Promise<ModelRequest> {
+  const inputFiles = await readFilesFromMount(
+    request.sandbox.mounts.find((mount) => mount.target === "/input")?.source
+  );
   const referenceFiles = await readFilesFromMount(
     request.sandbox.mounts.find((mount) => mount.target === "/reference")?.source
   );
-  const skillFiles = await readFilesFromMount(request.sandbox.mounts.find((mount) => mount.target === "/skill")?.source);
+  const skillFiles = await readFilesFromMount(
+    request.sandbox.mounts.find((mount) => mount.target === "/skill")?.source
+  );
 
   return {
-    model: request.model,
+    model: roleModel(request, "producer"),
     system: request.role,
     prompt: [
-      `Evaluate "${request.evalCase.title}" (${request.evalCase.id}).`,
+      `Run the target skill for "${request.evalCase.title}" (${request.evalCase.id}).`,
       `Eval type: ${request.evalCase.eval_type}`,
       `Track: ${request.track.id}`,
       request.targetSkill ? `Target skill: ${request.targetSkill}` : "Baseline run: no target skill is mounted.",
@@ -141,15 +170,97 @@ export async function buildEvalModelRequest(request: EvalAgentRequest): Promise<
       "Skill files:",
       formatFileSet(skillFiles),
       "",
-      "Return only well-formed JSON matching the EvalScore schema. Do not include markdown, code fences, prose, or XML tags."
+      "Produce the concrete eval output files. Do not score your own work.",
+      "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
+      fencedJson({
+        output_files: [
+          {
+            path: "RESULT.md",
+            contents: "The concrete output produced for this eval."
+          }
+        ]
+      }),
+      "Each output_files path must be relative to the eval output directory."
     ].join("\n")
   };
+}
+
+export async function buildJudgeModelRequest(
+  request: EvalAgentRequest,
+  outputFiles: OutputFile[]
+): Promise<ModelRequest> {
+  const referenceFiles = await readFilesFromMount(
+    request.sandbox.mounts.find((mount) => mount.target === "/reference")?.source
+  );
+
+  return {
+    model: roleModel(request, "judge"),
+    system: request.modelRoles?.judge ?? "judge",
+    prompt: [
+      `Judge output for "${request.evalCase.title}" (${request.evalCase.id}).`,
+      `Eval type: ${request.evalCase.eval_type}`,
+      `Track: ${request.track.id}`,
+      "",
+      "Eval case JSON:",
+      fencedJson(request.evalCase),
+      "",
+      "Reference files:",
+      formatFileSet(referenceFiles),
+      "",
+      "Producer output files:",
+      formatFileSet(outputFiles),
+      "",
+      "Score only the producer output. Do not award credit for requirements merely stated in the skill instructions.",
+      "Return only well-formed JSON matching the EvalScore schema. Do not include markdown, code fences, prose, or XML tags:",
+      fencedJson({
+        eval_id: request.evalCase.id,
+        eval_type: request.evalCase.eval_type,
+        track_id: request.track.id,
+        total_score: 0,
+        max_score: request.evalCase.scoring_dimensions.reduce((sum, dimension) => sum + dimension.max_score, 0),
+        dimensions: request.evalCase.scoring_dimensions.map((dimension) => ({
+          id: dimension.id,
+          score: 0,
+          max_score: dimension.max_score,
+          rationale: "Rationale grounded only in the producer output."
+        })),
+        summary: "Concise scoring summary."
+      })
+    ].join("\n")
+  };
+}
+
+export function parseModelProduceResponse(response: string): ModelProduceResponse {
+  return parseWithSchema(
+    ModelProduceResponseSchema,
+    parseJson(response, "Model producer response"),
+    "model producer response"
+  );
+}
+
+export function parseModelJudgeResponse(response: string, evalCase: EvalCase, track: Track): EvalScore {
+  const score = parseWithSchema(EvalScoreSchema, parseJson(response, "Model judge response"), "model judge response");
+  validateEvalScore(score, evalCase, track);
+  return score;
+}
+
+export function validateModelProduceResponse(response: ModelProduceResponse): ModelProduceResponse {
+  return response;
+}
+
+export async function applyOutputFiles(outputDir: string, files: OutputFile[]): Promise<void> {
+  for (const file of files) {
+    const destination = resolveContainedPath(outputDir, file.path, "Eval output file");
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, file.contents, "utf8");
+  }
 }
 
 export async function buildResearchModelRequest(request: SkillResearchRequest): Promise<ModelRequest> {
   const skillFiles = await readFilesFromMount(request.previousSkillDir);
   return {
-    model: request.project.config.model ?? { provider: "anthropic", name: "claude-sonnet-4-6" },
+    model: request.project.config.models?.researcher ??
+      request.project.config.model ?? { provider: "anthropic", name: "claude-sonnet-4-6" },
     system: request.project.config.roles.skill_builder,
     prompt: [
       `Improve skill "${request.project.config.skill_name}" for iteration ${request.iteration}.`,
@@ -179,8 +290,12 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
   };
 }
 
+function roleModel(request: EvalAgentRequest, role: "producer" | "judge"): ModelConfig {
+  return request.models?.[role] ?? request.model;
+}
+
 export function parseSkillResearchPatch(response: string): SkillResearchPatch {
-  const raw = extractResearchJson(response);
+  const raw = parseJson(response, "Research response");
   return parseWithSchema(SkillResearchPatchSchema, raw, "skill research patch");
 }
 
@@ -198,22 +313,44 @@ export function validateSkillResearchPatch(skillDir: string, patch: SkillResearc
   }
 }
 
-function extractResearchJson(response: string): unknown {
+function parseJson(response: string, label: string): unknown {
   try {
     return JSON.parse(response.trim());
   } catch (error) {
-    throw new Error(`Research response was not valid JSON: ${(error as Error).message}`);
+    throw new Error(`${label} was not valid JSON: ${(error as Error).message}`, { cause: error });
   }
 }
 
 function resolveSkillPath(skillDir: string, path: string): string {
-  const root = resolve(skillDir);
+  return resolveContainedPath(skillDir, path, "Research patch path");
+}
+
+function resolveContainedPath(rootDir: string, path: string, label: string): string {
+  const root = resolve(rootDir);
   const destination = resolve(root, path);
   const rel = relative(root, destination);
   if (rel === "" || rel.startsWith("..") || rel.startsWith("/")) {
-    throw new Error(`Research patch path escapes skill directory: ${path}`);
+    throw new Error(`${label} escapes target directory: ${path}`);
   }
   return destination;
+}
+
+function validateEvalScore(score: EvalScore, evalCase: EvalCase, track: Track): void {
+  const knownDimensions = new Set(evalCase.scoring_dimensions.map((dimension) => dimension.id));
+  const unknown = score.dimensions.filter((dimension) => !knownDimensions.has(dimension.id));
+
+  if (score.eval_id !== evalCase.id) {
+    throw new Error(`Judge score eval_id "${score.eval_id}" does not match "${evalCase.id}"`);
+  }
+  if (score.eval_type !== evalCase.eval_type) {
+    throw new Error(`Judge score eval_type "${score.eval_type}" does not match "${evalCase.eval_type}"`);
+  }
+  if (score.track_id !== track.id) {
+    throw new Error(`Judge score track_id "${score.track_id}" does not match "${track.id}"`);
+  }
+  if (unknown.length > 0) {
+    throw new Error(`Judge score included unknown dimensions: ${unknown.map((dimension) => dimension.id).join(", ")}`);
+  }
 }
 
 function formatResearchSummary(patch: SkillResearchPatch): string {

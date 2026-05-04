@@ -1,0 +1,22 @@
+{
+  "evals": [
+    {
+      "id": "notes-001",
+      "eval_type": "summarise-changelog",
+      "title": "Summarise a small changelog for users",
+      "input": {
+        "file": "CHANGELOG.md"
+      },
+      "expectations": {
+        "must_include": ["parser", "migration note", "risk"]
+      },
+      "scoring_dimensions": [
+        {
+          "id": "clarity",
+          "label": "Clear user-facing summary",
+          "max_score": 1
+        }
+      ]
+    }
+  ]
+}

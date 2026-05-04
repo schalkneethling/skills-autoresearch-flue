@@ -4,7 +4,7 @@ export function extractScoreJson(response: string): unknown {
   try {
     return JSON.parse(response.trim());
   } catch (error) {
-    throw new Error(`Judge response was not valid JSON: ${(error as Error).message}`);
+    throw new Error(`Judge response was not valid JSON: ${(error as Error).message}`, { cause: error });
   }
 }
 

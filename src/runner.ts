@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { resolveModel } from "./model.js";
 import { trackForEval } from "./project.js";
 import { createEvalSandbox, EvalSandbox } from "./sandbox.js";
-import { EvalCase, EvalScore, ModelConfig, ProjectConfig, Track } from "./schemas.js";
+import { EvalCase, EvalScore, ModelConfig, ProjectConfig, RoleModels, Track } from "./schemas.js";
 
 export interface EvalRunRequest {
   config: ProjectConfig;
@@ -18,8 +18,12 @@ export interface EvalAgentRequest {
   evalCase: EvalCase;
   track: Track;
   role: string;
+  modelRoles?: {
+    judge?: string;
+  };
   targetSkill?: string;
   model: ModelConfig;
+  models?: RoleModels;
   sandbox: EvalSandbox;
 }
 
@@ -44,8 +48,12 @@ export async function runEval(request: EvalRunRequest, agent: EvalAgent): Promis
     evalCase: request.evalCase,
     track,
     role,
+    modelRoles: {
+      judge: request.config.roles.judge
+    },
     targetSkill: request.baseline ? undefined : track.target_skill,
     model,
+    models: request.config.models,
     sandbox
   });
 }

@@ -2,12 +2,15 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   AnthropicMessagesClient,
-  buildEvalModelRequest,
+  applyOutputFiles,
+  buildJudgeModelRequest,
+  buildProduceModelRequest,
   buildResearchModelRequest,
   ModelClient,
   ModelEvalAgent,
   ModelSkillResearcher,
   ModelRequest,
+  parseModelProduceResponse,
   parseSkillResearchPatch
 } from "../src/model-agent.js";
 import { createEvalSandbox } from "../src/sandbox.js";
@@ -17,16 +20,23 @@ import { loadProject } from "../src/project.js";
 
 class MemoryModelClient implements ModelClient {
   requests: ModelRequest[] = [];
+  readonly #responses: string[];
 
-  constructor(private readonly response: string) {}
+  constructor(...responses: string[]) {
+    this.#responses = responses;
+  }
 
   async complete(request: ModelRequest): Promise<string> {
     this.requests.push(request);
-    return this.response;
+    const response = this.#responses.shift();
+    if (!response) {
+      throw new Error("No queued model response");
+    }
+    return response;
   }
 }
 
-test("buildEvalModelRequest includes eval, mounted files, and target skill context", async () => {
+test("buildProduceModelRequest includes eval, mounted files, and target skill context", async () => {
   const root = await tempProject();
   await writeFixture(root, syntheticConfig, syntheticEvals);
   const skillDir = join(root, "skill");
@@ -36,12 +46,13 @@ test("buildEvalModelRequest includes eval, mounted files, and target skill conte
   await writeFile(join(skillDir, "SKILL.md"), "# Release skill\n");
 
   const evalCase = syntheticEvals.evals[0];
-  const request = await buildEvalModelRequest({
+  const request = await buildProduceModelRequest({
     evalCase,
     track: trackForEval(syntheticConfig, evalCase.eval_type),
     role: "release-editor",
     targetSkill: "release-summary",
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
+    models: { producer: { provider: "anthropic", name: "claude-haiku-4-5" } },
     sandbox: createEvalSandbox({
       evalId: evalCase.id,
       inputDir: join(root, "input"),
@@ -53,18 +64,25 @@ test("buildEvalModelRequest includes eval, mounted files, and target skill conte
   });
 
   expect(request.system).toBe("release-editor");
+  expect(request.model.name).toBe("claude-haiku-4-5");
   expect(request.prompt).toContain("CHANGELOG.md");
   expect(request.prompt).toContain("Added parser");
   expect(request.prompt).toContain("Target skill: release-summary");
   expect(request.prompt).toContain("SKILL.md");
+  expect(request.prompt).toContain("Do not score your own work");
 });
 
-test("ModelEvalAgent persists transcripts and parses returned JSON scores", async () => {
+test("ModelEvalAgent runs producer then judge and persists separate transcripts", async () => {
   const root = await tempProject();
   await writeFixture(root, syntheticConfig, syntheticEvals);
   const evalCase = syntheticEvals.evals[0];
   const evalScore = score(evalCase.id, evalCase.eval_type, "summarise");
-  const client = new MemoryModelClient(JSON.stringify(evalScore));
+  const client = new MemoryModelClient(
+    JSON.stringify({
+      output_files: [{ path: "RESULT.md", contents: "Summarised changes\n" }]
+    }),
+    JSON.stringify(evalScore)
+  );
   const agent = new ModelEvalAgent(client);
   const sandbox = createEvalSandbox({
     evalId: evalCase.id,
@@ -78,12 +96,61 @@ test("ModelEvalAgent persists transcripts and parses returned JSON scores", asyn
     evalCase,
     track: trackForEval(syntheticConfig, evalCase.eval_type),
     role: "release-editor",
+    modelRoles: { judge: "release-notes-judge" },
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
+    models: {
+      producer: { provider: "anthropic", name: "claude-haiku-4-5" },
+      judge: { provider: "anthropic", name: "claude-sonnet-4-6" }
+    },
     sandbox
   });
 
   expect(result.eval_id).toBe(evalCase.id);
-  await expect(readFile(join(sandbox.outputDir, "transcript.json"), "utf8")).resolves.toContain("release-editor");
+  expect(client.requests.map((request) => request.model.name)).toEqual(["claude-haiku-4-5", "claude-sonnet-4-6"]);
+  await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe("Summarised changes\n");
+  await expect(readFile(join(sandbox.outputDir, "producer-transcript.json"), "utf8")).resolves.toContain(
+    "release-editor"
+  );
+  await expect(readFile(join(sandbox.outputDir, "judge-transcript.json"), "utf8")).resolves.toContain(
+    "release-notes-judge"
+  );
+});
+
+test("parseModelProduceResponse requires output files and output writes reject unsafe paths", async () => {
+  expect(() => parseModelProduceResponse(JSON.stringify({ output_files: [] }))).toThrow(
+    /Invalid model producer response/
+  );
+  await expect(applyOutputFiles("/tmp/output", [{ path: "../escape.md", contents: "bad" }])).rejects.toThrow(
+    /escapes target directory/
+  );
+});
+
+test("buildJudgeModelRequest scores only producer output with judge model", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  const evalCase = syntheticEvals.evals[0];
+  const request = await buildJudgeModelRequest(
+    {
+      evalCase,
+      track: trackForEval(syntheticConfig, evalCase.eval_type),
+      role: "release-editor",
+      modelRoles: { judge: "release-notes-judge" },
+      model: { provider: "anthropic", name: "claude-sonnet-4-6" },
+      models: { judge: { provider: "anthropic", name: "claude-sonnet-4-6" } },
+      sandbox: createEvalSandbox({
+        evalId: evalCase.id,
+        inputDir: join(root, "input"),
+        referenceDir: join(root, "reference"),
+        evalsDir: join(root, "evals"),
+        outputDir: join(root, "out")
+      })
+    },
+    [{ path: "RESULT.md", contents: "Output\n" }]
+  );
+
+  expect(request.system).toBe("release-notes-judge");
+  expect(request.prompt).toContain("Producer output files");
+  expect(request.prompt).toContain("Score only the producer output");
 });
 
 test("ModelSkillResearcher snapshots the skill, applies patch changes, and records transcript", async () => {
@@ -171,7 +238,7 @@ test("parseSkillResearchPatch rejects non-JSON responses and unsafe paths fail d
         overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
       }
     })
-  ).rejects.toThrow(/escapes skill directory/);
+  ).rejects.toThrow(/escapes target directory/);
   await expect(stat(candidateSkillDir)).rejects.toMatchObject({ code: "ENOENT" });
 });
 

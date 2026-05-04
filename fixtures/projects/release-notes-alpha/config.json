@@ -1,0 +1,39 @@
+{
+  "skill_name": "release-notes",
+  "topic_group": "developer-communications",
+  "origin_skill": "fixtures/projects/release-notes-alpha/seed-skill",
+  "target_score": 0.8,
+  "max_iterations": 1,
+  "max_concurrency": 1,
+  "model": {
+    "provider": "anthropic",
+    "name": "claude-sonnet-4-6"
+  },
+  "models": {
+    "producer": {
+      "provider": "anthropic",
+      "name": "claude-haiku-4-5"
+    },
+    "judge": {
+      "provider": "anthropic",
+      "name": "claude-sonnet-4-6"
+    },
+    "researcher": {
+      "provider": "anthropic",
+      "name": "claude-sonnet-4-6"
+    }
+  },
+  "roles": {
+    "judge": "release-notes-judge",
+    "skill_builder": "skill-builder"
+  },
+  "tracks": [
+    {
+      "id": "summarise",
+      "eval_type": "summarise-changelog",
+      "role": "release-editor",
+      "target_skill": "release-summary",
+      "requires_description": false
+    }
+  ]
+}

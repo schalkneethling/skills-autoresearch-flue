@@ -7,10 +7,13 @@ export const ModelConfigSchema = v.object({
   name: v.pipe(v.string(), v.minLength(1))
 });
 
-export const RolesConfigSchema = v.record(
-  v.pipe(v.string(), v.minLength(1)),
-  v.pipe(v.string(), v.minLength(1))
-);
+export const RoleModelsSchema = v.object({
+  producer: v.optional(ModelConfigSchema),
+  judge: v.optional(ModelConfigSchema),
+  researcher: v.optional(ModelConfigSchema)
+});
+
+export const RolesConfigSchema = v.record(v.pipe(v.string(), v.minLength(1)), v.pipe(v.string(), v.minLength(1)));
 
 export const TrackSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
@@ -28,6 +31,7 @@ export const ProjectConfigSchema = v.object({
   max_iterations: v.pipe(v.number(), v.integer(), v.minValue(1)),
   max_concurrency: v.pipe(v.number(), v.integer(), v.minValue(1)),
   model: v.optional(ModelConfigSchema),
+  models: v.optional(RoleModelsSchema),
   roles: RolesConfigSchema,
   tracks: v.pipe(v.array(TrackSchema), v.minLength(1))
 });
@@ -70,6 +74,15 @@ export const EvalScoreSchema = v.object({
   summary: v.pipe(v.string(), v.minLength(1))
 });
 
+export const OutputFileSchema = v.object({
+  path: v.pipe(v.string(), v.minLength(1)),
+  contents: v.string()
+});
+
+export const ModelProduceResponseSchema = v.object({
+  output_files: v.pipe(v.array(OutputFileSchema), v.minLength(1))
+});
+
 export const SkillMetadataSchema = v.object({
   skillPath: v.pipe(v.string(), v.minLength(1)),
   description: v.pipe(v.string(), v.minLength(1)),
@@ -90,12 +103,15 @@ export const SkillResearchPatchSchema = v.object({
 
 export type ModelProvider = v.InferOutput<typeof ModelProviderSchema>;
 export type ModelConfig = v.InferOutput<typeof ModelConfigSchema>;
+export type RoleModels = v.InferOutput<typeof RoleModelsSchema>;
 export type ProjectConfig = v.InferOutput<typeof ProjectConfigSchema>;
 export type Track = v.InferOutput<typeof TrackSchema>;
 export type EvalCase = v.InferOutput<typeof EvalCaseSchema>;
 export type EvalCasesFile = v.InferOutput<typeof EvalCasesFileSchema>;
 export type ScoreDimension = v.InferOutput<typeof ScoreDimensionSchema>;
 export type EvalScore = v.InferOutput<typeof EvalScoreSchema>;
+export type OutputFile = v.InferOutput<typeof OutputFileSchema>;
+export type ModelProduceResponse = v.InferOutput<typeof ModelProduceResponseSchema>;
 export type SkillMetadata = v.InferOutput<typeof SkillMetadataSchema>;
 export type SkillFileChange = v.InferOutput<typeof SkillFileChangeSchema>;
 export type SkillResearchPatch = v.InferOutput<typeof SkillResearchPatchSchema>;
