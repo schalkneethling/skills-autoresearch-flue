@@ -1,6 +1,6 @@
 allowBuilds:
-  '@google/genai': true
-  '@mongodb-js/zstd': true
+  "@google/genai": true
+  "@mongodb-js/zstd": true
   esbuild: true
   node-liblzma: true
   protobufjs: true

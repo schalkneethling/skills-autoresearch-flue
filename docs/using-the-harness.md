@@ -24,6 +24,12 @@ The default alpha fixture uses:
 - Producer: `anthropic/claude-haiku-4-5`
 - Judge: `anthropic/claude-sonnet-4-6`
 
+## Project Root
+
+When this guide says "project layout", it means an autoresearch project root: a repository or directory that contains the config, evals, reference material, candidate skill files, and workspace artifacts for one bounded improvement effort.
+
+For example, a dedicated repository such as `skills-autoresearch-security/` is a project root. The harness does not require the project root to live inside this repository; the `projectRoot` payload value points Flue at the project you want to run.
+
 ## Project Layout
 
 Create a project directory with this shape:
@@ -46,6 +52,31 @@ my-autoresearch-project/
 ```
 
 Use `fixtures/projects/release-notes-alpha/` as the working example.
+
+This single-skill layout uses `seed-skill/` because the alpha fixture improves one skill.
+
+For a multi-skill project, keep the same root concepts but colocate the candidate skills under `skills/`:
+
+```text
+skills-autoresearch-security/
+  config.json
+  program.md
+  evals/
+    eval-cases.json
+    rubric.md
+  reference/
+    ...
+  skills/
+    security-audit/
+      SKILL.md
+    secure-authoring/
+      SKILL.md
+  workspace/
+    baseline/
+      ...
+```
+
+The important parts are not the exact directory names for every project, but that `config.json` and the run payload point at the correct project root and seed skill directory.
 
 ## Config
 
@@ -94,7 +125,7 @@ Use `fixtures/projects/release-notes-alpha/` as the working example.
 
 Important fields:
 
-- `origin_skill`: path to the seed skill directory.
+- `origin_skill`: default path to the seed skill directory, relative to the project root unless absolute.
 - `target_score`: normalized score required to stop early.
 - `max_iterations`: maximum candidate-improvement attempts.
 - `models.producer`: cheaper/smaller model that produces eval outputs.
@@ -104,6 +135,36 @@ Important fields:
 - `tracks[].role`: Flue role used by the producer.
 
 Flue roles live under `.flue/roles/`. Add a new role file if your project needs a different producer or judge role.
+
+For a multi-skill project, use one track per skill or skill responsibility. For example, a security project might have an `audit` track that targets `skills/security-audit` and an `authoring` track that targets `skills/secure-authoring`.
+
+## Seed Skill Selection
+
+`origin_skill` is a `config.json` field. It is the default seed skill used when a run does not provide an override.
+
+`seedSkillDir` is not a `config.json` field. It is a run payload option passed to the Flue agent when you want that specific run to improve a different skill directory.
+
+For example, this config default improves the audit skill:
+
+```json
+{
+  "origin_skill": "skills/security-audit"
+}
+```
+
+To improve the authoring skill without editing `config.json`, pass `seedSkillDir` in the run payload:
+
+```json
+{
+  "projectRoot": "path/to/skills-autoresearch-security",
+  "withBaseline": true,
+  "runResearch": true,
+  "seedSkillDir": "path/to/skills-autoresearch-security/skills/secure-authoring",
+  "sessionId": "security-authoring-research"
+}
+```
+
+Current alpha behavior improves one seed skill per run. For multi-skill projects, run the harness once per target skill.
 
 ## Eval Cases
 
@@ -244,6 +305,12 @@ For your own project:
 
 ```bash
 varlock run -- pnpm exec flue run autoresearch --target node --workspace .flue --id my-research --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+```
+
+For a multi-skill project, point `seedSkillDir` at the specific skill you want that run to improve:
+
+```bash
+varlock run -- pnpm exec flue run autoresearch --target node --workspace .flue --id security-audit-research --payload '{"projectRoot":"path/to/skills-autoresearch-security","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/skills-autoresearch-security/skills/security-audit","sessionId":"security-audit-research"}'
 ```
 
 The run stops when either:
