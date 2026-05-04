@@ -1,18 +1,10 @@
 import { EvalCase, EvalScore, EvalScoreSchema, Track, parseWithSchema } from "./schemas.js";
 
-const SCORE_BLOCK_RE = /```json\s*([\s\S]*?)```|<score>\s*([\s\S]*?)\s*<\/score>/i;
-
 export function extractScoreJson(response: string): unknown {
-  const match = response.match(SCORE_BLOCK_RE);
-  if (!match) {
-    throw new Error("Judge response did not include a JSON score block");
-  }
-
-  const raw = match[1] ?? match[2];
   try {
-    return JSON.parse(raw);
+    return JSON.parse(response.trim());
   } catch (error) {
-    throw new Error(`Judge response score block was not valid JSON: ${(error as Error).message}`);
+    throw new Error(`Judge response was not valid JSON: ${(error as Error).message}`);
   }
 }
 

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   AnthropicMessagesClient,
@@ -7,7 +7,8 @@ import {
   ModelClient,
   ModelEvalAgent,
   ModelSkillResearcher,
-  ModelRequest
+  ModelRequest,
+  parseSkillResearchPatch
 } from "../src/model-agent.js";
 import { createEvalSandbox } from "../src/sandbox.js";
 import { trackForEval } from "../src/project.js";
@@ -58,12 +59,12 @@ test("buildEvalModelRequest includes eval, mounted files, and target skill conte
   expect(request.prompt).toContain("SKILL.md");
 });
 
-test("ModelEvalAgent persists transcripts and parses returned score blocks", async () => {
+test("ModelEvalAgent persists transcripts and parses returned JSON scores", async () => {
   const root = await tempProject();
   await writeFixture(root, syntheticConfig, syntheticEvals);
   const evalCase = syntheticEvals.evals[0];
   const evalScore = score(evalCase.id, evalCase.eval_type, "summarise");
-  const client = new MemoryModelClient(`\`\`\`json\n${JSON.stringify(evalScore)}\n\`\`\``);
+  const client = new MemoryModelClient(JSON.stringify(evalScore));
   const agent = new ModelEvalAgent(client);
   const sandbox = createEvalSandbox({
     evalId: evalCase.id,
@@ -85,7 +86,7 @@ test("ModelEvalAgent persists transcripts and parses returned score blocks", asy
   await expect(readFile(join(sandbox.outputDir, "transcript.json"), "utf8")).resolves.toContain("release-editor");
 });
 
-test("ModelSkillResearcher snapshots the skill and records research transcript", async () => {
+test("ModelSkillResearcher snapshots the skill, applies patch changes, and records transcript", async () => {
   const root = await tempProject();
   await writeFixture(root, syntheticConfig, syntheticEvals);
   const project = await loadProject(root);
@@ -93,7 +94,14 @@ test("ModelSkillResearcher snapshots the skill and records research transcript",
   const candidateSkillDir = join(root, "candidate-skill");
   await mkdir(previousSkillDir, { recursive: true });
   await writeFile(join(previousSkillDir, "SKILL.md"), "# Previous\n");
-  const client = new MemoryModelClient("Improve the examples.");
+  const patch = {
+    summary: "Improve the examples.",
+    changes: [
+      { path: "SKILL.md", contents: "# Updated\n" },
+      { path: "examples/basic.md", contents: "Use concise release notes.\n" }
+    ]
+  };
+  const client = new MemoryModelClient(JSON.stringify(patch));
   const researcher = new ModelSkillResearcher(client);
 
   const modelRequest = await buildResearchModelRequest({
@@ -125,11 +133,46 @@ test("ModelSkillResearcher snapshots the skill and records research transcript",
     }
   });
 
-  await expect(readFile(join(candidateSkillDir, "SKILL.md"), "utf8")).resolves.toBe("# Previous\n");
-  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toBe("Improve the examples.");
-  await expect(readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8")).resolves.toContain(
-    "Improve the examples."
+  await expect(readFile(join(candidateSkillDir, "SKILL.md"), "utf8")).resolves.toBe("# Updated\n");
+  await expect(readFile(join(candidateSkillDir, "examples", "basic.md"), "utf8")).resolves.toBe(
+    "Use concise release notes.\n"
   );
+  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toContain("Improve the examples.");
+  await expect(readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8")).resolves.toContain(
+    "SKILL.md"
+  );
+});
+
+test("parseSkillResearchPatch rejects non-JSON responses and unsafe paths fail during research", async () => {
+  expect(() => parseSkillResearchPatch("plain text")).toThrow(/not valid JSON/);
+
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  const project = await loadProject(root);
+  const previousSkillDir = join(root, "previous-skill");
+  const candidateSkillDir = join(root, "candidate-skill");
+  await mkdir(previousSkillDir, { recursive: true });
+  await writeFile(join(previousSkillDir, "SKILL.md"), "# Previous\n");
+  const client = new MemoryModelClient(
+    JSON.stringify({ summary: "bad", changes: [{ path: "../escape.md", contents: "bad" }] })
+  );
+  const researcher = new ModelSkillResearcher(client);
+
+  await expect(
+    researcher.improve({
+      project,
+      iteration: 1,
+      previousSkillDir,
+      candidateSkillDir,
+      baselineScores: [],
+      previousScores: [],
+      previousAggregate: {
+        tracks: [],
+        overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
+      }
+    })
+  ).rejects.toThrow(/escapes skill directory/);
+  await expect(stat(candidateSkillDir)).rejects.toMatchObject({ code: "ENOENT" });
 });
 
 test("AnthropicMessagesClient posts messages request and extracts text response", async () => {

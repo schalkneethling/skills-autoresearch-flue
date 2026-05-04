@@ -62,10 +62,10 @@ test("aggregates arbitrary configured tracks", () => {
   expect(report.overall.normalizedScore).toBe(0.8);
 });
 
-test("parses judge score blocks and rejects unknown dimensions", () => {
+test("parses judge score JSON and rejects unknown dimensions", () => {
   const evalCase = securityEvals.evals[0];
   const track = trackForEval(securityConfig, evalCase.eval_type);
-  const response = `Result\n\n\`\`\`json\n${JSON.stringify({
+  const response = JSON.stringify({
     eval_id: "xss-001",
     eval_type: "detect-and-fix",
     track_id: "audit",
@@ -73,10 +73,11 @@ test("parses judge score blocks and rejects unknown dimensions", () => {
     max_score: 2,
     dimensions: [{ id: "finding", score: 2, max_score: 2, rationale: "Found it" }],
     summary: "Pass"
-  })}\n\`\`\``;
+  });
 
   expect(parseEvalScore(response, evalCase, track).total_score).toBe(2);
 
   const bad = response.replace("finding", "unknown");
   expect(() => parseEvalScore(bad, evalCase, track)).toThrow(/unknown dimensions/);
+  expect(() => parseEvalScore(`\`\`\`json\n${response}\n\`\`\``, evalCase, track)).toThrow(/not valid JSON/);
 });

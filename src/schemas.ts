@@ -78,6 +78,16 @@ export const SkillMetadataSchema = v.object({
   changelog: v.optional(v.array(v.string()), [])
 });
 
+export const SkillFileChangeSchema = v.object({
+  path: v.pipe(v.string(), v.minLength(1)),
+  contents: v.string()
+});
+
+export const SkillResearchPatchSchema = v.object({
+  summary: v.pipe(v.string(), v.minLength(1)),
+  changes: v.pipe(v.array(SkillFileChangeSchema), v.minLength(1))
+});
+
 export type ModelProvider = v.InferOutput<typeof ModelProviderSchema>;
 export type ModelConfig = v.InferOutput<typeof ModelConfigSchema>;
 export type ProjectConfig = v.InferOutput<typeof ProjectConfigSchema>;
@@ -87,6 +97,8 @@ export type EvalCasesFile = v.InferOutput<typeof EvalCasesFileSchema>;
 export type ScoreDimension = v.InferOutput<typeof ScoreDimensionSchema>;
 export type EvalScore = v.InferOutput<typeof EvalScoreSchema>;
 export type SkillMetadata = v.InferOutput<typeof SkillMetadataSchema>;
+export type SkillFileChange = v.InferOutput<typeof SkillFileChangeSchema>;
+export type SkillResearchPatch = v.InferOutput<typeof SkillResearchPatchSchema>;
 
 export function parseWithSchema<TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
   schema: TSchema,

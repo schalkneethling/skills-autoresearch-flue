@@ -1,9 +1,9 @@
 import { cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { parseEvalScore } from "./score.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
-import { EvalScore } from "./schemas.js";
+import { EvalScore, SkillResearchPatch, SkillResearchPatchSchema, parseWithSchema } from "./schemas.js";
 
 export interface ModelRequest {
   system: string;
@@ -103,9 +103,12 @@ export class ModelSkillResearcher implements SkillResearcher {
   async improve(request: SkillResearchRequest): Promise<void> {
     const modelRequest = await buildResearchModelRequest(request);
     const response = await this.#client.complete(modelRequest);
+    const patch = parseSkillResearchPatch(response);
+    validateSkillResearchPatch(request.candidateSkillDir, patch);
     await cp(request.previousSkillDir, request.candidateSkillDir, { recursive: true, errorOnExist: true, force: false });
     await mkdir(request.candidateSkillDir, { recursive: true });
-    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), response, { flag: "wx" });
+    await applySkillResearchPatch(request.candidateSkillDir, patch);
+    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
     await persistTranscript(join(request.candidateSkillDir, ".autoresearch-transcript.json"), modelRequest, response);
   }
 }
@@ -138,7 +141,7 @@ export async function buildEvalModelRequest(request: EvalAgentRequest): Promise<
       "Skill files:",
       formatFileSet(skillFiles),
       "",
-      "Return only a score in a fenced json block or <score> block matching the EvalScore schema."
+      "Return only well-formed JSON matching the EvalScore schema. Do not include markdown, code fences, prose, or XML tags."
     ].join("\n")
   };
 }
@@ -166,9 +169,63 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
       "Current skill files:",
       formatFileSet(skillFiles),
       "",
-      "Describe the skill changes to make. The caller will persist this as RESEARCH.md in the candidate snapshot."
+      "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
+      fencedJson({
+        summary: "Brief summary of the intended skill improvement.",
+        changes: [{ path: "SKILL.md", contents: "Complete replacement file contents." }]
+      }),
+      "Each change path must be relative to the skill directory."
     ].join("\n")
   };
+}
+
+export function parseSkillResearchPatch(response: string): SkillResearchPatch {
+  const raw = extractResearchJson(response);
+  return parseWithSchema(SkillResearchPatchSchema, raw, "skill research patch");
+}
+
+export async function applySkillResearchPatch(skillDir: string, patch: SkillResearchPatch): Promise<void> {
+  for (const change of patch.changes) {
+    const destination = resolveSkillPath(skillDir, change.path);
+    await mkdir(dirname(destination), { recursive: true });
+    await writeFile(destination, change.contents, "utf8");
+  }
+}
+
+export function validateSkillResearchPatch(skillDir: string, patch: SkillResearchPatch): void {
+  for (const change of patch.changes) {
+    resolveSkillPath(skillDir, change.path);
+  }
+}
+
+function extractResearchJson(response: string): unknown {
+  try {
+    return JSON.parse(response.trim());
+  } catch (error) {
+    throw new Error(`Research response was not valid JSON: ${(error as Error).message}`);
+  }
+}
+
+function resolveSkillPath(skillDir: string, path: string): string {
+  const root = resolve(skillDir);
+  const destination = resolve(root, path);
+  const rel = relative(root, destination);
+  if (rel === "" || rel.startsWith("..") || rel.startsWith("/")) {
+    throw new Error(`Research patch path escapes skill directory: ${path}`);
+  }
+  return destination;
+}
+
+function formatResearchSummary(patch: SkillResearchPatch): string {
+  return [
+    `# Research Summary`,
+    "",
+    patch.summary,
+    "",
+    "## Changed Files",
+    "",
+    ...patch.changes.map((change) => `- ${change.path}`)
+  ].join("\n");
 }
 
 async function persistTranscript(path: string, request: ModelRequest, response: string): Promise<void> {
