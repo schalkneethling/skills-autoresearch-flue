@@ -109,14 +109,14 @@ The important parts are not the exact directory names for every project, but tha
     }
   },
   "roles": {
-    "judge": "release-notes-judge",
+    "judge": "eval-judge",
     "skill_builder": "skill-builder"
   },
   "tracks": [
     {
       "id": "summarise",
       "eval_type": "summarise-changelog",
-      "role": "release-editor",
+      "role": "task-producer",
       "target_skill": "release-summary"
     }
   ]

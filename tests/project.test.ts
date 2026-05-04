@@ -19,7 +19,7 @@ test("loads security and synthetic project fixtures without domain branches", as
   const synthetic = await loadProject(syntheticRoot);
 
   expect(trackForEval(security.config, "secure-author").target_skill).toBe("secure-authoring");
-  expect(trackForEval(synthetic.config, "summarise-changelog").role).toBe("release-editor");
+  expect(trackForEval(synthetic.config, "summarise-changelog").role).toBe("task-producer");
 });
 
 test("resolves default model and rejects unsupported providers", async () => {

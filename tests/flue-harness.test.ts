@@ -43,8 +43,8 @@ test("FlueEvalAgent uses session structured output and writes eval artifacts", a
   const result = await new FlueEvalAgent(session).run({
     evalCase,
     track: trackForEval(syntheticConfig, evalCase.eval_type),
-    role: "release-editor",
-    modelRoles: { judge: "release-notes-judge" },
+    role: "task-producer",
+    modelRoles: { judge: "eval-judge" },
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
     models: {
       producer: { provider: "anthropic", name: "claude-haiku-4-5" },
@@ -58,7 +58,7 @@ test("FlueEvalAgent uses session structured output and writes eval artifacts", a
     "anthropic/claude-haiku-4-5",
     "anthropic/claude-sonnet-4-6"
   ]);
-  expect((session as any).prompts[1].role).toBe("release-notes-judge");
+  expect((session as any).prompts[1].role).toBe("eval-judge");
   await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe("Flue output\n");
 });
 

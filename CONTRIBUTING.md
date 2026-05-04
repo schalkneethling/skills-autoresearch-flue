@@ -68,8 +68,8 @@ It uses `session.prompt(..., { result: schema })` so Flue performs structured-ou
 The model-backed path is intentionally split:
 
 1. **Researcher** (`skill-builder`, Sonnet): patches the candidate skill.
-2. **Producer** (`release-editor`, Haiku): runs the candidate skill and writes `output_files`.
-3. **Judge** (`release-notes-judge`, Sonnet): scores only producer output.
+2. **Producer** (`task-producer`, Haiku): runs the candidate skill and writes `output_files`.
+3. **Judge** (`eval-judge`, Sonnet): scores only producer output.
 
 This is important. Avoid collapsing producer and judge back into a single self-scoring call.
 
