@@ -50,6 +50,14 @@ pnpm run alpha:research
 
 `alpha:research` runs the model-backed Flue harness through `varlock run`.
 
+## Using The Harness
+
+If you want to point the harness at your own skill, start with [docs/using-the-harness.md](docs/using-the-harness.md). It explains the required project layout, config fields, eval cases, baseline artifacts, run commands, and how to inspect results.
+
+## Contributing
+
+If you want to work on the harness itself, read [CONTRIBUTING.md](CONTRIBUTING.md). It explains the project structure, Flue integration, data contracts, fixtures, test expectations, and alpha limitations.
+
 ## Alpha Fixture
 
 The release-notes fixture lives at:
