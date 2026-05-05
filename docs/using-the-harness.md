@@ -313,7 +313,7 @@ The command parts are:
 
 The payload fields are:
 
-- `projectRoot`: path to the autoresearch project you want the harness to load.
+- `projectRoot`: path to the autoresearch project you want the harness to load. Relative paths are resolved from the directory where you run the command, so in this guide they are relative to the local `skills-autoresearch-flue` checkout root. Use an absolute path if the project lives somewhere else and you want to avoid ambiguity.
 - `withBaseline`: tells the harness to load or validate the baseline artifacts for the project.
 - `runResearch`: controls whether the researcher should patch the skill. `false` makes this a smoke run that stops before model-backed research.
 - `sessionId`: run/session name used when writing harness artifacts. Keeping this aligned with `--id` makes outputs easier to correlate.
