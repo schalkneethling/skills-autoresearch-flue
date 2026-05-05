@@ -152,7 +152,7 @@ For a multi-skill project, use one track per skill or skill responsibility. For 
 
 `origin_skill` is the `config.json` field for the default seed skill. The harness uses this path when a run payload does not provide a skill override.
 
-`seedSkillDir` is the run payload override for one invocation. Do not add it to `config.json`; pass it in the JSON payload you send to `flue run autoresearch` when you want that specific run to improve a different skill directory.
+`seedSkillDir` is the run payload override for one invocation. Do not add it to `config.json`; pass it in the JSON payload you send to the project-local Flue autoresearch command when you want that specific run to improve a different skill directory.
 
 For example, this config default improves the audit skill:
 
@@ -295,11 +295,13 @@ To run the baseline smoke against the built-in alpha fixture in this repository:
 pnpm run alpha:smoke
 ```
 
-For your own project:
+For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
 pnpm exec flue run autoresearch --target node --workspace .flue --id my-smoke --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
 ```
+
+This command uses `pnpm exec` to run the `flue` binary from this repository's installed dependencies. It does not require a globally installed `flue` CLI.
 
 The command parts are:
 
@@ -326,11 +328,13 @@ To run autoresearch against the built-in alpha fixture in this repository:
 pnpm run alpha:research
 ```
 
-For your own project:
+For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
 varlock run -- pnpm exec flue run autoresearch --target node --workspace .flue --id my-research --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
 ```
+
+This also uses `pnpm exec` to run the project-local `flue` binary. `varlock run --` wraps the command so model credentials are available during the run.
 
 For a multi-skill project, point `seedSkillDir` at the specific skill you want that run to improve:
 
