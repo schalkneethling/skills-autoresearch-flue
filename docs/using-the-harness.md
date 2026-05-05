@@ -28,7 +28,7 @@ The default alpha fixture uses:
 
 When this guide says "project layout", it means an autoresearch project root: a repository or directory that contains the config, evals, reference material, candidate skill files, and workspace artifacts for one bounded improvement effort.
 
-For example, a dedicated repository such as `skills-autoresearch-security/` is a project root. The harness does not require the project root to live inside this repository; the `projectRoot` payload value points Flue at the project you want to run.
+For example, a dedicated repository such as [`skills-autoresearch-security/`](https://github.com/schalkneethling/skills-autoresearch-security/tree/main) is a project root. The harness does not require the project root to live inside this repository; the `projectRoot` payload value points Flue at the project you want to run.
 
 ## Project Layout
 
