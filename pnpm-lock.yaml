@@ -25,8 +25,8 @@ importers:
         specifier: ^25.6.2
         version: 25.6.2
       '@varlock/1password-plugin':
-        specifier: ^1.0.2
-        version: 1.0.2(varlock@1.1.0)
+        specifier: ^1.1.0
+        version: 1.1.0(varlock@1.1.0)
       eslint:
         specifier: ^10.3.0
         version: 10.3.0
@@ -935,11 +935,11 @@ packages:
     peerDependencies:
       valibot: ^1.4.0
 
-  '@varlock/1password-plugin@1.0.2':
-    resolution: {integrity: sha512-dMhXZYORzYif8Opvz7pySFmhRrHUpp7UyXoi8hREkaHcK9yW9Xj9bau1wwTn9zEfaBEY2eFdV+GvmacVHH9J0Q==}
+  '@varlock/1password-plugin@1.1.0':
+    resolution: {integrity: sha512-78olHIxWqRy4CAsVHdu4KHkKuqTmuG9w3IrpDZy+9ZjQvKkbA9I5zk9xvnxWTYxCfe0a4CcyiS0yd4WIlWmydA==}
     engines: {node: '>=22'}
     peerDependencies:
-      varlock: ^1.0.0
+      varlock: ^1.1.0
 
   '@vercel/detect-agent@1.2.3':
     resolution: {integrity: sha512-VYNCgUc0nOmC4WJmWw9GkrKdfr8Zl4/rxhC5SvgacBgxiW9W/9NRttUoHHXV8xdII3MaRgkZZVX8Ikzc/Jmjag==}
@@ -3176,7 +3176,7 @@ snapshots:
     dependencies:
       valibot: 1.4.0(typescript@6.0.3)
 
-  '@varlock/1password-plugin@1.0.2(varlock@1.1.0)':
+  '@varlock/1password-plugin@1.1.0(varlock@1.1.0)':
     dependencies:
       varlock: 1.1.0
 
