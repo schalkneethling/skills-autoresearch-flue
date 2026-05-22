@@ -298,7 +298,7 @@ pnpm run alpha:smoke
 For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
-pnpm exec flue run autoresearch --target node --workspace .flue --id my-smoke --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
+pnpm exec flue run autoresearch --target node --root . --id my-smoke --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
 ```
 
 This command uses `pnpm exec` to run the `flue` binary from this repository's installed dependencies. It does not require a globally installed `flue` CLI.
@@ -307,7 +307,7 @@ The command parts are:
 
 - `pnpm exec flue run autoresearch`: runs the `autoresearch` Flue agent through the project-local `flue` dependency.
 - `--target node`: uses the Node.js target for the run.
-- `--workspace .flue`: stores Flue run state under the local `.flue/` workspace directory.
+- `--root .`: tells Flue to run from this harness checkout root. Flue reads source files from `<root>/.flue/` when that directory exists.
 - `--id my-smoke`: gives this Flue run a stable ID. Use a short name that identifies what you are checking.
 - `--payload '...'`: passes harness-specific options as JSON.
 
@@ -320,6 +320,20 @@ The payload fields are:
 
 This should return events ending with `research-loop-ready`.
 
+## Generate An Initial Baseline
+
+If your project does not have `workspace/baseline/` yet, run a model-backed baseline generation pass without `withBaseline` and with `runResearch:false`:
+
+```bash
+varlock run -- pnpm exec flue run autoresearch --target node --root . --id my-baseline --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"my-baseline"}'
+```
+
+This should return events including `baseline-started`, `baseline-generated`, `aggregated`, and `research-loop-ready`. The generated score files and transcripts are written under:
+
+```text
+path/to/my-autoresearch-project/workspace/baseline/
+```
+
 ## Run Autoresearch
 
 To run autoresearch against the built-in alpha fixture in this repository:
@@ -331,7 +345,7 @@ pnpm run alpha:research
 For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --workspace .flue --id my-research --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+varlock run -- pnpm exec flue run autoresearch --target node --root . --id my-research --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
 ```
 
 This also uses `pnpm exec` to run the project-local `flue` binary. `varlock run --` wraps the command so model credentials are available during the run.
@@ -339,7 +353,7 @@ This also uses `pnpm exec` to run the project-local `flue` binary. `varlock run 
 For a multi-skill project, point `seedSkillDir` at the specific skill you want that run to improve:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --workspace .flue --id security-audit-research --payload '{"projectRoot":"path/to/skills-autoresearch-security","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/skills-autoresearch-security/skills/security-audit","sessionId":"security-audit-research"}'
+varlock run -- pnpm exec flue run autoresearch --target node --root . --id security-audit-research --payload '{"projectRoot":"path/to/skills-autoresearch-security","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/skills-autoresearch-security/skills/security-audit","sessionId":"security-audit-research"}'
 ```
 
 The run stops when either:

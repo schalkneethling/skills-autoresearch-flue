@@ -17,10 +17,10 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.json",
-    "flue:run": "flue run autoresearch --target node --workspace .flue",
-    "flue:build": "flue build --target node --workspace .flue --output .flue-dist",
-    "alpha:smoke": "flue run autoresearch --target node --workspace .flue --id alpha-smoke --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":false,\"sessionId\":\"alpha-smoke\"}'",
-    "alpha:research": "varlock run -- flue run autoresearch --target node --workspace .flue --id alpha-research --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":true,\"seedSkillDir\":\"fixtures/projects/release-notes-alpha/seed-skill\",\"sessionId\":\"alpha-research\"}'",
+    "flue:run": "flue run autoresearch --target node --root .",
+    "flue:build": "flue build --target node --root . --output .flue-dist",
+    "alpha:smoke": "flue run autoresearch --target node --root . --id alpha-smoke --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":false,\"sessionId\":\"alpha-smoke\"}'",
+    "alpha:research": "varlock run -- flue run autoresearch --target node --root . --id alpha-research --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":true,\"seedSkillDir\":\"fixtures/projects/release-notes-alpha/seed-skill\",\"sessionId\":\"alpha-research\"}'",
     "env:check": "varlock load"
   },
   "dependencies": {
@@ -39,5 +39,5 @@
     "varlock": "^1.1.0",
     "vitest": "^4.1.5"
   },
-  "packageManager": "pnpm@10.33.2"
+  "packageManager": "pnpm@11.1.2"
 }

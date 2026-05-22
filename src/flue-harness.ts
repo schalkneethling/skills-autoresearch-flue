@@ -13,8 +13,7 @@ import {
   EvalScoreSchema,
   ModelProduceResponseSchema,
   SkillResearchPatchSchema,
-  SkillResearchPatch,
-  ModelProduceResponse
+  SkillResearchPatch
 } from "./schemas.js";
 import { applySkillResearchPatch, validateSkillResearchPatch } from "./model-agent.js";
 import { cp, mkdir, writeFile } from "node:fs/promises";
@@ -33,10 +32,11 @@ export class FlueEvalAgent implements EvalAgent {
 
   async run(request: EvalAgentRequest): Promise<EvalScore> {
     const produceRequest = await buildProduceModelRequest(request);
-    const produced = (await this.#session.prompt(produceRequest.prompt, {
-      result: ModelProduceResponseSchema,
+    const { data: produced } = await this.#session.task(produceRequest.prompt, {
+      schema: ModelProduceResponseSchema,
+      role: produceRequest.system,
       model: toFlueModel(produceRequest.model)
-    })) as ModelProduceResponse;
+    });
     await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
     await writeTranscript(request.sandbox.outputDir, "producer-flue-transcript.json", {
       request: produceRequest,
@@ -44,11 +44,11 @@ export class FlueEvalAgent implements EvalAgent {
     });
 
     const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
-    const score = (await this.#session.prompt(judgeRequest.prompt, {
-      result: EvalScoreSchema,
+    const { data: score } = await this.#session.task(judgeRequest.prompt, {
+      schema: EvalScoreSchema,
       role: request.modelRoles?.judge,
       model: toFlueModel(judgeRequest.model)
-    })) as EvalScore;
+    });
     const validated = parseModelJudgeResponse(JSON.stringify(score), request.evalCase, request.track);
     await writeTranscript(request.sandbox.outputDir, "judge-flue-transcript.json", {
       request: judgeRequest,
@@ -67,10 +67,11 @@ export class FlueSkillResearcher implements SkillResearcher {
 
   async improve(request: Parameters<SkillResearcher["improve"]>[0]): Promise<void> {
     const modelRequest = await buildResearchModelRequest(request);
-    const patch = (await this.#session.prompt(modelRequest.prompt, {
-      result: SkillResearchPatchSchema,
+    const { data: patch } = await this.#session.task(modelRequest.prompt, {
+      schema: SkillResearchPatchSchema,
+      role: modelRequest.system,
       model: toFlueModel(modelRequest.model)
-    })) as SkillResearchPatch;
+    });
     validateSkillResearchPatch(request.candidateSkillDir, patch);
     await cp(request.previousSkillDir, request.candidateSkillDir, {
       recursive: true,

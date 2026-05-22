@@ -151,6 +151,64 @@ test("buildJudgeModelRequest scores only producer output with judge model", asyn
   expect(request.prompt).toContain("Score only the producer output");
 });
 
+test("buildJudgeModelRequest bounds large producer outputs before judging", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  const evalCase = syntheticEvals.evals[0];
+  const request = await buildJudgeModelRequest(
+    {
+      evalCase,
+      track: trackForEval(syntheticConfig, evalCase.eval_type),
+      role: "task-producer",
+      model: { provider: "anthropic", name: "claude-sonnet-4-6" },
+      sandbox: createEvalSandbox({
+        evalId: evalCase.id,
+        inputDir: join(root, "input"),
+        referenceDir: join(root, "reference"),
+        evalsDir: join(root, "evals"),
+        outputDir: join(root, "out")
+      })
+    },
+    [{ path: "RESULT.md", contents: "x".repeat(250_000) }]
+  );
+
+  expect(request.prompt.length).toBeLessThan(120_000);
+  expect(request.prompt).toContain("truncated");
+  expect(request.prompt).toContain("judge eval notes-001 producer output files/RESULT.md");
+});
+
+test("buildProduceModelRequest fails before provider calls when prompt budget is exceeded", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, {
+    evals: [
+      {
+        ...syntheticEvals.evals[0],
+        expectations: { huge: "x".repeat(800_000) }
+      }
+    ]
+  });
+  const evalCase = {
+    ...syntheticEvals.evals[0],
+    expectations: { huge: "x".repeat(800_000) }
+  };
+
+  await expect(
+    buildProduceModelRequest({
+      evalCase,
+      track: trackForEval(syntheticConfig, evalCase.eval_type),
+      role: "task-producer",
+      model: { provider: "anthropic", name: "claude-sonnet-4-6" },
+      sandbox: createEvalSandbox({
+        evalId: evalCase.id,
+        inputDir: join(root, "input"),
+        referenceDir: join(root, "reference"),
+        evalsDir: join(root, "evals"),
+        outputDir: join(root, "out")
+      })
+    })
+  ).rejects.toThrow(/prompt budget exceeded before producer eval notes-001/);
+});
+
 test("ModelSkillResearcher snapshots the skill, applies patch changes, and records transcript", async () => {
   const root = await tempProject();
   await writeFixture(root, syntheticConfig, syntheticEvals);
