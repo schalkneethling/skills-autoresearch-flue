@@ -451,14 +451,20 @@ function formatFileSet(files: Array<{ path: string; contents: string }>, label: 
   let omittedFiles = 0;
 
   for (const file of files) {
-    if (remainingChars <= 0) {
+    const separatorOverhead = formatted.length > 0 ? "\n\n".length : 0;
+    const heading = `### ${file.path}\n\n`;
+    const fenceOverhead = fenced("").length;
+    const renderedOverhead = separatorOverhead + heading.length + fenceOverhead;
+
+    if (remainingChars <= renderedOverhead) {
       omittedFiles++;
       continue;
     }
 
-    const contents = truncateText(file.contents, Math.min(MAX_FILE_CHARS, remainingChars), `${label}/${file.path}`);
-    remainingChars -= contents.length;
-    formatted.push(`### ${file.path}\n\n${fenced(contents)}`);
+    const maxContentsChars = Math.min(MAX_FILE_CHARS, remainingChars - renderedOverhead);
+    const contents = truncateText(file.contents, maxContentsChars, `${label}/${file.path}`);
+    remainingChars -= renderedOverhead + contents.length;
+    formatted.push(`${heading}${fenced(contents)}`);
   }
 
   if (omittedFiles > 0) {
@@ -478,9 +484,12 @@ function truncateText(contents: string, maxChars: number, label: string): string
   if (contents.length <= maxChars) {
     return contents;
   }
+  if (maxChars <= 0) {
+    return "";
+  }
   const keptChars = Math.max(0, maxChars - 128);
   const marker = `\n\n[truncated ${contents.length - keptChars} chars from ${label}; kept first ${keptChars} chars]\n`;
-  return `${contents.slice(0, keptChars)}${marker}`;
+  return `${contents.slice(0, keptChars)}${marker}`.slice(0, maxChars);
 }
 
 function fencedJson(value: unknown): string {
