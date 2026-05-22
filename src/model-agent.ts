@@ -23,6 +23,7 @@ export interface ModelRequest {
     provider: string;
     name: string;
   };
+  phase?: string;
 }
 
 export interface ModelClient {
@@ -149,9 +150,10 @@ export async function buildProduceModelRequest(request: EvalAgentRequest): Promi
     request.sandbox.mounts.find((mount) => mount.target === "/skill")?.source
   );
 
-  return {
+  return checkedModelRequest({
     model: roleModel(request, "producer"),
     system: request.role,
+    phase: `producer eval ${request.evalCase.id}`,
     prompt: [
       `Run the target skill for "${request.evalCase.title}" (${request.evalCase.id}).`,
       `Eval type: ${request.evalCase.eval_type}`,
@@ -162,13 +164,13 @@ export async function buildProduceModelRequest(request: EvalAgentRequest): Promi
       fencedJson(request.evalCase),
       "",
       "Input files:",
-      formatFileSet(inputFiles),
+      formatFileSet(inputFiles, `producer eval ${request.evalCase.id} input files`),
       "",
       "Reference files:",
-      formatFileSet(referenceFiles),
+      formatFileSet(referenceFiles, `producer eval ${request.evalCase.id} reference files`),
       "",
       "Skill files:",
-      formatFileSet(skillFiles),
+      formatFileSet(skillFiles, `producer eval ${request.evalCase.id} skill files`),
       "",
       "Produce the concrete eval output files. Do not score your own work.",
       "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
@@ -182,7 +184,7 @@ export async function buildProduceModelRequest(request: EvalAgentRequest): Promi
       }),
       "Each output_files path must be relative to the eval output directory."
     ].join("\n")
-  };
+  });
 }
 
 export async function buildJudgeModelRequest(
@@ -193,9 +195,10 @@ export async function buildJudgeModelRequest(
     request.sandbox.mounts.find((mount) => mount.target === "/reference")?.source
   );
 
-  return {
+  return checkedModelRequest({
     model: roleModel(request, "judge"),
     system: request.modelRoles?.judge ?? "judge",
+    phase: `judge eval ${request.evalCase.id}`,
     prompt: [
       `Judge output for "${request.evalCase.title}" (${request.evalCase.id}).`,
       `Eval type: ${request.evalCase.eval_type}`,
@@ -205,10 +208,10 @@ export async function buildJudgeModelRequest(
       fencedJson(request.evalCase),
       "",
       "Reference files:",
-      formatFileSet(referenceFiles),
+      formatFileSet(referenceFiles, `judge eval ${request.evalCase.id} reference files`),
       "",
       "Producer output files:",
-      formatFileSet(outputFiles),
+      formatFileSet(outputFiles, `judge eval ${request.evalCase.id} producer output files`),
       "",
       "Score only the producer output. Do not award credit for requirements merely stated in the skill instructions.",
       "Return only well-formed JSON matching the EvalScore schema. Do not include markdown, code fences, prose, or XML tags:",
@@ -227,7 +230,7 @@ export async function buildJudgeModelRequest(
         summary: "Concise scoring summary."
       })
     ].join("\n")
-  };
+  });
 }
 
 export function parseModelProduceResponse(response: string): ModelProduceResponse {
@@ -258,10 +261,11 @@ export async function applyOutputFiles(outputDir: string, files: OutputFile[]): 
 
 export async function buildResearchModelRequest(request: SkillResearchRequest): Promise<ModelRequest> {
   const skillFiles = await readFilesFromMount(request.previousSkillDir);
-  return {
+  return checkedModelRequest({
     model: request.project.config.models?.researcher ??
       request.project.config.model ?? { provider: "anthropic", name: "claude-sonnet-4-6" },
     system: request.project.config.roles.skill_builder,
+    phase: `research iteration ${request.iteration}`,
     prompt: [
       `Improve skill "${request.project.config.skill_name}" for iteration ${request.iteration}.`,
       `Topic group: ${request.project.config.topic_group}`,
@@ -278,7 +282,7 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
       fencedJson(request.baselineScores),
       "",
       "Current skill files:",
-      formatFileSet(skillFiles),
+      formatFileSet(skillFiles, `research iteration ${request.iteration} skill files`),
       "",
       "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
       fencedJson({
@@ -287,7 +291,7 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
       }),
       "Each change path must be relative to the skill directory."
     ].join("\n")
-  };
+  });
 }
 
 function roleModel(request: EvalAgentRequest, role: "producer" | "judge"): ModelConfig {
@@ -413,15 +417,70 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function formatFileSet(files: Array<{ path: string; contents: string }>): string {
+const MAX_PROMPT_TOKENS = 180_000;
+const APPROX_CHARS_PER_TOKEN = 4;
+const MAX_FILE_CHARS = 80_000;
+const MAX_FILE_SET_CHARS = 240_000;
+
+function checkedModelRequest(request: ModelRequest): ModelRequest {
+  const estimatedTokens = estimateTokens(`${request.system}\n${request.prompt}`);
+  if (estimatedTokens <= MAX_PROMPT_TOKENS) {
+    return request;
+  }
+
+  const phase = request.phase ?? "model request";
+  throw new Error(
+    [
+      `[flue] prompt budget exceeded before ${phase}: estimated ${estimatedTokens} tokens > ${MAX_PROMPT_TOKENS} token budget`,
+      `Prompt size: ${request.prompt.length} chars. This was detected before submitting a provider request.`,
+      "Reduce the eval input/reference/skill/output artifacts for this phase or add a more compact summary."
+    ].join("\n")
+  );
+}
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / APPROX_CHARS_PER_TOKEN);
+}
+
+function formatFileSet(files: Array<{ path: string; contents: string }>, label: string): string {
   if (files.length === 0) {
     return "(none)";
   }
-  return files.map((file) => `### ${file.path}\n\n${fenced(file.contents)}`).join("\n\n");
+  let remainingChars = MAX_FILE_SET_CHARS;
+  const formatted: string[] = [];
+  let omittedFiles = 0;
+
+  for (const file of files) {
+    if (remainingChars <= 0) {
+      omittedFiles++;
+      continue;
+    }
+
+    const contents = truncateText(file.contents, Math.min(MAX_FILE_CHARS, remainingChars), `${label}/${file.path}`);
+    remainingChars -= contents.length;
+    formatted.push(`### ${file.path}\n\n${fenced(contents)}`);
+  }
+
+  if (omittedFiles > 0) {
+    formatted.push(
+      `[${omittedFiles} file(s) omitted from ${label}; ${MAX_FILE_SET_CHARS} char file-set budget exhausted.]`
+    );
+  }
+
+  return formatted.join("\n\n");
 }
 
 function fenced(contents: string): string {
   return `\`\`\`\n${contents}\n\`\`\``;
+}
+
+function truncateText(contents: string, maxChars: number, label: string): string {
+  if (contents.length <= maxChars) {
+    return contents;
+  }
+  const keptChars = Math.max(0, maxChars - 128);
+  const marker = `\n\n[truncated ${contents.length - keptChars} chars from ${label}; kept first ${keptChars} chars]\n`;
+  return `${contents.slice(0, keptChars)}${marker}`;
 }
 
 function fencedJson(value: unknown): string {
