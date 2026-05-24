@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
@@ -24,6 +24,7 @@ export interface ModelRequest {
     name: string;
   };
   phase?: string;
+  workspaceDir?: string;
 }
 
 export interface ModelClient {
@@ -140,25 +141,24 @@ export class ModelSkillResearcher implements SkillResearcher {
 }
 
 export async function buildProduceModelRequest(request: EvalAgentRequest): Promise<ModelRequest> {
-  const inputFiles = await readFilesFromMount(
-    request.sandbox.mounts.find((mount) => mount.target === "/input")?.source
-  );
-  const referenceFiles = await readFilesFromMount(
-    request.sandbox.mounts.find((mount) => mount.target === "/reference")?.source
-  );
-  const skillFiles = await readFilesFromMount(
-    request.sandbox.mounts.find((mount) => mount.target === "/skill")?.source
-  );
+  const workspaceDir = await createPhaseWorkspace(request, "producer", ["/input", "/reference", "/skill"]);
+  const inputFiles = await readFilesFromMount(join(workspaceDir, "input"));
+  const referenceFiles = await readFilesFromMount(join(workspaceDir, "reference"));
+  const skillFiles = await readFilesFromMount(join(workspaceDir, "skill"));
 
   return checkedModelRequest({
     model: roleModel(request, "producer"),
     system: request.role,
     phase: `producer eval ${request.evalCase.id}`,
+    workspaceDir,
     prompt: [
       `Run the target skill for "${request.evalCase.title}" (${request.evalCase.id}).`,
       `Eval type: ${request.evalCase.eval_type}`,
       `Track: ${request.track.id}`,
       request.targetSkill ? `Target skill: ${request.targetSkill}` : "Baseline run: no target skill is mounted.",
+      `Authoritative workspace root: ${workspaceDir}`,
+      "Only files under this workspace are authoritative for this producer phase.",
+      "Available paths: ./input, ./reference, ./skill when present.",
       "",
       "Eval case JSON:",
       fencedJson(request.evalCase),
@@ -191,27 +191,37 @@ export async function buildJudgeModelRequest(
   request: EvalAgentRequest,
   outputFiles: OutputFile[]
 ): Promise<ModelRequest> {
-  const referenceFiles = await readFilesFromMount(
-    request.sandbox.mounts.find((mount) => mount.target === "/reference")?.source
-  );
+  await applyOutputFiles(request.sandbox.outputDir, outputFiles);
+  const workspaceDir = await createPhaseWorkspace(request, "judge", ["/reference"]);
+  await applyOutputFiles(join(workspaceDir, "output"), outputFiles);
+  const referenceFiles = await readFilesFromMount(join(workspaceDir, "reference"));
+  const rubricFiles = await readFilesFromMount(join(workspaceDir, "evals"));
+  const workspaceOutputFiles = await readFilesFromMount(join(workspaceDir, "output"));
 
   return checkedModelRequest({
     model: roleModel(request, "judge"),
     system: request.modelRoles?.judge ?? "judge",
     phase: `judge eval ${request.evalCase.id}`,
+    workspaceDir,
     prompt: [
       `Judge output for "${request.evalCase.title}" (${request.evalCase.id}).`,
       `Eval type: ${request.evalCase.eval_type}`,
       `Track: ${request.track.id}`,
+      `Authoritative workspace root: ${workspaceDir}`,
+      "Only files under this workspace are authoritative for this judge phase.",
+      "Available paths: ./evals, ./reference, ./output.",
       "",
       "Eval case JSON:",
       fencedJson(request.evalCase),
+      "",
+      "Rubric files:",
+      formatFileSet(rubricFiles, `judge eval ${request.evalCase.id} rubric files`),
       "",
       "Reference files:",
       formatFileSet(referenceFiles, `judge eval ${request.evalCase.id} reference files`),
       "",
       "Producer output files:",
-      formatFileSet(outputFiles, `judge eval ${request.evalCase.id} producer output files`),
+      formatFileSet(workspaceOutputFiles, `judge eval ${request.evalCase.id} producer output files`),
       "",
       "Score only the producer output. Do not award credit for requirements merely stated in the skill instructions.",
       "Return only well-formed JSON matching the EvalScore schema. Do not include markdown, code fences, prose, or XML tags:",
@@ -231,6 +241,35 @@ export async function buildJudgeModelRequest(
       })
     ].join("\n")
   });
+}
+
+async function createPhaseWorkspace(
+  request: EvalAgentRequest,
+  phase: "producer" | "judge",
+  mountTargets: string[]
+): Promise<string> {
+  const workspaceDir = join(request.sandbox.outputDir, ".phase-workspaces", phase);
+  await rm(workspaceDir, { recursive: true, force: true });
+  await mkdir(workspaceDir, { recursive: true });
+
+  for (const target of mountTargets) {
+    const mount = request.sandbox.mounts.find((candidate) => candidate.target === target);
+    if (!mount || !(await exists(mount.source))) {
+      continue;
+    }
+    await cp(mount.source, join(workspaceDir, target.slice(1)), { recursive: true, force: false, errorOnExist: true });
+  }
+
+  const evalsMount = request.sandbox.mounts.find((candidate) => candidate.target === "/evals");
+  if (phase === "judge" && evalsMount && (await exists(evalsMount.source))) {
+    await mkdir(join(workspaceDir, "evals"), { recursive: true });
+    const rubricPath = join(evalsMount.source, "rubric.md");
+    if (await exists(rubricPath)) {
+      await cp(rubricPath, join(workspaceDir, "evals", "rubric.md"), { force: false, errorOnExist: true });
+    }
+  }
+
+  return workspaceDir;
 }
 
 export function parseModelProduceResponse(response: string): ModelProduceResponse {
@@ -260,17 +299,24 @@ export async function applyOutputFiles(outputDir: string, files: OutputFile[]): 
 }
 
 export async function buildResearchModelRequest(request: SkillResearchRequest): Promise<ModelRequest> {
-  const skillFiles = await readFilesFromMount(request.previousSkillDir);
+  const workspaceDir = await createResearchWorkspace(request);
+  const skillFiles = await readFilesFromMount(join(workspaceDir, "skill"));
+  const referenceFiles = await readFilesFromMount(join(workspaceDir, "reference"));
+  const evalFiles = await readFilesFromMount(join(workspaceDir, "evals"));
   return checkedModelRequest({
     model: request.project.config.models?.researcher ??
       request.project.config.model ?? { provider: "anthropic", name: "claude-sonnet-4-6" },
     system: request.project.config.roles.skill_builder,
     phase: `research iteration ${request.iteration}`,
+    workspaceDir,
     prompt: [
       `Improve skill "${request.project.config.skill_name}" for iteration ${request.iteration}.`,
       `Topic group: ${request.project.config.topic_group}`,
       `Target normalized score: ${request.project.config.target_score}`,
       `Previous normalized score: ${request.previousAggregate.overall.normalizedScore}`,
+      `Authoritative workspace root: ${workspaceDir}`,
+      "Only files under this workspace are authoritative for this research phase.",
+      "Available paths: ./config.json, ./evals, ./reference, ./skill, ./scores.",
       "",
       "Previous aggregate:",
       fencedJson(request.previousAggregate),
@@ -284,6 +330,12 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
       "Current skill files:",
       formatFileSet(skillFiles, `research iteration ${request.iteration} skill files`),
       "",
+      "Eval and rubric files:",
+      formatFileSet(evalFiles, `research iteration ${request.iteration} eval files`),
+      "",
+      "Reference files:",
+      formatFileSet(referenceFiles, `research iteration ${request.iteration} reference files`),
+      "",
       "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
       fencedJson({
         summary: "Brief summary of the intended skill improvement.",
@@ -292,6 +344,46 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
       "Each change path must be relative to the skill directory."
     ].join("\n")
   });
+}
+
+async function createResearchWorkspace(request: SkillResearchRequest): Promise<string> {
+  const workspaceDir = join(request.project.root, "workspace", ".phase-workspaces", `research-${request.iteration}`);
+  await rm(workspaceDir, { recursive: true, force: true });
+  await mkdir(join(workspaceDir, "scores"), { recursive: true });
+  await cp(join(request.project.root, "config.json"), join(workspaceDir, "config.json"), {
+    force: false,
+    errorOnExist: true
+  });
+  await cp(join(request.project.root, "evals"), join(workspaceDir, "evals"), {
+    recursive: true,
+    force: false,
+    errorOnExist: true
+  });
+  if (await exists(request.project.referenceDir)) {
+    await cp(request.project.referenceDir, join(workspaceDir, "reference"), {
+      recursive: true,
+      force: false,
+      errorOnExist: true
+    });
+  }
+  await cp(request.previousSkillDir, join(workspaceDir, "skill"), {
+    recursive: true,
+    force: false,
+    errorOnExist: true
+  });
+  await writeFile(
+    join(workspaceDir, "scores", "previous-aggregate.json"),
+    `${JSON.stringify(request.previousAggregate, null, 2)}\n`
+  );
+  await writeFile(
+    join(workspaceDir, "scores", "previous-scores.json"),
+    `${JSON.stringify(request.previousScores, null, 2)}\n`
+  );
+  await writeFile(
+    join(workspaceDir, "scores", "baseline-scores.json"),
+    `${JSON.stringify(request.baselineScores, null, 2)}\n`
+  );
+  return workspaceDir;
 }
 
 function roleModel(request: EvalAgentRequest, role: "producer" | "judge"): ModelConfig {

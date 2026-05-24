@@ -237,8 +237,19 @@ The producer sees:
 The judge sees:
 
 - eval case JSON
+- rubric files
 - reference files
 - producer output files
+
+The researcher sees:
+
+- project config
+- eval and rubric files
+- reference files
+- previous aggregate, score, and baseline summaries
+- the previous skill files
+
+For Flue-backed runs, each phase executes from a small generated workspace containing only the files for that phase. These workspaces are written under `workspace/.phase-workspaces/` or the eval output directory's `.phase-workspaces/` folder and are also recorded in transcripts as `workspaceDir`. The judge workspace contains only `evals/rubric.md`, reference files, and producer output files; it does not mount the candidate skill or unrelated harness fixtures.
 
 The judge should not score skill instructions directly.
 

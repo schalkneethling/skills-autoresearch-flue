@@ -1,5 +1,5 @@
 import type { FlueSession } from "@flue/runtime/client";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { FlueEvalAgent, runFlueAutoresearch } from "../src/flue-harness.js";
 import { createEvalSandbox } from "../src/sandbox.js";
@@ -8,12 +8,12 @@ import { score, syntheticConfig, syntheticEvals, tempProject, writeFixture } fro
 
 class MockFlueSession {
   readonly id = "mock";
-  tasks: Array<{ text: string; schema: unknown; model?: string; role?: string }> = [];
+  tasks: Array<{ text: string; schema: unknown; model?: string; role?: string; cwd?: string }> = [];
 
   constructor(private readonly responses: unknown[]) {}
 
-  async task(text: string, options?: { schema?: unknown; model?: string; role?: string }) {
-    this.tasks.push({ text, schema: options?.schema, model: options?.model, role: options?.role });
+  async task(text: string, options?: { schema?: unknown; model?: string; role?: string; cwd?: string }) {
+    this.tasks.push({ text, schema: options?.schema, model: options?.model, role: options?.role, cwd: options?.cwd });
     const response = this.responses.shift();
     if (!response) {
       throw new Error("No queued Flue response");
@@ -60,6 +60,16 @@ test("FlueEvalAgent uses session structured output and writes eval artifacts", a
   ]);
   expect((session as any).tasks[0].role).toBe("task-producer");
   expect((session as any).tasks[1].role).toBe("eval-judge");
+  expect((session as any).tasks[0].cwd).toContain(join(sandbox.outputDir, ".phase-workspaces", "producer"));
+  expect((session as any).tasks[1].cwd).toContain(join(sandbox.outputDir, ".phase-workspaces", "judge"));
+  expect((session as any).tasks[1].text).toContain("Available paths: ./evals, ./reference, ./output.");
+  expect((session as any).tasks[1].text).not.toContain("release-notes-alpha");
+  await expect(
+    readFile(join(sandbox.outputDir, ".phase-workspaces", "judge", "output", "RESULT.md"), "utf8")
+  ).resolves.toBe("Flue output\n");
+  await expect(stat(join(sandbox.outputDir, ".phase-workspaces", "judge", "skill"))).rejects.toMatchObject({
+    code: "ENOENT"
+  });
   await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe("Flue output\n");
 });
 
