@@ -1,4 +1,5 @@
-import type { FlueContext } from "@flue/sdk/client";
+import type { FlueContext } from "@flue/runtime/client";
+import { local } from "@flue/runtime/node";
 import { runFlueAutoresearch } from "../../src/flue-harness.js";
 
 export const triggers = {};
@@ -16,7 +17,7 @@ interface AutoresearchPayload {
 export default async function ({ init, payload, env }: FlueContext<AutoresearchPayload>) {
   const model = payload.model ?? env.FLUE_MODEL ?? "anthropic/claude-sonnet-4-6";
   const agent = await init({
-    sandbox: "local",
+    sandbox: local(),
     model
   });
   const session = await agent.session(payload.sessionId ?? "autoresearch");

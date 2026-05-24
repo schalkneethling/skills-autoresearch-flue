@@ -1,4 +1,4 @@
-import type { FlueSession } from "@flue/sdk/client";
+import type { FlueSession } from "@flue/runtime/client";
 import {
   applyOutputFiles,
   buildJudgeModelRequest,
