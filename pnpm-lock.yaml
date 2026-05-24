@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@flue/sdk':
-        specifier: ^0.6.2
-        version: 0.6.2
+        specifier: 0.5.3
+        version: 0.5.3(ws@8.20.1)(zod@4.4.3)
       valibot:
         specifier: ^1.4.0
         version: 1.4.0(typescript@6.0.3)
@@ -546,10 +546,6 @@ packages:
     peerDependenciesMeta:
       wrangler:
         optional: true
-
-  '@flue/sdk@0.6.2':
-    resolution: {integrity: sha512-DqXybBpxb17gwEppuHcpUR0K0/04kCPmNhm2kTfz+Yhrxiw3OeClF3zPK9BkMj2GN/2ZZnwPPEeh1gJ4CoACdw==}
-    engines: {node: '>=22.18.0'}
 
   '@google/genai@1.52.0':
     resolution: {integrity: sha512-gwSvbpiN/17O9TbsqSsE/OzZcpv5Fo4RQjdngGgogtuB9RsyJ8ZHhX5KjHj1bp5N9snN2eK8LDGXSaWW2hof8Q==}
@@ -2778,8 +2774,6 @@ snapshots:
       - utf-8-validate
       - ws
       - zod
-
-  '@flue/sdk@0.6.2': {}
 
   '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))':
     dependencies:

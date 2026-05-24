@@ -65,3 +65,13 @@ test("formatEvent classifies target completion as a regular log", () => {
     })
   ).toEqual({ level: "log", message: "Target reached at iteration 2: 0.900" });
 });
+
+test("formatEvent explains baseline target completion", () => {
+  expect(
+    formatEvent({
+      type: "baseline-target-score-reached",
+      normalizedScore: 0.95,
+      targetScore: 0.8
+    })
+  ).toEqual({ level: "log", message: "Baseline reached target: 0.950 >= 0.800" });
+});

@@ -7,6 +7,7 @@ interface AutoresearchPayload {
   projectRoot?: string;
   withBaseline?: boolean;
   runResearch?: boolean;
+  forceResearch?: boolean;
   seedSkillDir?: string;
   sessionId?: string;
   model?: string;
@@ -24,6 +25,7 @@ export default async function ({ init, payload, env }: FlueContext<AutoresearchP
     projectRoot: payload.projectRoot ?? process.cwd(),
     withBaseline: payload.withBaseline,
     runResearch: payload.runResearch,
+    forceResearch: payload.forceResearch,
     seedSkillDir: payload.seedSkillDir
   });
 

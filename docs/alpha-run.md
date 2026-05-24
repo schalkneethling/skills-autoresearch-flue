@@ -67,6 +67,8 @@ This runs the Flue agent with:
 }
 ```
 
+If the imported baseline already meets `target_score`, the run emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1`. Add `"forceResearch": true` to the payload only when you want to spend model calls on research anyway.
+
 ## Model Split
 
 The alpha fixture config assigns different models per phase:
