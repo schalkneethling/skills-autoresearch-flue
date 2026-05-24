@@ -9,6 +9,7 @@ interface CliOptions {
   projectRoot: string;
   withBaseline: boolean;
   runResearch: boolean;
+  forceResearch: boolean;
   seedSkillDir?: string;
   scoreDir?: string;
   modelClient?: "anthropic";
@@ -23,6 +24,7 @@ function usage(): string {
     "  --project <dir>       Project root. Defaults to current directory.",
     "  --with-baseline       Import workspace/baseline instead of generating it.",
     "  --research            Run research iterations after baseline.",
+    "  --force-research      Run research even when the baseline already reaches target_score.",
     "  --seed-skill <dir>    Seed skill directory for research iterations.",
     "  --score-dir <dir>     Directory of file-backed EvalScore JSON files.",
     "  --model-client <name> Use a model client. Supported: anthropic.",
@@ -38,6 +40,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       project: { type: "string" },
       "with-baseline": { type: "boolean" },
       research: { type: "boolean" },
+      "force-research": { type: "boolean" },
       "seed-skill": { type: "string" },
       "score-dir": { type: "string" },
       "model-client": { type: "string" },
@@ -57,6 +60,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     projectRoot: parsed.values.project ?? process.cwd(),
     withBaseline: parsed.values["with-baseline"] ?? false,
     runResearch: parsed.values.research ?? false,
+    forceResearch: parsed.values["force-research"] ?? false,
     seedSkillDir: parsed.values["seed-skill"],
     scoreDir: parsed.values["score-dir"],
     modelClient: parseModelClient(parsed.values["model-client"]),
@@ -94,6 +98,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     projectRoot: cli.projectRoot,
     withBaseline: cli.withBaseline,
     runResearch: cli.runResearch,
+    forceResearch: cli.forceResearch,
     seedSkillDir: cli.seedSkillDir,
     agent: modelClient
       ? new ModelEvalAgent(modelClient)
@@ -156,6 +161,11 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
       return {
         level: "log",
         message: `Iteration ${event.iteration} score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`
+      };
+    case "baseline-target-score-reached":
+      return {
+        level: "log",
+        message: `Baseline reached target: ${event.normalizedScore.toFixed(3)} >= ${event.targetScore.toFixed(3)}`
       };
     case "target-score-reached":
       return {

@@ -14,6 +14,7 @@ export type RunEvent =
   | { type: "iteration-started"; iteration: number; previousSkillDir: string; candidateSkillDir: string }
   | { type: "iteration-generated"; iteration: number; candidateSkillDir: string }
   | { type: "iteration-scored"; iteration: number; scores: number; aggregate: AggregateReport }
+  | { type: "baseline-target-score-reached"; normalizedScore: number; targetScore: number }
   | { type: "target-score-reached"; iteration: number; normalizedScore: number; targetScore: number }
   | { type: "max-iterations-reached"; completedIterations: number; maxIterations: number }
   | { type: "research-loop-ready"; completedIterations: number; maxIterations: number }
@@ -56,6 +57,7 @@ export interface OrchestrateOptions {
   researcher?: SkillResearcher;
   withBaseline?: boolean;
   runResearch?: boolean;
+  forceResearch?: boolean;
   seedSkillDir?: string;
 }
 
@@ -71,6 +73,20 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
 
   const aggregate = aggregateScores(project.config, baselineScores);
   events.push({ type: "aggregated", aggregate });
+
+  if (
+    options.runResearch &&
+    !options.forceResearch &&
+    aggregate.overall.normalizedScore >= project.config.target_score
+  ) {
+    events.push({
+      type: "baseline-target-score-reached",
+      normalizedScore: aggregate.overall.normalizedScore,
+      targetScore: project.config.target_score
+    });
+    return { project, baselineScores, aggregate, completedIterations: 0, iterations: [], events };
+  }
+
   events.push({
     type: "research-loop-ready",
     completedIterations: 0,

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createEvalSandbox } from "../src/sandbox.js";
 import { runEval, runWithConcurrency, EvalAgent } from "../src/runner.js";
@@ -146,6 +146,74 @@ test("orchestrator generates initial baseline by default without counting it as 
   await expect(readFile(join(generateRoot, "workspace", "baseline", "scores-0.json"), "utf8")).resolves.toContain(
     "notes-001"
   );
+});
+
+test("orchestrator skips research when the baseline already reaches target score", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  const agent: EvalAgent = {
+    async run(request) {
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.95);
+    }
+  };
+  const researcher: SkillResearcher = {
+    async improve() {
+      throw new Error("researcher should not run when baseline reaches target");
+    }
+  };
+
+  const result = await orchestrateBaseline({
+    projectRoot: root,
+    agent,
+    researcher,
+    runResearch: true
+  });
+
+  expect(result.completedIterations).toBe(0);
+  expect(result.iterations).toEqual([]);
+  expect(result.aggregate.overall.normalizedScore).toBe(0.95);
+  expect(result.events.at(-1)).toMatchObject({
+    type: "baseline-target-score-reached",
+    normalizedScore: 0.95,
+    targetScore: syntheticConfig.target_score
+  });
+  await expect(stat(join(root, "workspace", "iterations", "1"))).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+test("orchestrator can force research when the baseline already reaches target score", async () => {
+  const root = await tempProject();
+  const config = { ...syntheticConfig, max_iterations: 1 };
+  await writeFixture(root, config, syntheticEvals);
+  const seedSkill = join(root, "seed-skill");
+  await mkdir(seedSkill, { recursive: true });
+  await writeFile(join(seedSkill, "SKILL.md"), "# Release Summary\n");
+
+  const agent: EvalAgent = {
+    async run(request) {
+      return request.targetSkill
+        ? score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.9)
+        : score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.95);
+    }
+  };
+  const researcher: SkillResearcher = {
+    async improve(request) {
+      await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
+    }
+  };
+
+  const result = await orchestrateBaseline({
+    projectRoot: root,
+    agent,
+    researcher,
+    runResearch: true,
+    forceResearch: true,
+    seedSkillDir: seedSkill
+  });
+
+  expect(result.completedIterations).toBe(1);
+  expect(result.events.some((event) => event.type === "baseline-target-score-reached")).toBe(false);
+  expect(result.events.at(-1)).toMatchObject({ type: "target-score-reached", iteration: 1 });
+  await expect(stat(join(root, "workspace", "iterations", "1", "skill"))).resolves.toBeTruthy();
 });
 
 test("orchestrator runs research iterations until target score is reached", async () => {

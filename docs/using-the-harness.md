@@ -316,6 +316,7 @@ The payload fields are:
 - `projectRoot`: path to the autoresearch project you want the harness to load. Relative paths are resolved from the directory where you run the command, so in this guide they are relative to the local `skills-autoresearch-flue` checkout root. Use an absolute path if the project lives somewhere else and you want to avoid ambiguity.
 - `withBaseline`: tells the harness to load or validate the baseline artifacts for the project.
 - `runResearch`: controls whether the researcher should patch the skill. `false` makes this a smoke run that stops before model-backed research.
+- `forceResearch`: optional override for research runs. When omitted or `false`, `runResearch:true` stops before the researcher if the baseline aggregate score already meets `target_score`.
 - `sessionId`: run/session name used when writing harness artifacts. Keeping this aligned with `--id` makes outputs easier to correlate.
 
 This should return events ending with `research-loop-ready`.
@@ -356,7 +357,9 @@ For a multi-skill project, point `seedSkillDir` at the specific skill you want t
 varlock run -- pnpm exec flue run autoresearch --target node --root . --id security-audit-research --payload '{"projectRoot":"path/to/skills-autoresearch-security","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/skills-autoresearch-security/skills/security-audit","sessionId":"security-audit-research"}'
 ```
 
-The run stops when either:
+The run first scores the baseline. If the baseline aggregate `normalizedScore` is already greater than or equal to `target_score`, the harness emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1` or calling the researcher. To intentionally run improvements anyway, add `"forceResearch": true` to the payload.
+
+When research proceeds, the run stops when either:
 
 - `target_score` is reached, or
 - `max_iterations` is exhausted.
