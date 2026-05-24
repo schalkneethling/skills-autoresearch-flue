@@ -2,6 +2,8 @@
 
 This guide is for someone who has an agent skill and wants to use this repository to improve it through autoresearch.
 
+For goal-oriented examples, see [Harness Use Cases](use-cases/README.md).
+
 The current alpha flow is:
 
 1. Define a small autoresearch project for your skill.
