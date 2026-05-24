@@ -35,7 +35,8 @@ export class FlueEvalAgent implements EvalAgent {
     const { data: produced } = await this.#session.task(produceRequest.prompt, {
       schema: ModelProduceResponseSchema,
       role: produceRequest.system,
-      model: toFlueModel(produceRequest.model)
+      model: toFlueModel(produceRequest.model),
+      cwd: produceRequest.workspaceDir
     });
     await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
     await writeTranscript(request.sandbox.outputDir, "producer-flue-transcript.json", {
@@ -47,7 +48,8 @@ export class FlueEvalAgent implements EvalAgent {
     const { data: score } = await this.#session.task(judgeRequest.prompt, {
       schema: EvalScoreSchema,
       role: request.modelRoles?.judge,
-      model: toFlueModel(judgeRequest.model)
+      model: toFlueModel(judgeRequest.model),
+      cwd: judgeRequest.workspaceDir
     });
     const validated = parseModelJudgeResponse(JSON.stringify(score), request.evalCase, request.track);
     await writeTranscript(request.sandbox.outputDir, "judge-flue-transcript.json", {
@@ -70,7 +72,8 @@ export class FlueSkillResearcher implements SkillResearcher {
     const { data: patch } = await this.#session.task(modelRequest.prompt, {
       schema: SkillResearchPatchSchema,
       role: modelRequest.system,
-      model: toFlueModel(modelRequest.model)
+      model: toFlueModel(modelRequest.model),
+      cwd: modelRequest.workspaceDir
     });
     validateSkillResearchPatch(request.candidateSkillDir, patch);
     await cp(request.previousSkillDir, request.candidateSkillDir, {
