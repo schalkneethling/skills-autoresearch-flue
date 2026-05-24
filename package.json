@@ -24,12 +24,12 @@
     "env:check": "varlock load"
   },
   "dependencies": {
-    "@flue/sdk": "0.5.3",
+    "@flue/runtime": "0.7.0",
     "valibot": "^1.4.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@flue/cli": "^0.5.3",
+    "@flue/cli": "0.7.0",
     "@types/node": "^25.9.1",
     "@varlock/1password-plugin": "^1.1.0",
     "eslint": "^10.3.0",
