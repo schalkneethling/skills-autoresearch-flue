@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@flue/runtime": "0.7.0",
-    "valibot": "^1.4.0"
+    "valibot": "^1.4.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
