@@ -21,7 +21,7 @@ Do not use this as proof that a model never needs guidance. It only answers the 
 
 If the baseline reaches `target_score`, the model likely does not need additional skill guidance for this eval set.
 
-If the baseline falls short, the scores and judge rationales help identify where domain guidance may help. You can then run the standard seed skill improvement workflow, or implement the future seed-as-reference workflow tracked in [issue #40](https://github.com/schalkneethling/skills-autoresearch-flue/issues/40).
+If the baseline falls short, the scores and judge rationales help identify where domain guidance may help. You can then run the standard seed skill improvement workflow, or enable seed-as-reference research by setting `research_start` to `"empty"`.
 
 ## Project Setup
 
@@ -109,8 +109,17 @@ baseline-target-score-reached
 
 and does not create `workspace/iterations/1`.
 
-## Current Limitation
+## Seed-As-Reference Research
 
-If the baseline falls short and research proceeds today, iteration 1 starts from the configured seed skill. The researcher does not yet start from an empty candidate skill while using the seed skill only as reference material.
+To start research from an empty candidate skill while using the seed skill only as reference material, add this to `config.json`:
 
-That future workflow is tracked in [issue #40](https://github.com/schalkneethling/skills-autoresearch-flue/issues/40).
+```json
+{
+  "origin_skill": "seed-skill",
+  "research_start": "empty"
+}
+```
+
+If `guidance_skill` is omitted, `origin_skill` is used as the immutable guidance skill. Iteration 1 starts from `workspace/empty-skill`; later iterations continue from the previous candidate skill.
+
+Model-backed research writes `workspace/guidance-ledger.json` when the researcher records which seed/reference sections were used, deferred, ignored, or requested. After iteration 1, prompts include that ledger and a compact seed/reference index instead of the full seed skill content by default.

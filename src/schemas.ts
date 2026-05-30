@@ -27,6 +27,8 @@ export const ProjectConfigSchema = v.object({
   skill_name: v.pipe(v.string(), v.minLength(1)),
   topic_group: v.pipe(v.string(), v.minLength(1)),
   origin_skill: v.optional(v.pipe(v.string(), v.minLength(1))),
+  research_start: v.optional(v.picklist(["seed", "empty"])),
+  guidance_skill: v.optional(v.pipe(v.string(), v.minLength(1))),
   target_score: v.pipe(v.number(), v.minValue(0)),
   max_iterations: v.pipe(v.number(), v.integer(), v.minValue(1)),
   max_concurrency: v.pipe(v.number(), v.integer(), v.minValue(1)),
@@ -96,8 +98,22 @@ export const SkillFileChangeSchema = v.object({
   contents: v.string()
 });
 
+export const GuidanceLedgerEntrySchema = v.object({
+  iteration: v.pipe(v.number(), v.integer(), v.minValue(1)),
+  source: v.pipe(v.string(), v.minLength(1)),
+  action: v.picklist(["used", "deferred", "ignored", "requested"]),
+  reason: v.pipe(v.string(), v.minLength(1)),
+  section: v.optional(v.pipe(v.string(), v.minLength(1))),
+  appliedTo: v.optional(v.pipe(v.string(), v.minLength(1)))
+});
+
+export const GuidanceLedgerSchema = v.object({
+  entries: v.optional(v.array(GuidanceLedgerEntrySchema), [])
+});
+
 export const SkillResearchPatchSchema = v.object({
   summary: v.pipe(v.string(), v.minLength(1)),
+  guidance: v.optional(v.array(v.omit(GuidanceLedgerEntrySchema, ["iteration"])), []),
   changes: v.pipe(v.array(SkillFileChangeSchema), v.minLength(1))
 });
 
@@ -114,6 +130,8 @@ export type OutputFile = v.InferOutput<typeof OutputFileSchema>;
 export type ModelProduceResponse = v.InferOutput<typeof ModelProduceResponseSchema>;
 export type SkillMetadata = v.InferOutput<typeof SkillMetadataSchema>;
 export type SkillFileChange = v.InferOutput<typeof SkillFileChangeSchema>;
+export type GuidanceLedgerEntry = v.InferOutput<typeof GuidanceLedgerEntrySchema>;
+export type GuidanceLedger = v.InferOutput<typeof GuidanceLedgerSchema>;
 export type SkillResearchPatch = v.InferOutput<typeof SkillResearchPatchSchema>;
 
 export function parseWithSchema<TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(

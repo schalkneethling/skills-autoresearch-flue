@@ -136,6 +136,8 @@ The important parts are not the exact directory names for every project, but tha
 Important fields:
 
 - `origin_skill`: default path to the seed skill directory, relative to the project root unless absolute.
+- `research_start`: optional. Use `"seed"` or omit it for the standard workflow; use `"empty"` when the first research iteration should start from an empty candidate skill.
+- `guidance_skill`: optional path to a skill used only as seed/reference guidance. Use this when the candidate should start from `origin_skill`, but the researcher should consult a different reference skill; or when `research_start` is `"empty"` and the guidance source should be different from `origin_skill`. When `research_start` is `"empty"` and `guidance_skill` is omitted, the harness uses `origin_skill` as the guidance skill.
 - `target_score`: normalized score required to stop early.
 - `max_iterations`: maximum candidate-improvement attempts.
 - `models.producer`: model that produces eval outputs. The default config uses a cheaper/smaller model here.
@@ -177,6 +179,31 @@ To improve the authoring skill without editing `config.json`, keep the config de
 ```
 
 Current alpha behavior improves one seed skill per run. For multi-skill projects, run the harness once per target skill.
+
+## Seed-As-Reference Research
+
+Use this workflow when you want to test whether the producer needs any skill guidance at all, then let the researcher selectively pull from an existing seed skill only if the baseline falls short.
+
+Configure the project like this:
+
+```json
+{
+  "origin_skill": "seed-skill",
+  "research_start": "empty"
+}
+```
+
+With this shape:
+
+- Baseline generation still runs with no mounted skill.
+- If the baseline reaches `target_score`, research stops before creating an iteration.
+- If research runs, iteration 1 starts from `workspace/empty-skill`.
+- The seed skill remains available to the researcher as immutable reference material.
+- Later iterations continue from the previous candidate skill, not from the seed skill.
+
+Model-backed research writes `workspace/guidance-ledger.json` when the researcher reports seed/reference guidance decisions. Iteration 1 includes the full seed/reference skill in the researcher prompt. Later iterations include the guidance ledger and a compact seed/reference index instead of repeatedly injecting the full seed skill content.
+
+Set `guidance_skill` only when the guidance source should differ from the starting skill. For example, `origin_skill` can point at a minimal house-style skill that should be copied into the first candidate, while `guidance_skill` points at a larger reference skill that should be consulted selectively. In the empty-start workflow, `origin_skill` can remain the default seed reference, while `guidance_skill` can point at a distilled or alternate guidance source for that run.
 
 ## Eval Cases
 

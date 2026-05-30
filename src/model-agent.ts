@@ -6,6 +6,8 @@ import {
   EvalCase,
   EvalScore,
   EvalScoreSchema,
+  GuidanceLedger,
+  GuidanceLedgerSchema,
   ModelConfig,
   ModelProduceResponse,
   ModelProduceResponseSchema,
@@ -15,6 +17,8 @@ import {
   Track,
   parseWithSchema
 } from "./schemas.js";
+
+type MountedFile = { path: string; contents: string };
 
 export interface ModelRequest {
   system: string;
@@ -135,6 +139,7 @@ export class ModelSkillResearcher implements SkillResearcher {
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
     await applySkillResearchPatch(request.candidateSkillDir, patch);
+    await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
     await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
     await persistTranscript(join(request.candidateSkillDir, ".autoresearch-transcript.json"), modelRequest, response);
   }
@@ -302,7 +307,9 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
   const workspaceDir = await createResearchWorkspace(request);
   const skillFiles = await readFilesFromMount(join(workspaceDir, "skill"));
   const referenceFiles = await readFilesFromMount(join(workspaceDir, "reference"));
+  const seedReferenceFiles = await readFilesFromMount(join(workspaceDir, "seed-reference"));
   const evalFiles = await readFilesFromMount(join(workspaceDir, "evals"));
+  const guidanceLedger = await readGuidanceLedger(request.guidanceLedgerPath);
   return checkedModelRequest({
     model: request.project.config.models?.researcher ??
       request.project.config.model ?? { provider: "anthropic", name: "claude-sonnet-4-6" },
@@ -317,6 +324,9 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
       `Authoritative workspace root: ${workspaceDir}`,
       "Only files under this workspace are authoritative for this research phase.",
       "Available paths: ./config.json, ./evals, ./reference, ./skill, ./scores.",
+      request.guidanceSkillDir
+        ? "Seed/reference skill guidance is available under ./seed-reference for this research phase."
+        : "No separate seed/reference skill guidance directory is configured for this research phase.",
       "",
       "Previous aggregate:",
       fencedJson(request.previousAggregate),
@@ -336,12 +346,25 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
       "Reference files:",
       formatFileSet(referenceFiles, `research iteration ${request.iteration} reference files`),
       "",
+      ...formatGuidanceContext(request.iteration, seedReferenceFiles, guidanceLedger),
+      "",
       "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
       fencedJson({
         summary: "Brief summary of the intended skill improvement.",
+        guidance: [
+          {
+            source: "seed-reference/SKILL.md",
+            section: "Optional section heading or concise location.",
+            action: "used",
+            reason: "Why this guidance was or was not needed for the current failures.",
+            appliedTo: "SKILL.md"
+          }
+        ],
         changes: [{ path: "SKILL.md", contents: "Complete replacement file contents." }]
       }),
-      "Each change path must be relative to the skill directory."
+      "Each change path must be relative to the skill directory.",
+      "Use guidance entries to update the guidance ledger whenever you inspect, use, defer, ignore, or need more seed/reference guidance.",
+      "After iteration 1, prefer the guidance ledger and seed/reference index first; pull exact seed/reference content only when the latest failures justify it."
     ].join("\n")
   });
 }
@@ -361,6 +384,13 @@ async function createResearchWorkspace(request: SkillResearchRequest): Promise<s
   });
   if (await exists(request.project.referenceDir)) {
     await cp(request.project.referenceDir, join(workspaceDir, "reference"), {
+      recursive: true,
+      force: false,
+      errorOnExist: true
+    });
+  }
+  if (request.guidanceSkillDir) {
+    await cp(request.guidanceSkillDir, join(workspaceDir, "seed-reference"), {
       recursive: true,
       force: false,
       errorOnExist: true
@@ -386,6 +416,43 @@ async function createResearchWorkspace(request: SkillResearchRequest): Promise<s
   return workspaceDir;
 }
 
+function formatGuidanceContext(iteration: number, seedReferenceFiles: MountedFile[], ledger: GuidanceLedger): string[] {
+  if (seedReferenceFiles.length === 0) {
+    return ["Seed/reference skill guidance:", "No seed/reference skill files are configured."];
+  }
+
+  if (iteration === 1) {
+    return [
+      "Seed/reference skill files:",
+      formatFileSet(seedReferenceFiles, `research iteration ${iteration} seed/reference skill files`),
+      "",
+      "Guidance ledger:",
+      fencedJson(ledger)
+    ];
+  }
+
+  return [
+    "Guidance ledger:",
+    fencedJson(ledger),
+    "",
+    "Seed/reference skill index:",
+    formatGuidanceIndex(seedReferenceFiles)
+  ];
+}
+
+function formatGuidanceIndex(files: MountedFile[]): string {
+  return files.map((file) => `- ${file.path}${formatHeadings(file.contents)}`).join("\n");
+}
+
+function formatHeadings(contents: string): string {
+  const headings = contents
+    .split(/\r?\n/)
+    .map((line) => line.match(/^(#{1,6})\s+(.+)$/)?.[2]?.trim())
+    .filter((heading): heading is string => Boolean(heading))
+    .slice(0, 8);
+  return headings.length > 0 ? ` (${headings.join("; ")})` : "";
+}
+
 function roleModel(request: EvalAgentRequest, role: "producer" | "judge"): ModelConfig {
   return request.models?.[role] ?? request.model;
 }
@@ -393,6 +460,32 @@ function roleModel(request: EvalAgentRequest, role: "producer" | "judge"): Model
 export function parseSkillResearchPatch(response: string): SkillResearchPatch {
   const raw = parseJson(response, "Research response");
   return parseWithSchema(SkillResearchPatchSchema, raw, "skill research patch");
+}
+
+export async function readGuidanceLedger(path: string | undefined): Promise<GuidanceLedger> {
+  if (!path || !(await exists(path))) {
+    return { entries: [] };
+  }
+  try {
+    const raw = JSON.parse(await readFile(path, "utf8")) as unknown;
+    return parseWithSchema(GuidanceLedgerSchema, raw, "guidance ledger");
+  } catch (error) {
+    throw new Error(`Could not read guidance ledger at ${path}: ${(error as Error).message}`, { cause: error });
+  }
+}
+
+export async function appendGuidanceLedger(
+  path: string | undefined,
+  iteration: number,
+  patch: SkillResearchPatch
+): Promise<void> {
+  if (!path || patch.guidance.length === 0) {
+    return;
+  }
+  const ledger = await readGuidanceLedger(path);
+  ledger.entries.push(...patch.guidance.map((entry) => ({ ...entry, iteration })));
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
 }
 
 export async function applySkillResearchPatch(skillDir: string, patch: SkillResearchPatch): Promise<void> {
@@ -449,7 +542,7 @@ function validateEvalScore(score: EvalScore, evalCase: EvalCase, track: Track): 
   }
 }
 
-function formatResearchSummary(patch: SkillResearchPatch): string {
+export function formatResearchSummary(patch: SkillResearchPatch): string {
   return [
     `# Research Summary`,
     "",

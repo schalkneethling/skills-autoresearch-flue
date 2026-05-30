@@ -1,10 +1,14 @@
 import type { FlueSession } from "@flue/runtime/client";
 import {
   applyOutputFiles,
+  appendGuidanceLedger,
   buildJudgeModelRequest,
   buildProduceModelRequest,
   buildResearchModelRequest,
-  parseModelJudgeResponse
+  formatResearchSummary,
+  parseModelJudgeResponse,
+  applySkillResearchPatch,
+  validateSkillResearchPatch
 } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, SkillResearcher } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
@@ -12,10 +16,8 @@ import {
   EvalScore,
   EvalScoreSchema,
   ModelProduceResponseSchema,
-  SkillResearchPatchSchema,
-  SkillResearchPatch
+  SkillResearchPatchSchema
 } from "./schemas.js";
-import { applySkillResearchPatch, validateSkillResearchPatch } from "./model-agent.js";
 import { cp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -83,6 +85,7 @@ export class FlueSkillResearcher implements SkillResearcher {
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
     await applySkillResearchPatch(request.candidateSkillDir, patch);
+    await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
     await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
     await writeTranscript(request.candidateSkillDir, ".autoresearch-flue-transcript.json", {
       request: modelRequest,
@@ -106,16 +109,4 @@ export async function runFlueAutoresearch(options: FlueAutoresearchOptions) {
 async function writeTranscript(dir: string, fileName: string, value: unknown): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, fileName), `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
-}
-
-function formatResearchSummary(patch: SkillResearchPatch): string {
-  return [
-    "# Research Summary",
-    "",
-    patch.summary,
-    "",
-    "## Changed Files",
-    "",
-    ...patch.changes.map((change) => `- ${change.path}`)
-  ].join("\n");
 }

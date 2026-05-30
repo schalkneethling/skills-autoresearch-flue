@@ -70,4 +70,4 @@ Review:
 
 Iteration 1 starts by copying the seed skill and applying the researcher's patch. Later iterations start from the previous candidate skill.
 
-If you need a workflow where iteration 1 starts from an empty skill and the seed is only reference material, follow [issue #40](https://github.com/schalkneethling/skills-autoresearch-flue/issues/40).
+If you need a workflow where iteration 1 starts from an empty skill and the seed is only reference material, set `research_start` to `"empty"` in `config.json`. The seed remains available as immutable guidance, and model-backed research records seed/reference usage in `workspace/guidance-ledger.json`.
