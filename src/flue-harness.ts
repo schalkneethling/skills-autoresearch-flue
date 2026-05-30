@@ -1,6 +1,7 @@
 import type { FlueSession } from "@flue/runtime/client";
 import {
   applyOutputFiles,
+  appendGuidanceLedger,
   buildJudgeModelRequest,
   buildProduceModelRequest,
   buildResearchModelRequest,
@@ -83,6 +84,7 @@ export class FlueSkillResearcher implements SkillResearcher {
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
     await applySkillResearchPatch(request.candidateSkillDir, patch);
+    await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
     await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
     await writeTranscript(request.candidateSkillDir, ".autoresearch-flue-transcript.json", {
       request: modelRequest,

@@ -1,4 +1,4 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createEvalSandbox } from "../src/sandbox.js";
 import { runEval, runWithConcurrency, EvalAgent } from "../src/runner.js";
@@ -259,6 +259,52 @@ test("orchestrator runs research iterations until target score is reached", asyn
   await expect(readFile(join(root, "workspace", "iterations", "2", "skill", "iteration-2.txt"), "utf8")).resolves.toBe(
     "candidate\n"
   );
+});
+
+test("orchestrator can start research from an empty skill while using the seed as guidance", async () => {
+  const root = await tempProject();
+  const seedSkill = join(root, "seed-skill");
+  const config = { ...syntheticConfig, origin_skill: seedSkill, research_start: "empty" as const };
+  await writeFixture(root, config, syntheticEvals);
+  await mkdir(seedSkill, { recursive: true });
+  await writeFile(join(seedSkill, "SKILL.md"), "# Seed Guidance\n");
+
+  let evalRuns = 0;
+  const previousSkillDirs: string[] = [];
+  const guidanceSkillDirs: Array<string | undefined> = [];
+  const agent: EvalAgent = {
+    async run(request) {
+      if (!request.targetSkill) {
+        return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.2);
+      }
+      evalRuns++;
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, evalRuns === 1 ? 0.5 : 0.9);
+    }
+  };
+  const researcher: SkillResearcher = {
+    async improve(request) {
+      previousSkillDirs.push(request.previousSkillDir);
+      guidanceSkillDirs.push(request.guidanceSkillDir);
+      await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
+      await writeFile(join(request.candidateSkillDir, `iteration-${request.iteration}.txt`), "candidate\n");
+    }
+  };
+
+  const result = await orchestrateBaseline({
+    projectRoot: root,
+    agent,
+    researcher,
+    runResearch: true
+  });
+
+  expect(result.completedIterations).toBe(2);
+  expect(previousSkillDirs[0]).toBe(join(root, "workspace", "empty-skill"));
+  expect(await readdir(previousSkillDirs[0])).toEqual([]);
+  expect(previousSkillDirs[1]).toBe(join(root, "workspace", "iterations", "1", "skill"));
+  expect(guidanceSkillDirs).toEqual([seedSkill, seedSkill]);
+  await expect(stat(join(root, "workspace", "iterations", "1", "skill", "SKILL.md"))).rejects.toMatchObject({
+    code: "ENOENT"
+  });
 });
 
 test("orchestrator stops research at max iterations and keeps the best candidate", async () => {

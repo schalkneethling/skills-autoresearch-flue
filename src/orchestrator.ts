@@ -1,5 +1,5 @@
-import { cp, mkdir, stat, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { aggregateScores, AggregateReport } from "./aggregate.js";
 import { importBaselineArtefacts } from "./baseline.js";
 import { loadProject, ProjectInputs } from "./project.js";
@@ -42,6 +42,8 @@ export interface SkillResearchRequest {
   iteration: number;
   previousSkillDir: string;
   candidateSkillDir: string;
+  guidanceSkillDir?: string;
+  guidanceLedgerPath?: string;
   baselineScores: EvalScore[];
   previousScores: EvalScore[];
   previousAggregate: AggregateReport;
@@ -59,6 +61,7 @@ export interface OrchestrateOptions {
   runResearch?: boolean;
   forceResearch?: boolean;
   seedSkillDir?: string;
+  guidanceSkillDir?: string;
 }
 
 export async function orchestrateBaseline(options: OrchestrateOptions): Promise<OrchestratorResult> {
@@ -196,8 +199,10 @@ async function runResearchIterations(
 
   const agent = options.agent;
   const seedSkillDir = await resolveSeedSkillDir(project, options.seedSkillDir);
+  const guidanceSkillDir = await resolveGuidanceSkillDir(project, options.guidanceSkillDir, seedSkillDir);
+  const guidanceLedgerPath = guidanceSkillDir ? join(project.root, "workspace", "guidance-ledger.json") : undefined;
   const iterations: IterationResult[] = [];
-  let previousSkillDir = seedSkillDir;
+  let previousSkillDir = await resolveInitialResearchSkillDir(project, seedSkillDir);
   let previousScores = baselineScores;
   let previousAggregate = baselineAggregate;
   let bestIteration: IterationResult | undefined;
@@ -214,6 +219,8 @@ async function runResearchIterations(
       iteration,
       previousSkillDir,
       candidateSkillDir,
+      guidanceSkillDir,
+      guidanceLedgerPath,
       baselineScores,
       previousScores,
       previousAggregate
@@ -282,6 +289,31 @@ async function resolveSeedSkillDir(project: ProjectInputs, seedSkillDir?: string
   }
   await assertExists(resolved, `Seed skill directory was not found: ${resolved}`);
   return resolved;
+}
+
+async function resolveGuidanceSkillDir(
+  project: ProjectInputs,
+  guidanceSkillDir: string | undefined,
+  seedSkillDir: string
+): Promise<string | undefined> {
+  const configured = guidanceSkillDir ?? project.config.guidance_skill;
+  const resolved = configured ?? (project.config.research_start === "empty" ? seedSkillDir : undefined);
+  if (!resolved) {
+    return undefined;
+  }
+  await assertExists(resolved, `Guidance skill directory was not found: ${resolved}`);
+  return resolved;
+}
+
+async function resolveInitialResearchSkillDir(project: ProjectInputs, seedSkillDir: string): Promise<string> {
+  if ((project.config.research_start ?? "seed") !== "empty") {
+    return seedSkillDir;
+  }
+
+  const emptySkillDir = resolve(project.root, "workspace", "empty-skill");
+  await rm(emptySkillDir, { recursive: true, force: true });
+  await mkdir(emptySkillDir, { recursive: true });
+  return emptySkillDir;
 }
 
 async function assertExists(path: string, message: string): Promise<void> {

@@ -11,6 +11,7 @@ import {
   ModelSkillResearcher,
   ModelRequest,
   parseModelProduceResponse,
+  readGuidanceLedger,
   parseSkillResearchPatch
 } from "../src/model-agent.js";
 import { createEvalSandbox } from "../src/sandbox.js";
@@ -264,6 +265,141 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
   await expect(readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8")).resolves.toContain(
     "SKILL.md"
   );
+});
+
+test("buildResearchModelRequest uses full seed guidance first, then ledger and index", async () => {
+  const root = await tempProject();
+  await writeFixture(root, { ...syntheticConfig, research_start: "empty" }, syntheticEvals);
+  const project = await loadProject(root);
+  const previousSkillDir = join(root, "previous-skill");
+  const guidanceSkillDir = join(root, "seed-skill");
+  const guidanceLedgerPath = join(root, "workspace", "guidance-ledger.json");
+  await mkdir(previousSkillDir, { recursive: true });
+  await mkdir(guidanceSkillDir, { recursive: true });
+  await writeFile(join(previousSkillDir, "SKILL.md"), "# Candidate\n");
+  await writeFile(
+    join(guidanceSkillDir, "SKILL.md"),
+    "# Seed Skill\n\n## Breaking changes\n\nMention risky changes.\n\n## Tone\n\nBe concise.\n"
+  );
+  await mkdir(join(root, "workspace"), { recursive: true });
+  await writeFile(
+    guidanceLedgerPath,
+    `${JSON.stringify(
+      {
+        entries: [
+          {
+            iteration: 1,
+            source: "seed-reference/SKILL.md",
+            section: "Breaking changes",
+            action: "used",
+            reason: "The first failure missed risk notes.",
+            appliedTo: "SKILL.md"
+          }
+        ]
+      },
+      null,
+      2
+    )}\n`
+  );
+
+  const first = await buildResearchModelRequest({
+    project,
+    iteration: 1,
+    previousSkillDir,
+    candidateSkillDir: join(root, "candidate-1"),
+    guidanceSkillDir,
+    guidanceLedgerPath,
+    baselineScores: [],
+    previousScores: [],
+    previousAggregate: {
+      tracks: [],
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
+    }
+  });
+
+  expect(first.prompt).toContain("Seed/reference skill files");
+  expect(first.prompt).toContain("Mention risky changes.");
+
+  const second = await buildResearchModelRequest({
+    project,
+    iteration: 2,
+    previousSkillDir,
+    candidateSkillDir: join(root, "candidate-2"),
+    guidanceSkillDir,
+    guidanceLedgerPath,
+    baselineScores: [],
+    previousScores: [],
+    previousAggregate: {
+      tracks: [],
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
+    }
+  });
+
+  expect(second.prompt).toContain("Guidance ledger");
+  expect(second.prompt).toContain("Seed/reference skill index");
+  expect(second.prompt).toContain("Breaking changes");
+  expect(second.prompt).not.toContain("Mention risky changes.");
+});
+
+test("ModelSkillResearcher appends guidance decisions to the ledger", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  const project = await loadProject(root);
+  const previousSkillDir = join(root, "previous-skill");
+  const candidateSkillDir = join(root, "candidate-skill");
+  const guidanceLedgerPath = join(root, "workspace", "guidance-ledger.json");
+  await mkdir(previousSkillDir, { recursive: true });
+  await writeFile(join(previousSkillDir, "SKILL.md"), "# Previous\n");
+  const client = new MemoryModelClient(
+    JSON.stringify({
+      summary: "Apply relevant seed guidance.",
+      guidance: [
+        {
+          source: "seed-reference/SKILL.md",
+          section: "Breaking changes",
+          action: "used",
+          reason: "Judge rationale called out missing breaking-change risk.",
+          appliedTo: "SKILL.md"
+        }
+      ],
+      changes: [{ path: "SKILL.md", contents: "# Updated\n" }]
+    })
+  );
+  const researcher = new ModelSkillResearcher(client);
+
+  await researcher.improve({
+    project,
+    iteration: 2,
+    previousSkillDir,
+    candidateSkillDir,
+    guidanceLedgerPath,
+    baselineScores: [],
+    previousScores: [],
+    previousAggregate: {
+      tracks: [],
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
+    }
+  });
+
+  await expect(readGuidanceLedger(guidanceLedgerPath)).resolves.toMatchObject({
+    entries: [
+      {
+        iteration: 2,
+        source: "seed-reference/SKILL.md",
+        section: "Breaking changes",
+        action: "used"
+      }
+    ]
+  });
+});
+
+test("readGuidanceLedger reports invalid ledger files with context", async () => {
+  const root = await tempProject();
+  const guidanceLedgerPath = join(root, "workspace", "guidance-ledger.json");
+  await mkdir(join(root, "workspace"), { recursive: true });
+  await writeFile(guidanceLedgerPath, "{not json");
+
+  await expect(readGuidanceLedger(guidanceLedgerPath)).rejects.toThrow(/Could not read guidance ledger/);
 });
 
 test("parseSkillResearchPatch rejects non-JSON responses and unsafe paths fail during research", async () => {
