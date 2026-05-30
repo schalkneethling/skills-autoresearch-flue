@@ -542,7 +542,7 @@ function validateEvalScore(score: EvalScore, evalCase: EvalCase, track: Track): 
   }
 }
 
-function formatResearchSummary(patch: SkillResearchPatch): string {
+export function formatResearchSummary(patch: SkillResearchPatch): string {
   return [
     `# Research Summary`,
     "",

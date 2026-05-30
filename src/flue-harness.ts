@@ -5,7 +5,10 @@ import {
   buildJudgeModelRequest,
   buildProduceModelRequest,
   buildResearchModelRequest,
-  parseModelJudgeResponse
+  formatResearchSummary,
+  parseModelJudgeResponse,
+  applySkillResearchPatch,
+  validateSkillResearchPatch
 } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, SkillResearcher } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
@@ -13,10 +16,8 @@ import {
   EvalScore,
   EvalScoreSchema,
   ModelProduceResponseSchema,
-  SkillResearchPatchSchema,
-  SkillResearchPatch
+  SkillResearchPatchSchema
 } from "./schemas.js";
-import { applySkillResearchPatch, validateSkillResearchPatch } from "./model-agent.js";
 import { cp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -108,16 +109,4 @@ export async function runFlueAutoresearch(options: FlueAutoresearchOptions) {
 async function writeTranscript(dir: string, fileName: string, value: unknown): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, fileName), `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
-}
-
-function formatResearchSummary(patch: SkillResearchPatch): string {
-  return [
-    "# Research Summary",
-    "",
-    patch.summary,
-    "",
-    "## Changed Files",
-    "",
-    ...patch.changes.map((change) => `- ${change.path}`)
-  ].join("\n");
 }
