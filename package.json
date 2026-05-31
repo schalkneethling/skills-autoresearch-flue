@@ -1,15 +1,12 @@
 {
   "name": "skills-autoresearch-flue",
   "version": "0.1.0",
-  "description": "Flue agent harness for autoresearching and evaluating agent skills.",
   "private": true,
-  "type": "module",
+  "description": "Flue agent harness for autoresearching and evaluating agent skills.",
   "bin": {
     "skills-autoresearch": "./dist/src/cli.js"
   },
-  "engines": {
-    "node": ">=24"
-  },
+  "type": "module",
   "scripts": {
     "test": "vitest run",
     "lint": "eslint .",
@@ -19,8 +16,8 @@
     "build": "tsc -p tsconfig.json",
     "flue:run": "flue run autoresearch --target node --root .",
     "flue:build": "flue build --target node --root . --output .flue-dist",
-    "alpha:smoke": "flue run autoresearch --target node --root . --id alpha-smoke --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":false,\"sessionId\":\"alpha-smoke\"}'",
-    "alpha:research": "varlock run -- flue run autoresearch --target node --root . --id alpha-research --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":true,\"seedSkillDir\":\"fixtures/projects/release-notes-alpha/seed-skill\",\"sessionId\":\"alpha-research\"}'",
+    "alpha:smoke": "flue run autoresearch --target node --root . --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":false,\"sessionId\":\"alpha-smoke\"}'",
+    "alpha:research": "varlock run -- flue run autoresearch --target node --root . --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":true,\"seedSkillDir\":\"fixtures/projects/release-notes-alpha/seed-skill\",\"sessionId\":\"alpha-research\"}'",
     "env:check": "varlock load"
   },
   "dependencies": {
@@ -38,6 +35,9 @@
     "typescript-eslint": "^8.60.0",
     "varlock": "^1.3.0",
     "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=24"
   },
   "packageManager": "pnpm@11.1.2"
 }

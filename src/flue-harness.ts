@@ -8,7 +8,7 @@ import {
   formatResearchSummary,
   parseModelJudgeResponse,
   applySkillResearchPatch,
-  validateSkillResearchPatch
+  validateSkillResearchPatch,
 } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, SkillResearcher } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
@@ -16,7 +16,7 @@ import {
   EvalScore,
   EvalScoreSchema,
   ModelProduceResponseSchema,
-  SkillResearchPatchSchema
+  SkillResearchPatchSchema,
 } from "./schemas.js";
 import { cp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -24,6 +24,10 @@ import { join } from "node:path";
 export interface FlueAutoresearchOptions extends Omit<OrchestrateOptions, "agent" | "researcher"> {
   session: FlueSession;
 }
+
+const PRODUCER_AGENT = "producer";
+const JUDGE_AGENT = "judge";
+const RESEARCHER_AGENT = "researcher";
 
 export class FlueEvalAgent implements EvalAgent {
   readonly #session: FlueSession;
@@ -35,28 +39,32 @@ export class FlueEvalAgent implements EvalAgent {
   async run(request: EvalAgentRequest): Promise<EvalScore> {
     const produceRequest = await buildProduceModelRequest(request);
     const { data: produced } = await this.#session.task(produceRequest.prompt, {
-      schema: ModelProduceResponseSchema,
-      role: produceRequest.system,
+      result: ModelProduceResponseSchema,
+      agent: PRODUCER_AGENT,
       model: toFlueModel(produceRequest.model),
-      cwd: produceRequest.workspaceDir
+      cwd: produceRequest.workspaceDir,
     });
     await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
     await writeTranscript(request.sandbox.outputDir, "producer-flue-transcript.json", {
       request: produceRequest,
-      response: produced
+      response: produced,
     });
 
     const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
     const { data: score } = await this.#session.task(judgeRequest.prompt, {
-      schema: EvalScoreSchema,
-      role: request.modelRoles?.judge,
+      result: EvalScoreSchema,
+      agent: JUDGE_AGENT,
       model: toFlueModel(judgeRequest.model),
-      cwd: judgeRequest.workspaceDir
+      cwd: judgeRequest.workspaceDir,
     });
-    const validated = parseModelJudgeResponse(JSON.stringify(score), request.evalCase, request.track);
+    const validated = parseModelJudgeResponse(
+      JSON.stringify(score),
+      request.evalCase,
+      request.track,
+    );
     await writeTranscript(request.sandbox.outputDir, "judge-flue-transcript.json", {
       request: judgeRequest,
-      response: validated
+      response: validated,
     });
     return validated;
   }
@@ -72,24 +80,26 @@ export class FlueSkillResearcher implements SkillResearcher {
   async improve(request: Parameters<SkillResearcher["improve"]>[0]): Promise<void> {
     const modelRequest = await buildResearchModelRequest(request);
     const { data: patch } = await this.#session.task(modelRequest.prompt, {
-      schema: SkillResearchPatchSchema,
-      role: modelRequest.system,
+      result: SkillResearchPatchSchema,
+      agent: RESEARCHER_AGENT,
       model: toFlueModel(modelRequest.model),
-      cwd: modelRequest.workspaceDir
+      cwd: modelRequest.workspaceDir,
     });
     validateSkillResearchPatch(request.candidateSkillDir, patch);
     await cp(request.previousSkillDir, request.candidateSkillDir, {
       recursive: true,
       errorOnExist: true,
-      force: false
+      force: false,
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
     await applySkillResearchPatch(request.candidateSkillDir, patch);
     await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
-    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
+    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), {
+      flag: "wx",
+    });
     await writeTranscript(request.candidateSkillDir, ".autoresearch-flue-transcript.json", {
       request: modelRequest,
-      response: patch
+      response: patch,
     });
   }
 }
@@ -102,7 +112,7 @@ export async function runFlueAutoresearch(options: FlueAutoresearchOptions) {
   return orchestrateBaseline({
     ...options,
     agent: new FlueEvalAgent(options.session),
-    researcher: options.runResearch ? new FlueSkillResearcher(options.session) : undefined
+    researcher: options.runResearch ? new FlueSkillResearcher(options.session) : undefined,
   });
 }
 

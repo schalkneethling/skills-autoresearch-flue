@@ -14,7 +14,10 @@ export async function writeFixture(root: string, config: unknown, evals: unknown
   await mkdir(join(root, "input"), { recursive: true });
   await writeFile(join(root, "config.json"), `${JSON.stringify(config, null, 2)}\n`);
   await writeFile(join(root, "evals", "eval-cases.json"), `${JSON.stringify(evals, null, 2)}\n`);
-  await writeFile(join(root, "evals", "rubric.md"), "# Rubric\n\nScore the configured dimensions.\n");
+  await writeFile(
+    join(root, "evals", "rubric.md"),
+    "# Rubric\n\nScore the configured dimensions.\n",
+  );
   await writeFile(join(root, "reference", "context.md"), "Reference material\n");
 }
 
@@ -27,11 +30,11 @@ export const securityConfig = {
   max_concurrency: 2,
   model: {
     provider: "anthropic",
-    name: "claude-sonnet-4-6"
+    name: "claude-sonnet-4-6",
   },
   roles: {
     judge: "judge",
-    skill_builder: "skill-builder"
+    skill_builder: "skill-builder",
   },
   tracks: [
     {
@@ -39,16 +42,16 @@ export const securityConfig = {
       eval_type: "detect-and-fix",
       role: "security-auditor",
       target_skill: "security-audit",
-      requires_description: false
+      requires_description: false,
     },
     {
       id: "authoring",
       eval_type: "secure-author",
       role: "secure-author",
       target_skill: "secure-authoring",
-      requires_description: true
-    }
-  ]
+      requires_description: true,
+    },
+  ],
 } satisfies ProjectConfig;
 
 export const syntheticConfig = {
@@ -59,7 +62,7 @@ export const syntheticConfig = {
   max_concurrency: 1,
   roles: {
     judge: "judge",
-    skill_builder: "skill-builder"
+    skill_builder: "skill-builder",
   },
   tracks: [
     {
@@ -67,9 +70,9 @@ export const syntheticConfig = {
       eval_type: "summarise-changelog",
       role: "task-producer",
       target_skill: "release-summary",
-      requires_description: false
-    }
-  ]
+      requires_description: false,
+    },
+  ],
 } satisfies ProjectConfig;
 
 export const securityEvals = {
@@ -80,7 +83,7 @@ export const securityEvals = {
       title: "Detect reflected XSS",
       input: {},
       expectations: {},
-      scoring_dimensions: [{ id: "finding", label: "Finding", max_score: 2 }]
+      scoring_dimensions: [{ id: "finding", label: "Finding", max_score: 2 }],
     },
     {
       id: "author-001",
@@ -88,9 +91,9 @@ export const securityEvals = {
       title: "Author safe DOM code",
       input: {},
       expectations: {},
-      scoring_dimensions: [{ id: "safety", label: "Safety", max_score: 3 }]
-    }
-  ]
+      scoring_dimensions: [{ id: "safety", label: "Safety", max_score: 3 }],
+    },
+  ],
 };
 
 export const syntheticEvals = {
@@ -101,12 +104,18 @@ export const syntheticEvals = {
       title: "Summarise changes",
       input: {},
       expectations: {},
-      scoring_dimensions: [{ id: "clarity", label: "Clarity", max_score: 1 }]
-    }
-  ]
+      scoring_dimensions: [{ id: "clarity", label: "Clarity", max_score: 1 }],
+    },
+  ],
 };
 
-export function score(eval_id: string, eval_type: string, track_id: string, total_score = 1, max_score = 1): EvalScore {
+export function score(
+  eval_id: string,
+  eval_type: string,
+  track_id: string,
+  total_score = 1,
+  max_score = 1,
+): EvalScore {
   return {
     eval_id,
     eval_type,
@@ -114,6 +123,6 @@ export function score(eval_id: string, eval_type: string, track_id: string, tota
     total_score,
     max_score,
     dimensions: [{ id: "clarity", score: total_score, max_score, rationale: "Clear" }],
-    summary: "Good"
+    summary: "Good",
   };
 }

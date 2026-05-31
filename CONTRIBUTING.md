@@ -21,7 +21,7 @@ The harness should:
 
 ```text
 .flue/
-  agents/autoresearch.ts      Flue agent entrypoint.
+  workflows/autoresearch.ts   Flue workflow entrypoint.
   roles/                      Flue roles for researcher, producer, and judge.
 docs/
   alpha-run.md                Alpha run and credential workflow.
@@ -47,10 +47,10 @@ tests/
 
 Flue is not incidental here; it is the harness layer.
 
-The runnable agent is:
+The runnable workflow is:
 
 ```text
-.flue/agents/autoresearch.ts
+.flue/workflows/autoresearch.ts
 ```
 
 It initializes Flue with a local sandbox and calls `runFlueAutoresearch()`.
@@ -61,7 +61,7 @@ The Flue adapter is:
 src/flue-harness.ts
 ```
 
-It uses `session.prompt(..., { result: schema })` so Flue performs structured-output validation before the harness writes artifacts or scores.
+It uses `session.task(..., { schema })` so Flue performs structured-output validation before the harness writes artifacts or scores.
 
 ## Research Flow
 

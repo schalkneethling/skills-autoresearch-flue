@@ -6,7 +6,7 @@ The harness evaluates a seed skill against project fixtures, asks a researcher m
 
 ## Current Architecture
 
-- **Flue agent entrypoint:** `.flue/agents/autoresearch.ts`
+- **Flue workflow entrypoint:** `.flue/workflows/autoresearch.ts`
 - **Flue roles:** `.flue/roles/`
 - **Core orchestration:** `src/orchestrator.ts`
 - **Flue adapters:** `src/flue-harness.ts`

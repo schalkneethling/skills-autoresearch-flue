@@ -12,7 +12,7 @@ import {
   ModelRequest,
   parseModelProduceResponse,
   readGuidanceLedger,
-  parseSkillResearchPatch
+  parseSkillResearchPatch,
 } from "../src/model-agent.js";
 import { createEvalSandbox } from "../src/sandbox.js";
 import { trackForEval } from "../src/project.js";
@@ -60,8 +60,8 @@ test("buildProduceModelRequest includes eval, mounted files, and target skill co
       referenceDir: join(root, "reference"),
       evalsDir: join(root, "evals"),
       outputDir,
-      skillDir
-    })
+      skillDir,
+    }),
   });
 
   expect(request.system).toBe("task-producer");
@@ -80,9 +80,9 @@ test("ModelEvalAgent runs producer then judge and persists separate transcripts"
   const evalScore = score(evalCase.id, evalCase.eval_type, "summarise");
   const client = new MemoryModelClient(
     JSON.stringify({
-      output_files: [{ path: "RESULT.md", contents: "Summarised changes\n" }]
+      output_files: [{ path: "RESULT.md", contents: "Summarised changes\n" }],
     }),
-    JSON.stringify(evalScore)
+    JSON.stringify(evalScore),
   );
   const agent = new ModelEvalAgent(client);
   const sandbox = createEvalSandbox({
@@ -90,7 +90,7 @@ test("ModelEvalAgent runs producer then judge and persists separate transcripts"
     inputDir: join(root, "input"),
     referenceDir: join(root, "reference"),
     evalsDir: join(root, "evals"),
-    outputDir: join(root, "out")
+    outputDir: join(root, "out"),
   });
 
   const result = await agent.run({
@@ -101,27 +101,34 @@ test("ModelEvalAgent runs producer then judge and persists separate transcripts"
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
     models: {
       producer: { provider: "anthropic", name: "claude-haiku-4-5" },
-      judge: { provider: "anthropic", name: "claude-sonnet-4-6" }
+      judge: { provider: "anthropic", name: "claude-sonnet-4-6" },
     },
-    sandbox
+    sandbox,
   });
 
   expect(result.eval_id).toBe(evalCase.id);
-  expect(client.requests.map((request) => request.model.name)).toEqual(["claude-haiku-4-5", "claude-sonnet-4-6"]);
-  await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe("Summarised changes\n");
-  await expect(readFile(join(sandbox.outputDir, "producer-transcript.json"), "utf8")).resolves.toContain(
-    "task-producer"
+  expect(client.requests.map((request) => request.model.name)).toEqual([
+    "claude-haiku-4-5",
+    "claude-sonnet-4-6",
+  ]);
+  await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe(
+    "Summarised changes\n",
   );
-  await expect(readFile(join(sandbox.outputDir, "judge-transcript.json"), "utf8")).resolves.toContain("eval-judge");
+  await expect(
+    readFile(join(sandbox.outputDir, "producer-transcript.json"), "utf8"),
+  ).resolves.toContain("task-producer");
+  await expect(
+    readFile(join(sandbox.outputDir, "judge-transcript.json"), "utf8"),
+  ).resolves.toContain("eval-judge");
 });
 
 test("parseModelProduceResponse requires output files and output writes reject unsafe paths", async () => {
   expect(() => parseModelProduceResponse(JSON.stringify({ output_files: [] }))).toThrow(
-    /Invalid model producer response/
+    /Invalid model producer response/,
   );
-  await expect(applyOutputFiles("/tmp/output", [{ path: "../escape.md", contents: "bad" }])).rejects.toThrow(
-    /escapes target directory/
-  );
+  await expect(
+    applyOutputFiles("/tmp/output", [{ path: "../escape.md", contents: "bad" }]),
+  ).rejects.toThrow(/escapes target directory/);
 });
 
 test("buildJudgeModelRequest scores only producer output with judge model", async () => {
@@ -141,10 +148,10 @@ test("buildJudgeModelRequest scores only producer output with judge model", asyn
         inputDir: join(root, "input"),
         referenceDir: join(root, "reference"),
         evalsDir: join(root, "evals"),
-        outputDir: join(root, "out")
-      })
+        outputDir: join(root, "out"),
+      }),
     },
-    [{ path: "RESULT.md", contents: "Output\n" }]
+    [{ path: "RESULT.md", contents: "Output\n" }],
   );
 
   expect(request.system).toBe("eval-judge");
@@ -167,10 +174,10 @@ test("buildJudgeModelRequest bounds large producer outputs before judging", asyn
         inputDir: join(root, "input"),
         referenceDir: join(root, "reference"),
         evalsDir: join(root, "evals"),
-        outputDir: join(root, "out")
-      })
+        outputDir: join(root, "out"),
+      }),
     },
-    [{ path: "RESULT.md", contents: "x".repeat(250_000) }]
+    [{ path: "RESULT.md", contents: "x".repeat(250_000) }],
   );
 
   expect(request.prompt.length).toBeLessThan(120_000);
@@ -184,13 +191,13 @@ test("buildProduceModelRequest fails before provider calls when prompt budget is
     evals: [
       {
         ...syntheticEvals.evals[0],
-        expectations: { huge: "x".repeat(800_000) }
-      }
-    ]
+        expectations: { huge: "x".repeat(800_000) },
+      },
+    ],
   });
   const evalCase = {
     ...syntheticEvals.evals[0],
-    expectations: { huge: "x".repeat(800_000) }
+    expectations: { huge: "x".repeat(800_000) },
   };
 
   await expect(
@@ -204,9 +211,9 @@ test("buildProduceModelRequest fails before provider calls when prompt budget is
         inputDir: join(root, "input"),
         referenceDir: join(root, "reference"),
         evalsDir: join(root, "evals"),
-        outputDir: join(root, "out")
-      })
-    })
+        outputDir: join(root, "out"),
+      }),
+    }),
   ).rejects.toThrow(/prompt budget exceeded before producer eval notes-001/);
 });
 
@@ -222,8 +229,8 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
     summary: "Improve the examples.",
     changes: [
       { path: "SKILL.md", contents: "# Updated\n" },
-      { path: "examples/basic.md", contents: "Use concise release notes.\n" }
-    ]
+      { path: "examples/basic.md", contents: "Use concise release notes.\n" },
+    ],
   };
   const client = new MemoryModelClient(JSON.stringify(patch));
   const researcher = new ModelSkillResearcher(client);
@@ -237,8 +244,8 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
     previousScores: [],
     previousAggregate: {
       tracks: [],
-      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
-    }
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 },
+    },
   });
 
   expect(modelRequest.prompt).toContain("Current skill files");
@@ -253,21 +260,23 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
     previousScores: [],
     previousAggregate: {
       tracks: [],
-      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
-    }
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 },
+    },
   });
 
   await expect(readFile(join(candidateSkillDir, "SKILL.md"), "utf8")).resolves.toBe("# Updated\n");
   await expect(readFile(join(candidateSkillDir, "examples", "basic.md"), "utf8")).resolves.toBe(
-    "Use concise release notes.\n"
+    "Use concise release notes.\n",
   );
-  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toContain("Improve the examples.");
-  await expect(readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8")).resolves.toContain(
-    "SKILL.md"
+  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toContain(
+    "Improve the examples.",
   );
+  await expect(
+    readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8"),
+  ).resolves.toContain("SKILL.md");
 });
 
-test("buildResearchModelRequest uses full seed guidance first, then ledger and index", async () => {
+test("buildResearchModelRequest uses progressive seed guidance and regression context", async () => {
   const root = await tempProject();
   await writeFixture(root, { ...syntheticConfig, research_start: "empty" }, syntheticEvals);
   const project = await loadProject(root);
@@ -279,7 +288,7 @@ test("buildResearchModelRequest uses full seed guidance first, then ledger and i
   await writeFile(join(previousSkillDir, "SKILL.md"), "# Candidate\n");
   await writeFile(
     join(guidanceSkillDir, "SKILL.md"),
-    "# Seed Skill\n\n## Breaking changes\n\nMention risky changes.\n\n## Tone\n\nBe concise.\n"
+    "# Seed Skill\n\n## Breaking changes\n\nMention risky changes.\n\n## Tone\n\nBe concise.\n",
   );
   await mkdir(join(root, "workspace"), { recursive: true });
   await writeFile(
@@ -293,13 +302,13 @@ test("buildResearchModelRequest uses full seed guidance first, then ledger and i
             section: "Breaking changes",
             action: "used",
             reason: "The first failure missed risk notes.",
-            appliedTo: "SKILL.md"
-          }
-        ]
+            appliedTo: "SKILL.md",
+          },
+        ],
       },
       null,
-      2
-    )}\n`
+      2,
+    )}\n`,
   );
 
   const first = await buildResearchModelRequest({
@@ -313,12 +322,15 @@ test("buildResearchModelRequest uses full seed guidance first, then ledger and i
     previousScores: [],
     previousAggregate: {
       tracks: [],
-      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
-    }
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 },
+    },
   });
 
-  expect(first.prompt).toContain("Seed/reference skill files");
-  expect(first.prompt).toContain("Mention risky changes.");
+  expect(first.prompt).toContain("Guidance ledger");
+  expect(first.prompt).toContain("Seed/reference skill index");
+  expect(first.prompt).toContain("Breaking changes");
+  expect(first.prompt).not.toContain("Mention risky changes.");
+  expect(first.prompt).toContain("Prefer the smallest effective change");
 
   const second = await buildResearchModelRequest({
     project,
@@ -331,8 +343,8 @@ test("buildResearchModelRequest uses full seed guidance first, then ledger and i
     previousScores: [],
     previousAggregate: {
       tracks: [],
-      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
-    }
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 },
+    },
   });
 
   expect(second.prompt).toContain("Guidance ledger");
@@ -359,11 +371,11 @@ test("ModelSkillResearcher appends guidance decisions to the ledger", async () =
           section: "Breaking changes",
           action: "used",
           reason: "Judge rationale called out missing breaking-change risk.",
-          appliedTo: "SKILL.md"
-        }
+          appliedTo: "SKILL.md",
+        },
       ],
-      changes: [{ path: "SKILL.md", contents: "# Updated\n" }]
-    })
+      changes: [{ path: "SKILL.md", contents: "# Updated\n" }],
+    }),
   );
   const researcher = new ModelSkillResearcher(client);
 
@@ -377,8 +389,8 @@ test("ModelSkillResearcher appends guidance decisions to the ledger", async () =
     previousScores: [],
     previousAggregate: {
       tracks: [],
-      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
-    }
+      overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 },
+    },
   });
 
   await expect(readGuidanceLedger(guidanceLedgerPath)).resolves.toMatchObject({
@@ -387,9 +399,9 @@ test("ModelSkillResearcher appends guidance decisions to the ledger", async () =
         iteration: 2,
         source: "seed-reference/SKILL.md",
         section: "Breaking changes",
-        action: "used"
-      }
-    ]
+        action: "used",
+      },
+    ],
   });
 });
 
@@ -399,7 +411,9 @@ test("readGuidanceLedger reports invalid ledger files with context", async () =>
   await mkdir(join(root, "workspace"), { recursive: true });
   await writeFile(guidanceLedgerPath, "{not json");
 
-  await expect(readGuidanceLedger(guidanceLedgerPath)).rejects.toThrow(/Could not read guidance ledger/);
+  await expect(readGuidanceLedger(guidanceLedgerPath)).rejects.toThrow(
+    /Could not read guidance ledger/,
+  );
 });
 
 test("parseSkillResearchPatch rejects non-JSON responses and unsafe paths fail during research", async () => {
@@ -413,7 +427,7 @@ test("parseSkillResearchPatch rejects non-JSON responses and unsafe paths fail d
   await mkdir(previousSkillDir, { recursive: true });
   await writeFile(join(previousSkillDir, "SKILL.md"), "# Previous\n");
   const client = new MemoryModelClient(
-    JSON.stringify({ summary: "bad", changes: [{ path: "../escape.md", contents: "bad" }] })
+    JSON.stringify({ summary: "bad", changes: [{ path: "../escape.md", contents: "bad" }] }),
   );
   const researcher = new ModelSkillResearcher(client);
 
@@ -427,9 +441,9 @@ test("parseSkillResearchPatch rejects non-JSON responses and unsafe paths fail d
       previousScores: [],
       previousAggregate: {
         tracks: [],
-        overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 }
-      }
-    })
+        overall: { score: 0, maxScore: 1, normalizedScore: 0, evalCount: 0 },
+      },
+    }),
   ).rejects.toThrow(/escapes target directory/);
   await expect(stat(candidateSkillDir)).rejects.toMatchObject({ code: "ENOENT" });
 });
@@ -438,14 +452,16 @@ test("AnthropicMessagesClient posts messages request and extracts text response"
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const fetchStub: typeof fetch = async (url, init) => {
     calls.push({ url: String(url), init: init ?? {} });
-    return new Response(JSON.stringify({ content: [{ type: "text", text: "Done" }] }), { status: 200 });
+    return new Response(JSON.stringify({ content: [{ type: "text", text: "Done" }] }), {
+      status: 200,
+    });
   };
   const client = new AnthropicMessagesClient({ apiKey: "test-key", fetch: fetchStub });
 
   const result = await client.complete({
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
     system: "system prompt",
-    prompt: "user prompt"
+    prompt: "user prompt",
   });
 
   expect(result).toBe("Done");
@@ -454,6 +470,6 @@ test("AnthropicMessagesClient posts messages request and extracts text response"
   expect(JSON.parse(String(calls[0].init.body))).toMatchObject({
     model: "claude-sonnet-4-6",
     system: "system prompt",
-    messages: [{ role: "user", content: "user prompt" }]
+    messages: [{ role: "user", content: "user prompt" }],
   });
 });

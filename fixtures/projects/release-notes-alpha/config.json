@@ -1,7 +1,7 @@
 {
   "skill_name": "release-notes",
   "topic_group": "developer-communications",
-  "origin_skill": "fixtures/projects/release-notes-alpha/seed-skill",
+  "origin_skill": "seed-skill",
   "target_score": 0.8,
   "max_iterations": 1,
   "max_concurrency": 1,

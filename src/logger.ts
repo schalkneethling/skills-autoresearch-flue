@@ -17,6 +17,6 @@ export function createLogger(sink: LogSink = console): Logger {
   return {
     write(level, message) {
       sink[level](message);
-    }
+    },
   };
 }

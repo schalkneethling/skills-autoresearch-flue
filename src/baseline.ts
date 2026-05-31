@@ -45,9 +45,14 @@ function parseScoreFile(raw: unknown, filePath: string): EvalScore[] {
     return raw.map((item, index) => parseBaselineScore(item, `${filePath}[${index}]`));
   }
 
-  if (raw && typeof raw === "object" && "scores" in raw && Array.isArray((raw as { scores: unknown }).scores)) {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "scores" in raw &&
+    Array.isArray((raw as { scores: unknown }).scores)
+  ) {
     return (raw as { scores: unknown[] }).scores.map((item, index) =>
-      parseBaselineScore(item, `${filePath}.scores[${index}]`)
+      parseBaselineScore(item, `${filePath}.scores[${index}]`),
     );
   }
 
@@ -93,8 +98,14 @@ function normalizeLegacyBaselineScore(raw: unknown, filePath: string): EvalScore
   }
 
   const dimensions = Object.entries(score.scores as Record<string, unknown>).map(([id, value]) => {
-    if (!value || typeof value !== "object" || typeof (value as { score?: unknown }).score !== "number") {
-      throw new Error(`Invalid baseline score ${filePath}: dimension ${id} is missing numeric score`);
+    if (
+      !value ||
+      typeof value !== "object" ||
+      typeof (value as { score?: unknown }).score !== "number"
+    ) {
+      throw new Error(
+        `Invalid baseline score ${filePath}: dimension ${id} is missing numeric score`,
+      );
     }
     return {
       id,
@@ -103,14 +114,15 @@ function normalizeLegacyBaselineScore(raw: unknown, filePath: string): EvalScore
       rationale:
         typeof (value as { justification?: unknown }).justification === "string"
           ? (value as { justification: string }).justification
-          : "Imported baseline score"
+          : "Imported baseline score",
     };
   });
 
   const totalScore =
     typeof score.composite_score === "number"
       ? score.composite_score
-      : dimensions.reduce((sum, dimension) => sum + dimension.score, 0) / Math.max(1, dimensions.length);
+      : dimensions.reduce((sum, dimension) => sum + dimension.score, 0) /
+        Math.max(1, dimensions.length);
 
   return {
     eval_id: evalId,
@@ -119,11 +131,14 @@ function normalizeLegacyBaselineScore(raw: unknown, filePath: string): EvalScore
     total_score: totalScore,
     max_score: 3,
     dimensions,
-    summary: typeof score.eval_name === "string" ? score.eval_name : `Imported ${evalId}`
+    summary: typeof score.eval_name === "string" ? score.eval_name : `Imported ${evalId}`,
   };
 }
 
-export async function importBaselineArtefacts(baselineDir: string, expectedEvalIds: string[]): Promise<BaselineImport> {
+export async function importBaselineArtefacts(
+  baselineDir: string,
+  expectedEvalIds: string[],
+): Promise<BaselineImport> {
   const missing: string[] = [];
   const scores: EvalScore[] = [];
   const summaries: Record<string, unknown> = {};

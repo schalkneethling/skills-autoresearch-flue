@@ -20,7 +20,7 @@ Follow these gates in order. Do not skip a gate, and do not tell the user the pr
 
 ## Discovery Gate
 
-1. Ask the user for the full path to the local `skills-autoresearch` checkout and read `README.md`, `docs/using-the-harness.md`, and the alpha fixture under `fixtures/projects/release-notes-alpha/`. 
+1. Ask the user for the full path to the local `skills-autoresearch` checkout and read `README.md`, `docs/using-the-harness.md`, and the alpha fixture under `fixtures/projects/release-notes-alpha/`.
 2. Inspect the project being converted before writing files. Identify the skill or workflow to improve, representative inputs, expected outputs, and any stable reference material.
 3. Preserve user work. Check `git status --short` before editing. If there are uncommitted changes, notify the user and pause to ask whether they want to proceed, stash, commit, or switch branches before starting.
 4. If appropriate, start a new feature branch.

@@ -204,7 +204,7 @@
           continue;
         }
         // Strip all attributes except href on <a>
-        for (const attr of [...child.attributes]) {
+        for (const attr of Array.from(child.attributes)) {
           if (child.tagName === 'A' && attr.name === 'href') {
             // Only allow http/https/mailto hrefs
             if (!/^(https?:|mailto:)/i.test(attr.value)) {
@@ -264,7 +264,6 @@
     }
 
     _render() {
-      const t = THEMES[this._theme] || THEMES.light;
       const shadow = this._shadow;
 
       // Keep form values across re-renders if form exists
@@ -384,13 +383,13 @@
 
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        this._submitComment(authorInput.value.trim(), bodyInput.value.trim(), submit, bodyInput);
+        this._submitComment(authorInput.value.trim(), bodyInput.value.trim(), submit);
       });
 
       return form;
     }
 
-    async _submitComment(author, body, btn, bodyInput) {
+    async _submitComment(author, body, btn) {
       if (!author || !body) return;
 
       btn.disabled = true;

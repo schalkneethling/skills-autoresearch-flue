@@ -29,7 +29,7 @@ function usage(): string {
     "  --score-dir <dir>     Directory of file-backed EvalScore JSON files.",
     "  --model-client <name> Use a model client. Supported: anthropic.",
     "  --json                Print the full orchestrator result as JSON.",
-    "  -h, --help            Show this help."
+    "  -h, --help            Show this help.",
   ].join("\n");
 }
 
@@ -45,10 +45,10 @@ export function parseCliArgs(argv: string[]): CliOptions {
       "score-dir": { type: "string" },
       "model-client": { type: "string" },
       json: { type: "boolean" },
-      help: { type: "boolean", short: "h" }
+      help: { type: "boolean", short: "h" },
     },
     strict: true,
-    allowPositionals: false
+    allowPositionals: false,
   });
 
   if (parsed.values.help) {
@@ -64,7 +64,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     seedSkillDir: parsed.values["seed-skill"],
     scoreDir: parsed.values["score-dir"],
     modelClient: parseModelClient(parsed.values["model-client"]),
-    json: parsed.values.json ?? false
+    json: parsed.values.json ?? false,
   };
 
   if (options.scoreDir && options.modelClient) {
@@ -109,7 +109,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       ? new ModelSkillResearcher(modelClient)
       : cli.runResearch
         ? new SnapshotResearcher()
-        : undefined
+        : undefined,
   };
 
   const result = await orchestrateBaseline(options);
@@ -122,7 +122,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   logger.write(
     "log",
     `Final score: ${result.aggregate.overall.normalizedScore.toFixed(3)} ` +
-      `(${result.aggregate.overall.score}/${result.aggregate.overall.maxScore})`
+      `(${result.aggregate.overall.score}/${result.aggregate.overall.maxScore})`,
   );
   if (result.bestIteration) {
     logger.write("log", `Best skill: ${result.bestIteration.skillDir}`);
@@ -147,33 +147,47 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
     case "baseline-generated":
       return { level: "log", message: `Generated baseline: ${event.scores} scores` };
     case "aggregated":
-      return { level: "log", message: `Aggregated score: ${event.aggregate.overall.normalizedScore.toFixed(3)}` };
+      return {
+        level: "log",
+        message: `Aggregated score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`,
+      };
     case "research-loop-ready":
       return {
         level: "debug",
-        message: `Research loop ready: ${event.completedIterations}/${event.maxIterations} iterations complete`
+        message: `Research loop ready: ${event.completedIterations}/${event.maxIterations} iterations complete`,
       };
     case "iteration-started":
       return { level: "log", message: `Iteration ${event.iteration} started` };
     case "iteration-generated":
-      return { level: "debug", message: `Iteration ${event.iteration} skill: ${event.candidateSkillDir}` };
+      return {
+        level: "debug",
+        message: `Iteration ${event.iteration} skill: ${event.candidateSkillDir}`,
+      };
     case "iteration-scored":
       return {
         level: "log",
-        message: `Iteration ${event.iteration} score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`
+        message: `Iteration ${event.iteration} score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`,
       };
     case "baseline-target-score-reached":
       return {
         level: "log",
-        message: `Baseline reached target: ${event.normalizedScore.toFixed(3)} >= ${event.targetScore.toFixed(3)}`
+        message: `Baseline reached target: ${event.normalizedScore.toFixed(3)} >= ${event.targetScore.toFixed(3)}`,
       };
     case "target-score-reached":
       return {
         level: "log",
-        message: `Target reached at iteration ${event.iteration}: ${event.normalizedScore.toFixed(3)}`
+        message: `Target reached at iteration ${event.iteration}: ${event.normalizedScore.toFixed(3)}`,
+      };
+    case "target-score-blocked-by-regression":
+      return {
+        level: "warn",
+        message: `Target score met at iteration ${event.iteration}, but ${event.regressions.length} eval(s) regressed from baseline`,
       };
     case "max-iterations-reached":
-      return { level: "warn", message: `Max iterations reached: ${event.completedIterations}/${event.maxIterations}` };
+      return {
+        level: "warn",
+        message: `Max iterations reached: ${event.completedIterations}/${event.maxIterations}`,
+      };
   }
 }
 
