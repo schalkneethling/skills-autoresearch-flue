@@ -383,13 +383,13 @@
 
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        this._submitComment(authorInput.value.trim(), bodyInput.value.trim(), submit);
+        this._submitComment(authorInput.value.trim(), bodyInput.value.trim(), submit, bodyInput);
       });
 
       return form;
     }
 
-    async _submitComment(author, body, btn) {
+    async _submitComment(author, body, btn, bodyInput) {
       if (!author || !body) return;
 
       btn.disabled = true;
@@ -416,6 +416,7 @@
           createdAt: data.createdAt ?? new Date().toISOString(),
         });
         this._submitError = null;
+        bodyInput.value = '';
         this._render();
 
         window.parent.postMessage(

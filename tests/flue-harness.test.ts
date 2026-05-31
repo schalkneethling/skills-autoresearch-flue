@@ -8,21 +8,17 @@ import { score, syntheticConfig, syntheticEvals, tempProject, writeFixture } fro
 
 class MockFlueSession {
   readonly id = "mock";
-  tasks: Array<{ text: string; result: unknown; agent?: string; model?: string; cwd?: string }> =
-    [];
+  tasks: Array<{ text: string; result: unknown; agent?: string; model?: string; cwd?: string }> = [];
 
   constructor(private readonly responses: unknown[]) {}
 
-  async task(
-    text: string,
-    options?: { result?: unknown; agent?: string; model?: string; cwd?: string },
-  ) {
+  async task(text: string, options?: { result?: unknown; agent?: string; model?: string; cwd?: string }) {
     this.tasks.push({
       text,
       result: options?.result,
       agent: options?.agent,
       model: options?.model,
-      cwd: options?.cwd,
+      cwd: options?.cwd
     });
     const response = this.responses.shift();
     if (!response) {
@@ -38,16 +34,16 @@ test("FlueEvalAgent uses session structured output and writes eval artifacts", a
   const evalCase = syntheticEvals.evals[0];
   const session = new MockFlueSession([
     {
-      output_files: [{ path: "RESULT.md", contents: "Flue output\n" }],
+      output_files: [{ path: "RESULT.md", contents: "Flue output\n" }]
     },
-    score(evalCase.id, evalCase.eval_type, "summarise", 1),
+    score(evalCase.id, evalCase.eval_type, "summarise", 1)
   ]) as unknown as FlueSession;
   const sandbox = createEvalSandbox({
     evalId: evalCase.id,
     inputDir: join(root, "input"),
     referenceDir: join(root, "reference"),
     evalsDir: join(root, "evals"),
-    outputDir: join(root, "out"),
+    outputDir: join(root, "out")
   });
 
   const result = await new FlueEvalAgent(session).run({
@@ -58,47 +54,37 @@ test("FlueEvalAgent uses session structured output and writes eval artifacts", a
     model: { provider: "anthropic", name: "claude-sonnet-4-6" },
     models: {
       producer: { provider: "anthropic", name: "claude-haiku-4-5" },
-      judge: { provider: "anthropic", name: "claude-sonnet-4-6" },
+      judge: { provider: "anthropic", name: "claude-sonnet-4-6" }
     },
-    sandbox,
+    sandbox
   });
 
   expect(result.total_score).toBe(1);
   expect((session as any).tasks.map((task: any) => task.model)).toEqual([
     "anthropic/claude-haiku-4-5",
-    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-sonnet-4-6"
   ]);
   expect((session as any).tasks.map((task: any) => task.agent)).toEqual(["producer", "judge"]);
   expect((session as any).tasks[0].text).not.toContain("Role instructions:");
   expect((session as any).tasks[0].text).toContain("Producer role: task-producer");
   expect((session as any).tasks[1].text).not.toContain("Role instructions:");
   expect((session as any).tasks[1].text).toContain("Judge role: eval-judge");
-  expect((session as any).tasks[0].cwd).toContain(
-    join(sandbox.outputDir, ".phase-workspaces", "producer"),
-  );
-  expect((session as any).tasks[1].cwd).toContain(
-    join(sandbox.outputDir, ".phase-workspaces", "judge"),
-  );
-  expect((session as any).tasks[1].text).toContain(
-    "Available paths: ./evals, ./reference, ./output.",
-  );
+  expect((session as any).tasks[0].cwd).toContain(join(sandbox.outputDir, ".phase-workspaces", "producer"));
+  expect((session as any).tasks[1].cwd).toContain(join(sandbox.outputDir, ".phase-workspaces", "judge"));
+  expect((session as any).tasks[1].text).toContain("Available paths: ./evals, ./reference, ./output.");
   expect((session as any).tasks[1].text).not.toContain("release-notes-alpha");
   await expect(
-    readFile(join(sandbox.outputDir, ".phase-workspaces", "judge", "output", "RESULT.md"), "utf8"),
+    readFile(join(sandbox.outputDir, ".phase-workspaces", "judge", "output", "RESULT.md"), "utf8")
   ).resolves.toBe("Flue output\n");
-  await expect(
-    stat(join(sandbox.outputDir, ".phase-workspaces", "judge", "skill")),
-  ).rejects.toMatchObject({
-    code: "ENOENT",
+  await expect(stat(join(sandbox.outputDir, ".phase-workspaces", "judge", "skill"))).rejects.toMatchObject({
+    code: "ENOENT"
   });
-  await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe(
-    "Flue output\n",
-  );
+  await expect(readFile(join(sandbox.outputDir, "RESULT.md"), "utf8")).resolves.toBe("Flue output\n");
 });
 
 test("runFlueAutoresearch executes the dry run through detached Flue tasks", async () => {
   const root = await tempProject();
-  const config = { ...syntheticConfig, target_score: 0.8, max_iterations: 1 };
+  const config = { ...syntheticConfig, target_score: 0.8, max_iterations: 2 };
   await writeFixture(root, config, syntheticEvals);
   const seedSkillDir = join(root, "seed-skill");
   await mkdir(seedSkillDir, { recursive: true });
@@ -106,37 +92,48 @@ test("runFlueAutoresearch executes the dry run through detached Flue tasks", asy
   const evalCase = syntheticEvals.evals[0];
   const session = new MockFlueSession([
     {
-      output_files: [{ path: "RESULT.md", contents: "Baseline\n" }],
+      output_files: [{ path: "RESULT.md", contents: "Baseline\n" }]
     },
     score(evalCase.id, evalCase.eval_type, "summarise", 0.4),
     {
       summary: "Improve skill",
-      changes: [{ path: "SKILL.md", contents: "# Improved\n" }],
+      changes: [{ path: "SKILL.md", contents: "# Improved 1\n" }]
     },
     {
-      output_files: [{ path: "RESULT.md", contents: "Iteration\n" }],
+      output_files: [{ path: "RESULT.md", contents: "Iteration\n" }]
     },
-    score(evalCase.id, evalCase.eval_type, "summarise", 0.9),
+    score(evalCase.id, evalCase.eval_type, "summarise", 0.5),
+    {
+      summary: "Improve skill again",
+      changes: [{ path: "SKILL.md", contents: "# Improved 2\n" }]
+    },
+    {
+      output_files: [{ path: "RESULT.md", contents: "Iteration 2\n" }]
+    },
+    score(evalCase.id, evalCase.eval_type, "summarise", 0.9)
   ]) as unknown as MockFlueSession;
 
   const result = await runFlueAutoresearch({
     session: session as unknown as FlueSession,
     projectRoot: root,
     runResearch: true,
-    seedSkillDir,
+    seedSkillDir
   });
 
   expect(result.aggregate.overall.normalizedScore).toBe(0.9);
-  expect(session.tasks).toHaveLength(5);
+  expect(session.tasks).toHaveLength(8);
   expect(session.tasks.map((task) => task.agent)).toEqual([
     "producer",
     "judge",
     "researcher",
     "producer",
     "judge",
+    "researcher",
+    "producer",
+    "judge"
   ]);
   expect(session.tasks.every((task) => task.result)).toBe(true);
-  await expect(
-    readFile(join(root, "workspace", "iterations", "1", "skill", "SKILL.md"), "utf8"),
-  ).resolves.toBe("# Improved\n");
+  await expect(readFile(join(root, "workspace", "iterations", "2", "skill", "SKILL.md"), "utf8")).resolves.toBe(
+    "# Improved 2\n"
+  );
 });

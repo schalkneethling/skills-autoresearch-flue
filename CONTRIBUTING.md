@@ -22,7 +22,7 @@ The harness should:
 ```text
 .flue/
   workflows/autoresearch.ts   Flue workflow entrypoint.
-  roles/                      Flue roles for researcher, producer, and judge.
+  profiles.ts                 Named producer, judge, and researcher subagent profiles.
 docs/
   alpha-run.md                Alpha run and credential workflow.
   using-the-harness.md        User guide for running custom skill projects.
@@ -61,15 +61,15 @@ The Flue adapter is:
 src/flue-harness.ts
 ```
 
-It uses `session.task(..., { schema })` so Flue performs structured-output validation before the harness writes artifacts or scores.
+It uses `session.task(..., { agent, result })` so Flue runs the named subagent profile and performs structured-output validation before the harness writes artifacts or scores.
 
 ## Research Flow
 
 The model-backed path is intentionally split:
 
-1. **Researcher** (`skill-builder`, Sonnet): patches the candidate skill.
-2. **Producer** (`task-producer`, Haiku): runs the candidate skill and writes `output_files`.
-3. **Judge** (`eval-judge`, Sonnet): scores only producer output.
+1. **Researcher** (`researcher`, Sonnet): patches the candidate skill.
+2. **Producer** (`producer`, Haiku): runs the candidate skill and writes `output_files`.
+3. **Judge** (`judge`, Sonnet): scores only producer output.
 
 This is important. Avoid collapsing producer and judge back into a single self-scoring call.
 

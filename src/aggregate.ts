@@ -23,7 +23,9 @@ export interface AggregateReport {
 export function aggregateScores(config: ProjectConfig, scores: EvalScore[]): AggregateReport {
   const tracks = config.tracks.map((track) => {
     const trackScores = scores.filter(
-      (score) => score.track_id === track.id || score.eval_type === track.eval_type,
+      (score) =>
+        score.track_id === track.id ||
+        ((score.track_id === null || score.track_id === undefined) && score.eval_type === track.eval_type)
     );
     const score = trackScores.reduce((sum, item) => sum + item.total_score, 0);
     const maxScore = trackScores.reduce((sum, item) => sum + item.max_score, 0);
@@ -34,7 +36,7 @@ export function aggregateScores(config: ProjectConfig, scores: EvalScore[]): Agg
       score,
       maxScore,
       normalizedScore: maxScore === 0 ? 0 : score / maxScore,
-      evalCount: trackScores.length,
+      evalCount: trackScores.length
     };
   });
 
@@ -48,7 +50,7 @@ export function aggregateScores(config: ProjectConfig, scores: EvalScore[]): Agg
       score,
       maxScore,
       normalizedScore: maxScore === 0 ? 0 : score / maxScore,
-      evalCount,
-    },
+      evalCount
+    }
   };
 }

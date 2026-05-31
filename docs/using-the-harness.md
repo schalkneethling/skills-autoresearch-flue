@@ -143,12 +143,12 @@ Important fields:
 - `models.producer`: model that produces eval outputs. The default config uses a cheaper/smaller model here.
 - `models.judge`: model that scores producer outputs. The default config uses a stronger model here.
 - `models.researcher`: model that patches the skill.
-- `roles.judge`: Flue role used for judging.
-- `tracks[].role`: Flue role used by the producer.
+- `roles.judge`: judge role label included in judge prompts.
+- `tracks[].role`: producer role label included in producer prompts.
 
 These role/model choices are starting suggestions, not requirements. Try different producer, judge, and researcher models for your project, then compare cost, speed, score stability, and the usefulness of the resulting candidate skill.
 
-Flue roles live under `.flue/roles/`. Add a new role file if your project needs a different producer or judge role.
+Flue subagent profiles live in `.flue/profiles.ts`. The configured role labels are still passed through prompts as project context, while Flue behavior comes from the named `producer`, `judge`, and `researcher` profiles.
 
 For a multi-skill project, use one track per skill or skill responsibility. For example, a security project might have an `audit` track that targets `skills/security-audit` and an `authoring` track that targets `skills/secure-authoring`.
 
@@ -356,7 +356,7 @@ The payload fields are:
 - `withBaseline`: tells the harness to load or validate the baseline artifacts for the project.
 - `runResearch`: controls whether the researcher should patch the skill. `false` makes this a smoke run that stops before model-backed research.
 - `forceResearch`: optional override for research runs. When omitted or `false`, `runResearch:true` stops before the researcher if the baseline aggregate score already meets `target_score`.
-- `sessionId`: run/session name used when writing harness artifacts. Keeping this aligned with `--id` makes outputs easier to correlate.
+- `sessionId`: run/session name passed in the payload and used when writing harness artifacts.
 
 This should return events ending with `research-loop-ready`.
 

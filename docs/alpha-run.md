@@ -5,8 +5,8 @@ The model-backed alpha run uses Varlock to inject provider credentials into the 
 The current alpha harness is Flue-first:
 
 - `.flue/workflows/autoresearch.ts` is the runnable Flue workflow.
-- `.flue/roles/` defines the model roles.
-- `src/flue-harness.ts` adapts Flue `session.task(..., { schema })` calls into the autoresearch loop.
+- `.flue/profiles.ts` defines the named producer, judge, and researcher subagent profiles.
+- `src/flue-harness.ts` adapts Flue `session.task(..., { agent, result })` calls into the autoresearch loop.
 - `fixtures/projects/release-notes-alpha/` is the committed alpha fixture.
 
 ## 1Password Setup

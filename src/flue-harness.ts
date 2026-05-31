@@ -8,17 +8,12 @@ import {
   formatResearchSummary,
   parseModelJudgeResponse,
   applySkillResearchPatch,
-  validateSkillResearchPatch,
+  validateSkillResearchPatch
 } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, SkillResearcher } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
-import {
-  EvalScore,
-  EvalScoreSchema,
-  ModelProduceResponseSchema,
-  SkillResearchPatchSchema,
-} from "./schemas.js";
-import { cp, mkdir, writeFile } from "node:fs/promises";
+import { EvalScore, EvalScoreSchema, ModelProduceResponseSchema, SkillResearchPatchSchema } from "./schemas.js";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export interface FlueAutoresearchOptions extends Omit<OrchestrateOptions, "agent" | "researcher"> {
@@ -42,12 +37,12 @@ export class FlueEvalAgent implements EvalAgent {
       result: ModelProduceResponseSchema,
       agent: PRODUCER_AGENT,
       model: toFlueModel(produceRequest.model),
-      cwd: produceRequest.workspaceDir,
+      cwd: produceRequest.workspaceDir
     });
     await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
     await writeTranscript(request.sandbox.outputDir, "producer-flue-transcript.json", {
       request: produceRequest,
-      response: produced,
+      response: produced
     });
 
     const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
@@ -55,16 +50,12 @@ export class FlueEvalAgent implements EvalAgent {
       result: EvalScoreSchema,
       agent: JUDGE_AGENT,
       model: toFlueModel(judgeRequest.model),
-      cwd: judgeRequest.workspaceDir,
+      cwd: judgeRequest.workspaceDir
     });
-    const validated = parseModelJudgeResponse(
-      JSON.stringify(score),
-      request.evalCase,
-      request.track,
-    );
+    const validated = parseModelJudgeResponse(JSON.stringify(score), request.evalCase, request.track);
     await writeTranscript(request.sandbox.outputDir, "judge-flue-transcript.json", {
       request: judgeRequest,
-      response: validated,
+      response: validated
     });
     return validated;
   }
@@ -83,23 +74,24 @@ export class FlueSkillResearcher implements SkillResearcher {
       result: SkillResearchPatchSchema,
       agent: RESEARCHER_AGENT,
       model: toFlueModel(modelRequest.model),
-      cwd: modelRequest.workspaceDir,
+      cwd: modelRequest.workspaceDir
     });
     validateSkillResearchPatch(request.candidateSkillDir, patch);
     await cp(request.previousSkillDir, request.candidateSkillDir, {
       recursive: true,
       errorOnExist: true,
-      force: false,
+      force: false
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
+    await removeGeneratedResearchFiles(request.candidateSkillDir);
     await applySkillResearchPatch(request.candidateSkillDir, patch);
     await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
     await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), {
-      flag: "wx",
+      flag: "wx"
     });
     await writeTranscript(request.candidateSkillDir, ".autoresearch-flue-transcript.json", {
       request: modelRequest,
-      response: patch,
+      response: patch
     });
   }
 }
@@ -112,11 +104,19 @@ export async function runFlueAutoresearch(options: FlueAutoresearchOptions) {
   return orchestrateBaseline({
     ...options,
     agent: new FlueEvalAgent(options.session),
-    researcher: options.runResearch ? new FlueSkillResearcher(options.session) : undefined,
+    researcher: options.runResearch ? new FlueSkillResearcher(options.session) : undefined
   });
 }
 
 async function writeTranscript(dir: string, fileName: string, value: unknown): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, fileName), `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
+}
+
+async function removeGeneratedResearchFiles(skillDir: string): Promise<void> {
+  await Promise.all(
+    ["RESEARCH.md", ".autoresearch-transcript.json", ".autoresearch-flue-transcript.json"].map((fileName) =>
+      rm(join(skillDir, fileName), { force: true })
+    )
+  );
 }

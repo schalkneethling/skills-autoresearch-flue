@@ -20,7 +20,7 @@ export function buildResearchPrompt({
   referenceFiles,
   seedReferenceFiles,
   evalFiles,
-  guidanceLedger,
+  guidanceLedger
 }: ResearchPromptInput): string {
   return [
     `Improve skill "${request.project.config.skill_name}" for iteration ${request.iteration}.`,
@@ -34,11 +34,7 @@ export function buildResearchPrompt({
       ? "Seed/reference skill guidance is available under ./seed-reference for this research phase."
       : "No separate seed/reference skill guidance directory is configured for this research phase.",
     "",
-    ...formatRegressionContext(
-      request.baselineScores,
-      request.previousScores,
-      request.previousAggregate,
-    ),
+    ...formatRegressionContext(request.baselineScores, request.previousScores, request.previousAggregate),
     "",
     "Previous aggregate:",
     fencedJson(request.previousAggregate),
@@ -69,30 +65,30 @@ export function buildResearchPrompt({
           section: "Optional section heading or concise location.",
           action: "used",
           reason: "Why this guidance was or was not needed for the current failures.",
-          appliedTo: "SKILL.md",
-        },
+          appliedTo: "SKILL.md"
+        }
       ],
-      changes: [{ path: "SKILL.md", contents: "Complete replacement file contents." }],
+      changes: [{ path: "SKILL.md", contents: "Complete replacement file contents." }]
     }),
     "Each change path must be relative to the skill directory.",
     "Use guidance entries to update the guidance ledger whenever you inspect, use, defer, ignore, or need more seed/reference guidance.",
     "Prefer the smallest effective change over recreating or expanding the whole reference skill.",
     "Do not copy seed/reference files wholesale unless the scores show the current candidate is missing that entire file's behavior.",
     "If the aggregate target is already close, focus on the specific score gaps and avoid changes that could regress stronger eval cases.",
-    "After iteration 1, prefer the guidance ledger and seed/reference index first; pull exact seed/reference content only when the latest failures justify it.",
+    "After iteration 1, prefer the guidance ledger and seed/reference index first; pull exact seed/reference content only when the latest failures justify it."
   ].join("\n");
 }
 
 function formatRegressionContext(
   baselineScores: EvalScore[],
   previousScores: EvalScore[],
-  previousAggregate: AggregateReport,
+  previousAggregate: AggregateReport
 ): string[] {
   const regressions = scoreRegressions(baselineScores, previousScores);
   if (regressions.length === 0) {
     return [
       "Regression guard:",
-      "No previous eval total-score regressions are currently known relative to the baseline.",
+      "No previous eval total-score regressions are currently known relative to the baseline."
     ];
   }
 
@@ -102,34 +98,31 @@ function formatRegressionContext(
     "Fix these regressions while preserving the aggregate gains:",
     ...regressions.map(
       (regression) =>
-        `- ${regression.evalId}: baseline ${regression.baselineScore}/${regression.baselineMaxScore}, previous ${regression.previousScore}/${regression.previousMaxScore}`,
-    ),
+        `- ${regression.evalId}: baseline ${regression.baselineScore}/${regression.baselineMaxScore}, previous ${regression.previousScore}/${regression.previousMaxScore}`
+    )
   ];
 }
 
 function scoreRegressions(baselineScores: EvalScore[], previousScores: EvalScore[]) {
-  const baselineByEval = new Map(baselineScores.map((score) => [score.eval_id, score]));
-  return previousScores
-    .map((previous) => {
-      const baseline = baselineByEval.get(previous.eval_id);
-      if (!baseline || previous.total_score >= baseline.total_score) {
+  const previousByEval = new Map(previousScores.map((score) => [score.eval_id, score]));
+  return baselineScores
+    .map((baseline) => {
+      const previous = previousByEval.get(baseline.eval_id);
+      if (previous && previous.total_score >= baseline.total_score) {
         return undefined;
       }
       return {
-        evalId: previous.eval_id,
+        evalId: baseline.eval_id,
         baselineScore: baseline.total_score,
         baselineMaxScore: baseline.max_score,
-        previousScore: previous.total_score,
-        previousMaxScore: previous.max_score,
+        previousScore: previous?.total_score ?? 0,
+        previousMaxScore: previous?.max_score ?? 0
       };
     })
     .filter((regression): regression is NonNullable<typeof regression> => Boolean(regression));
 }
 
-function formatGuidanceContext(
-  seedReferenceFiles: MountedFile[],
-  ledger: GuidanceLedger,
-): string[] {
+function formatGuidanceContext(seedReferenceFiles: MountedFile[], ledger: GuidanceLedger): string[] {
   if (seedReferenceFiles.length === 0) {
     return ["Seed/reference skill guidance:", "No seed/reference skill files are configured."];
   }
@@ -141,7 +134,7 @@ function formatGuidanceContext(
     "Seed/reference skill index:",
     formatGuidanceIndex(seedReferenceFiles),
     "",
-    "Use the seed/reference files as progressive guidance. Start from the index and ledger; only consult or copy exact seed/reference content when a current score gap clearly justifies that section.",
+    "Use the seed/reference files as progressive guidance. Start from the index and ledger; only consult or copy exact seed/reference content when a current score gap clearly justifies that section."
   ];
 }
 

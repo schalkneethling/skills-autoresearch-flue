@@ -18,7 +18,7 @@ import {
   SkillResearchPatch,
   SkillResearchPatchSchema,
   Track,
-  parseWithSchema,
+  parseWithSchema
 } from "./schemas.js";
 
 export interface ModelRequest {
@@ -70,14 +70,14 @@ export class AnthropicMessagesClient implements ModelClient {
       headers: {
         "content-type": "application/json",
         "x-api-key": this.#apiKey,
-        "anthropic-version": this.#version,
+        "anthropic-version": this.#version
       },
       body: JSON.stringify({
         model: request.model.name,
         max_tokens: this.#maxTokens,
         system: request.system,
-        messages: [{ role: "user", content: request.prompt }],
-      }),
+        messages: [{ role: "user", content: request.prompt }]
+      })
     });
 
     if (!response.ok) {
@@ -109,18 +109,14 @@ export class ModelEvalAgent implements EvalAgent {
     await persistTranscript(
       join(request.sandbox.outputDir, "producer-transcript.json"),
       produceRequest,
-      produceResponse,
+      produceResponse
     );
     const produced = parseModelProduceResponse(produceResponse);
     await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
 
     const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
     const judgeResponse = await this.#client.complete(judgeRequest);
-    await persistTranscript(
-      join(request.sandbox.outputDir, "judge-transcript.json"),
-      judgeRequest,
-      judgeResponse,
-    );
+    await persistTranscript(join(request.sandbox.outputDir, "judge-transcript.json"), judgeRequest, judgeResponse);
     return parseModelJudgeResponse(judgeResponse, request.evalCase, request.track);
   }
 }
@@ -140,28 +136,21 @@ export class ModelSkillResearcher implements SkillResearcher {
     await cp(request.previousSkillDir, request.candidateSkillDir, {
       recursive: true,
       errorOnExist: true,
-      force: false,
+      force: false
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
+    await removeGeneratedResearchFiles(request.candidateSkillDir);
     await applySkillResearchPatch(request.candidateSkillDir, patch);
     await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
     await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), {
-      flag: "wx",
+      flag: "wx"
     });
-    await persistTranscript(
-      join(request.candidateSkillDir, ".autoresearch-transcript.json"),
-      modelRequest,
-      response,
-    );
+    await persistTranscript(join(request.candidateSkillDir, ".autoresearch-transcript.json"), modelRequest, response);
   }
 }
 
 export async function buildProduceModelRequest(request: EvalAgentRequest): Promise<ModelRequest> {
-  const workspaceDir = await createPhaseWorkspace(request, "producer", [
-    "/input",
-    "/reference",
-    "/skill",
-  ]);
+  const workspaceDir = await createPhaseWorkspace(request, "producer", ["/input", "/reference", "/skill"]);
   const inputFiles = await readFilesFromMount(join(workspaceDir, "input"));
   const referenceFiles = await readFilesFromMount(join(workspaceDir, "reference"));
   const skillFiles = await readFilesFromMount(join(workspaceDir, "skill"));
@@ -171,13 +160,13 @@ export async function buildProduceModelRequest(request: EvalAgentRequest): Promi
     system: request.role,
     phase: `producer eval ${request.evalCase.id}`,
     workspaceDir,
-    prompt: buildProducePrompt({ request, workspaceDir, inputFiles, referenceFiles, skillFiles }),
+    prompt: buildProducePrompt({ request, workspaceDir, inputFiles, referenceFiles, skillFiles })
   });
 }
 
 export async function buildJudgeModelRequest(
   request: EvalAgentRequest,
-  outputFiles: OutputFile[],
+  outputFiles: OutputFile[]
 ): Promise<ModelRequest> {
   await applyOutputFiles(request.sandbox.outputDir, outputFiles);
   const workspaceDir = await createPhaseWorkspace(request, "judge", ["/reference"]);
@@ -196,15 +185,15 @@ export async function buildJudgeModelRequest(
       workspaceDir,
       referenceFiles,
       rubricFiles,
-      workspaceOutputFiles,
-    }),
+      workspaceOutputFiles
+    })
   });
 }
 
 async function createPhaseWorkspace(
   request: EvalAgentRequest,
   phase: "producer" | "judge",
-  mountTargets: string[],
+  mountTargets: string[]
 ): Promise<string> {
   const workspaceDir = join(request.sandbox.outputDir, ".phase-workspaces", phase);
   await rm(workspaceDir, { recursive: true, force: true });
@@ -218,7 +207,7 @@ async function createPhaseWorkspace(
     await cp(mount.source, join(workspaceDir, target.slice(1)), {
       recursive: true,
       force: false,
-      errorOnExist: true,
+      errorOnExist: true
     });
   }
 
@@ -229,7 +218,7 @@ async function createPhaseWorkspace(
     if (await exists(rubricPath)) {
       await cp(rubricPath, join(workspaceDir, "evals", "rubric.md"), {
         force: false,
-        errorOnExist: true,
+        errorOnExist: true
       });
     }
   }
@@ -241,20 +230,12 @@ export function parseModelProduceResponse(response: string): ModelProduceRespons
   return parseWithSchema(
     ModelProduceResponseSchema,
     parseJson(response, "Model producer response"),
-    "model producer response",
+    "model producer response"
   );
 }
 
-export function parseModelJudgeResponse(
-  response: string,
-  evalCase: EvalCase,
-  track: Track,
-): EvalScore {
-  const score = parseWithSchema(
-    EvalScoreSchema,
-    parseJson(response, "Model judge response"),
-    "model judge response",
-  );
+export function parseModelJudgeResponse(response: string, evalCase: EvalCase, track: Track): EvalScore {
+  const score = parseWithSchema(EvalScoreSchema, parseJson(response, "Model judge response"), "model judge response");
   validateEvalScore(score, evalCase, track);
   return score;
 }
@@ -271,9 +252,7 @@ export async function applyOutputFiles(outputDir: string, files: OutputFile[]): 
   }
 }
 
-export async function buildResearchModelRequest(
-  request: SkillResearchRequest,
-): Promise<ModelRequest> {
+export async function buildResearchModelRequest(request: SkillResearchRequest): Promise<ModelRequest> {
   const workspaceDir = await createResearchWorkspace(request);
   const skillFiles = await readFilesFromMount(join(workspaceDir, "skill"));
   const referenceFiles = await readFilesFromMount(join(workspaceDir, "reference"));
@@ -293,59 +272,54 @@ export async function buildResearchModelRequest(
       referenceFiles,
       seedReferenceFiles,
       evalFiles,
-      guidanceLedger,
-    }),
+      guidanceLedger
+    })
   });
 }
 
 async function createResearchWorkspace(request: SkillResearchRequest): Promise<string> {
-  const workspaceDir = join(
-    request.project.root,
-    "workspace",
-    ".phase-workspaces",
-    `research-${request.iteration}`,
-  );
+  const workspaceDir = join(request.project.root, "workspace", ".phase-workspaces", `research-${request.iteration}`);
   await rm(workspaceDir, { recursive: true, force: true });
   await mkdir(join(workspaceDir, "scores"), { recursive: true });
   await cp(join(request.project.root, "config.json"), join(workspaceDir, "config.json"), {
     force: false,
-    errorOnExist: true,
+    errorOnExist: true
   });
   await cp(join(request.project.root, "evals"), join(workspaceDir, "evals"), {
     recursive: true,
     force: false,
-    errorOnExist: true,
+    errorOnExist: true
   });
   if (await exists(request.project.referenceDir)) {
     await cp(request.project.referenceDir, join(workspaceDir, "reference"), {
       recursive: true,
       force: false,
-      errorOnExist: true,
+      errorOnExist: true
     });
   }
   if (request.guidanceSkillDir) {
     await cp(request.guidanceSkillDir, join(workspaceDir, "seed-reference"), {
       recursive: true,
       force: false,
-      errorOnExist: true,
+      errorOnExist: true
     });
   }
   await cp(request.previousSkillDir, join(workspaceDir, "skill"), {
     recursive: true,
     force: false,
-    errorOnExist: true,
+    errorOnExist: true
   });
   await writeFile(
     join(workspaceDir, "scores", "previous-aggregate.json"),
-    `${JSON.stringify(request.previousAggregate, null, 2)}\n`,
+    `${JSON.stringify(request.previousAggregate, null, 2)}\n`
   );
   await writeFile(
     join(workspaceDir, "scores", "previous-scores.json"),
-    `${JSON.stringify(request.previousScores, null, 2)}\n`,
+    `${JSON.stringify(request.previousScores, null, 2)}\n`
   );
   await writeFile(
     join(workspaceDir, "scores", "baseline-scores.json"),
-    `${JSON.stringify(request.baselineScores, null, 2)}\n`,
+    `${JSON.stringify(request.baselineScores, null, 2)}\n`
   );
   return workspaceDir;
 }
@@ -368,7 +342,7 @@ export async function readGuidanceLedger(path: string | undefined): Promise<Guid
     return parseWithSchema(GuidanceLedgerSchema, raw, "guidance ledger");
   } catch (error) {
     throw new Error(`Could not read guidance ledger at ${path}: ${(error as Error).message}`, {
-      cause: error,
+      cause: error
     });
   }
 }
@@ -376,7 +350,7 @@ export async function readGuidanceLedger(path: string | undefined): Promise<Guid
 export async function appendGuidanceLedger(
   path: string | undefined,
   iteration: number,
-  patch: SkillResearchPatch,
+  patch: SkillResearchPatch
 ): Promise<void> {
   if (!path || patch.guidance.length === 0) {
     return;
@@ -387,10 +361,7 @@ export async function appendGuidanceLedger(
   await writeFile(path, `${JSON.stringify(ledger, null, 2)}\n`, "utf8");
 }
 
-export async function applySkillResearchPatch(
-  skillDir: string,
-  patch: SkillResearchPatch,
-): Promise<void> {
+export async function applySkillResearchPatch(skillDir: string, patch: SkillResearchPatch): Promise<void> {
   for (const change of patch.changes) {
     const destination = resolveSkillPath(skillDir, change.path);
     await mkdir(dirname(destination), { recursive: true });
@@ -434,17 +405,13 @@ function validateEvalScore(score: EvalScore, evalCase: EvalCase, track: Track): 
     throw new Error(`Judge score eval_id "${score.eval_id}" does not match "${evalCase.id}"`);
   }
   if (score.eval_type !== evalCase.eval_type) {
-    throw new Error(
-      `Judge score eval_type "${score.eval_type}" does not match "${evalCase.eval_type}"`,
-    );
+    throw new Error(`Judge score eval_type "${score.eval_type}" does not match "${evalCase.eval_type}"`);
   }
   if (score.track_id !== track.id) {
     throw new Error(`Judge score track_id "${score.track_id}" does not match "${track.id}"`);
   }
   if (unknown.length > 0) {
-    throw new Error(
-      `Judge score included unknown dimensions: ${unknown.map((dimension) => dimension.id).join(", ")}`,
-    );
+    throw new Error(`Judge score included unknown dimensions: ${unknown.map((dimension) => dimension.id).join(", ")}`);
   }
 }
 
@@ -456,22 +423,24 @@ export function formatResearchSummary(patch: SkillResearchPatch): string {
     "",
     "## Changed Files",
     "",
-    ...patch.changes.map((change) => `- ${change.path}`),
+    ...patch.changes.map((change) => `- ${change.path}`)
   ].join("\n");
 }
 
-async function persistTranscript(
-  path: string,
-  request: ModelRequest,
-  response: string,
-): Promise<void> {
+async function persistTranscript(path: string, request: ModelRequest, response: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify({ request, response }, null, 2)}\n`, { flag: "wx" });
 }
 
-async function readFilesFromMount(
-  root: string | undefined,
-): Promise<Array<{ path: string; contents: string }>> {
+async function removeGeneratedResearchFiles(skillDir: string): Promise<void> {
+  await Promise.all(
+    ["RESEARCH.md", ".autoresearch-transcript.json", ".autoresearch-flue-transcript.json"].map((fileName) =>
+      rm(join(skillDir, fileName), { force: true })
+    )
+  );
+}
+
+async function readFilesFromMount(root: string | undefined): Promise<Array<{ path: string; contents: string }>> {
   if (!root || !(await exists(root))) {
     return [];
   }
@@ -479,8 +448,8 @@ async function readFilesFromMount(
   return Promise.all(
     files.map(async (path) => ({
       path: relative(root, path),
-      contents: await readFile(path, "utf8"),
-    })),
+      contents: await readFile(path, "utf8")
+    }))
   );
 }
 
@@ -496,7 +465,7 @@ async function listTextFiles(root: string): Promise<string[]> {
         return [path];
       }
       return [];
-    }),
+    })
   );
   return nested.flat().sort();
 }
@@ -528,8 +497,8 @@ function checkedModelRequest(request: ModelRequest): ModelRequest {
     [
       `[flue] prompt budget exceeded before ${phase}: estimated ${estimatedTokens} tokens > ${MAX_PROMPT_TOKENS} token budget`,
       `Prompt size: ${request.prompt.length} chars. This was detected before submitting a provider request.`,
-      "Reduce the eval input/reference/skill/output artifacts for this phase or add a more compact summary.",
-    ].join("\n"),
+      "Reduce the eval input/reference/skill/output artifacts for this phase or add a more compact summary."
+    ].join("\n")
   );
 }
 
