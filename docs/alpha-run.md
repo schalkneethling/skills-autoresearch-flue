@@ -4,9 +4,9 @@ The model-backed alpha run uses Varlock to inject provider credentials into the 
 
 The current alpha harness is Flue-first:
 
-- `.flue/agents/autoresearch.ts` is the runnable Flue agent.
-- `.flue/roles/` defines the model roles.
-- `src/flue-harness.ts` adapts Flue `session.prompt(..., { result })` calls into the autoresearch loop.
+- `.flue/workflows/autoresearch.ts` is the runnable Flue workflow.
+- `.flue/profiles.ts` defines the named producer, judge, and researcher subagent profiles.
+- `src/flue-harness.ts` adapts Flue `session.task(..., { agent, result })` calls into the autoresearch loop.
 - `fixtures/projects/release-notes-alpha/` is the committed alpha fixture.
 
 ## 1Password Setup
@@ -55,7 +55,7 @@ This requires `ANTHROPIC_API_KEY` to resolve through Varlock.
 pnpm run alpha:research
 ```
 
-This runs the Flue agent with:
+This runs the Flue workflow with:
 
 ```json
 {
@@ -68,6 +68,8 @@ This runs the Flue agent with:
 ```
 
 If the imported baseline already meets `target_score`, the run emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1`. Add `"forceResearch": true` to the payload only when you want to spend model calls on research anyway.
+
+During research, an iteration that reaches the aggregate target but lowers any eval case below its baseline score emits `target-score-blocked-by-regression` and continues until a non-regressing candidate reaches the target or `max_iterations` is exhausted.
 
 ## Model Split
 

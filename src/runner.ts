@@ -63,7 +63,8 @@ export async function runWithConcurrency<TInput, TOutput>(
   limit: number,
   worker: (input: TInput, index: number) => Promise<TOutput>
 ): Promise<TOutput[]> {
-  const results = new Array<TOutput>(inputs.length);
+  const results: TOutput[] = [];
+  results.length = inputs.length;
   let cursor = 0;
 
   async function runNext(): Promise<void> {

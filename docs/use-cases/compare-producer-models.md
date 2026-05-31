@@ -24,7 +24,7 @@ This makes the comparison easier to interpret.
 For each producer model, generate a baseline:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --id baseline-haiku --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"baseline-haiku"}'
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"baseline-haiku"}'
 ```
 
 Record:

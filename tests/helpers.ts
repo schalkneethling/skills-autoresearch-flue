@@ -106,14 +106,31 @@ export const syntheticEvals = {
   ]
 };
 
-export function score(eval_id: string, eval_type: string, track_id: string, total_score = 1, max_score = 1): EvalScore {
+export function score(
+  eval_id: string,
+  eval_type: string,
+  track_id: string,
+  total_score = 1,
+  max_score = 1,
+  dimensionId = defaultDimensionId(eval_type)
+): EvalScore {
   return {
     eval_id,
     eval_type,
     track_id,
     total_score,
     max_score,
-    dimensions: [{ id: "clarity", score: total_score, max_score, rationale: "Clear" }],
+    dimensions: [{ id: dimensionId, score: total_score, max_score, rationale: "Clear" }],
     summary: "Good"
   };
+}
+
+function defaultDimensionId(evalType: string): string {
+  if (evalType === "detect-and-fix") {
+    return "finding";
+  }
+  if (evalType === "secure-author") {
+    return "safety";
+  }
+  return "clarity";
 }

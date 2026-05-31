@@ -218,6 +218,8 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
   const candidateSkillDir = join(root, "candidate-skill");
   await mkdir(previousSkillDir, { recursive: true });
   await writeFile(join(previousSkillDir, "SKILL.md"), "# Previous\n");
+  await writeFile(join(previousSkillDir, "RESEARCH.md"), "# Old research\n");
+  await writeFile(join(previousSkillDir, ".autoresearch-transcript.json"), "{}\n");
   const patch = {
     summary: "Improve the examples.",
     changes: [
@@ -265,9 +267,10 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
   await expect(readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8")).resolves.toContain(
     "SKILL.md"
   );
+  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.not.toContain("Old research");
 });
 
-test("buildResearchModelRequest uses full seed guidance first, then ledger and index", async () => {
+test("buildResearchModelRequest uses progressive seed guidance and regression context", async () => {
   const root = await tempProject();
   await writeFixture(root, { ...syntheticConfig, research_start: "empty" }, syntheticEvals);
   const project = await loadProject(root);
@@ -309,7 +312,7 @@ test("buildResearchModelRequest uses full seed guidance first, then ledger and i
     candidateSkillDir: join(root, "candidate-1"),
     guidanceSkillDir,
     guidanceLedgerPath,
-    baselineScores: [],
+    baselineScores: [score("missing-case", "summarise-changelog", "summarise", 1)],
     previousScores: [],
     previousAggregate: {
       tracks: [],
@@ -317,8 +320,12 @@ test("buildResearchModelRequest uses full seed guidance first, then ledger and i
     }
   });
 
-  expect(first.prompt).toContain("Seed/reference skill files");
-  expect(first.prompt).toContain("Mention risky changes.");
+  expect(first.prompt).toContain("Guidance ledger");
+  expect(first.prompt).toContain("Seed/reference skill index");
+  expect(first.prompt).toContain("Breaking changes");
+  expect(first.prompt).not.toContain("Mention risky changes.");
+  expect(first.prompt).toContain("Prefer the smallest effective change");
+  expect(first.prompt).toContain("missing-case: baseline 1/1, previous 0/0");
 
   const second = await buildResearchModelRequest({
     project,
@@ -438,7 +445,9 @@ test("AnthropicMessagesClient posts messages request and extracts text response"
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const fetchStub: typeof fetch = async (url, init) => {
     calls.push({ url: String(url), init: init ?? {} });
-    return new Response(JSON.stringify({ content: [{ type: "text", text: "Done" }] }), { status: 200 });
+    return new Response(JSON.stringify({ content: [{ type: "text", text: "Done" }] }), {
+      status: 200
+    });
   };
   const client = new AnthropicMessagesClient({ apiKey: "test-key", fetch: fetchStub });
 

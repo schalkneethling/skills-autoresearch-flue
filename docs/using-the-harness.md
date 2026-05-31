@@ -96,7 +96,7 @@ The important parts are not the exact directory names for every project, but tha
 {
   "skill_name": "release-notes",
   "topic_group": "developer-communications",
-  "origin_skill": "fixtures/projects/release-notes-alpha/seed-skill",
+  "origin_skill": "seed-skill",
   "target_score": 0.8,
   "max_iterations": 1,
   "max_concurrency": 1,
@@ -137,18 +137,18 @@ Important fields:
 
 - `origin_skill`: default path to the seed skill directory, relative to the project root unless absolute.
 - `research_start`: optional. Use `"seed"` or omit it for the standard workflow; use `"empty"` when the first research iteration should start from an empty candidate skill.
-- `guidance_skill`: optional path to a skill used only as seed/reference guidance. Use this when the candidate should start from `origin_skill`, but the researcher should consult a different reference skill; or when `research_start` is `"empty"` and the guidance source should be different from `origin_skill`. When `research_start` is `"empty"` and `guidance_skill` is omitted, the harness uses `origin_skill` as the guidance skill.
+- `guidance_skill`: optional path to a skill used only as seed/reference guidance, relative to the project root unless absolute. Use this when the candidate should start from `origin_skill`, but the researcher should consult a different reference skill; or when `research_start` is `"empty"` and the guidance source should be different from `origin_skill`. When `research_start` is `"empty"` and `guidance_skill` is omitted, the harness uses `origin_skill` as the guidance skill.
 - `target_score`: normalized score required to stop early.
 - `max_iterations`: maximum candidate-improvement attempts.
 - `models.producer`: model that produces eval outputs. The default config uses a cheaper/smaller model here.
 - `models.judge`: model that scores producer outputs. The default config uses a stronger model here.
 - `models.researcher`: model that patches the skill.
-- `roles.judge`: Flue role used for judging.
-- `tracks[].role`: Flue role used by the producer.
+- `roles.judge`: judge role label included in judge prompts.
+- `tracks[].role`: producer role label included in producer prompts.
 
 These role/model choices are starting suggestions, not requirements. Try different producer, judge, and researcher models for your project, then compare cost, speed, score stability, and the usefulness of the resulting candidate skill.
 
-Flue roles live under `.flue/roles/`. Add a new role file if your project needs a different producer or judge role.
+Flue subagent profiles live in `.flue/profiles.ts`. The configured role labels are still passed through prompts as project context, while Flue behavior comes from the named `producer`, `judge`, and `researcher` profiles.
 
 For a multi-skill project, use one track per skill or skill responsibility. For example, a security project might have an `audit` track that targets `skills/security-audit` and an `authoring` track that targets `skills/secure-authoring`.
 
@@ -156,7 +156,7 @@ For a multi-skill project, use one track per skill or skill responsibility. For 
 
 `origin_skill` is the `config.json` field for the default seed skill. The harness uses this path when a run payload does not provide a skill override.
 
-`seedSkillDir` is the run payload override for one invocation. Do not add it to `config.json`; pass it in the JSON payload you send to the project-local Flue autoresearch command when you want that specific run to improve a different skill directory.
+`seedSkillDir` is the run payload override for one invocation. Payload overrides resolve relative to the shell working directory unless absolute. Do not add it to `config.json`; pass it in the JSON payload you send to the project-local Flue autoresearch command when you want that specific run to improve a different skill directory.
 
 For example, this config default improves the audit skill:
 
@@ -201,7 +201,7 @@ With this shape:
 - The seed skill remains available to the researcher as immutable reference material.
 - Later iterations continue from the previous candidate skill, not from the seed skill.
 
-Model-backed research writes `workspace/guidance-ledger.json` when the researcher reports seed/reference guidance decisions. Iteration 1 includes the full seed/reference skill in the researcher prompt. Later iterations include the guidance ledger and a compact seed/reference index instead of repeatedly injecting the full seed skill content.
+Model-backed research writes `workspace/guidance-ledger.json` when the researcher reports seed/reference guidance decisions. Research prompts include the guidance ledger and a compact seed/reference index, and instruct the researcher to consult exact seed/reference content only when the latest failures justify it. This keeps seed-as-reference runs closer to progressive disclosure instead of encouraging wholesale reconstruction of the reference skill.
 
 Set `guidance_skill` only when the guidance source should differ from the starting skill. For example, `origin_skill` can point at a minimal house-style skill that should be copied into the first candidate, while `guidance_skill` points at a larger reference skill that should be consulted selectively. In the empty-start workflow, `origin_skill` can remain the default seed reference, while `guidance_skill` can point at a distilled or alternate guidance source for that run.
 
@@ -338,17 +338,16 @@ pnpm run alpha:smoke
 For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
-pnpm exec flue run autoresearch --target node --root . --id my-smoke --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
+pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
 ```
 
 This command uses `pnpm exec` to run the `flue` binary from this repository's installed dependencies. It does not require a globally installed `flue` CLI.
 
 The command parts are:
 
-- `pnpm exec flue run autoresearch`: runs the `autoresearch` Flue agent through the project-local `flue` dependency.
+- `pnpm exec flue run autoresearch`: runs the `autoresearch` Flue workflow through the project-local `flue` dependency.
 - `--target node`: uses the Node.js target for the run.
 - `--root .`: tells Flue to run from this harness checkout root. Flue reads source files from `<root>/.flue/` when that directory exists.
-- `--id my-smoke`: gives this Flue run a stable ID. Use a short name that identifies what you are checking.
 - `--payload '...'`: passes harness-specific options as JSON.
 
 The payload fields are:
@@ -357,7 +356,7 @@ The payload fields are:
 - `withBaseline`: tells the harness to load or validate the baseline artifacts for the project.
 - `runResearch`: controls whether the researcher should patch the skill. `false` makes this a smoke run that stops before model-backed research.
 - `forceResearch`: optional override for research runs. When omitted or `false`, `runResearch:true` stops before the researcher if the baseline aggregate score already meets `target_score`.
-- `sessionId`: run/session name used when writing harness artifacts. Keeping this aligned with `--id` makes outputs easier to correlate.
+- `sessionId`: run/session name passed in the payload and used when writing harness artifacts.
 
 This should return events ending with `research-loop-ready`.
 
@@ -366,7 +365,7 @@ This should return events ending with `research-loop-ready`.
 If your project does not have `workspace/baseline/` yet, run a model-backed baseline generation pass without `withBaseline` and with `runResearch:false`:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --id my-baseline --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"my-baseline"}'
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"my-baseline"}'
 ```
 
 This should return events including `baseline-started`, `baseline-generated`, `aggregated`, and `research-loop-ready`. The generated score files and transcripts are written under:
@@ -386,7 +385,7 @@ pnpm run alpha:research
 For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --id my-research --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
 ```
 
 This also uses `pnpm exec` to run the project-local `flue` binary. `varlock run --` wraps the command so model credentials are available during the run.
@@ -394,14 +393,14 @@ This also uses `pnpm exec` to run the project-local `flue` binary. `varlock run 
 For a multi-skill project, point `seedSkillDir` at the specific skill you want that run to improve:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --id security-audit-research --payload '{"projectRoot":"path/to/skills-autoresearch-security","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/skills-autoresearch-security/skills/security-audit","sessionId":"security-audit-research"}'
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/skills-autoresearch-security","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/skills-autoresearch-security/skills/security-audit","sessionId":"security-audit-research"}'
 ```
 
 The run first scores the baseline. If the baseline aggregate `normalizedScore` is already greater than or equal to `target_score`, the harness emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1` or calling the researcher. To intentionally run improvements anyway, add `"forceResearch": true` to the payload.
 
 When research proceeds, the run stops when either:
 
-- `target_score` is reached, or
+- `target_score` is reached without any eval case regressing below its baseline `total_score`, or
 - `max_iterations` is exhausted.
 
 ## Inspect Results

@@ -46,7 +46,7 @@ export function createEvalSandbox(options: CreateEvalSandboxOptions): EvalSandbo
     { source: resolve(options.inputDir), target: "/input", readOnly: true },
     { source: resolve(options.referenceDir), target: "/reference", readOnly: true },
     { source: resolve(options.evalsDir), target: "/evals", readOnly: true },
-    { source: outputDir, target: "/output", readOnly: false }
+    { source: outputDir, target: "/output", readOnly: false },
   ];
 
   if (options.skillDir) {
@@ -55,7 +55,9 @@ export function createEvalSandbox(options: CreateEvalSandboxOptions): EvalSandbo
 
   const assertWritable = (path: string) => {
     const absolute = resolve(path);
-    const readOnlyMount = mounts.find((mount) => mount.readOnly && isWithin(mount.source, absolute));
+    const readOnlyMount = mounts.find(
+      (mount) => mount.readOnly && isWithin(mount.source, absolute),
+    );
     if (readOnlyMount) {
       throw erofs(path);
     }
@@ -99,6 +101,6 @@ export function createEvalSandbox(options: CreateEvalSandboxOptions): EvalSandbo
       assertWritable(path);
       const { chmod } = await import("node:fs/promises");
       await chmod(path, mode);
-    }
+    },
   };
 }

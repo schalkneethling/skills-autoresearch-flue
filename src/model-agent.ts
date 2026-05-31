@@ -2,6 +2,9 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
+import { buildJudgePrompt } from "./prompts/judge-prompt.js";
+import { buildProducePrompt } from "./prompts/produce-prompt.js";
+import { buildResearchPrompt } from "./prompts/research-prompt.js";
 import {
   EvalCase,
   EvalScore,
@@ -17,8 +20,6 @@ import {
   Track,
   parseWithSchema
 } from "./schemas.js";
-
-type MountedFile = { path: string; contents: string };
 
 export interface ModelRequest {
   system: string;
@@ -138,9 +139,12 @@ export class ModelSkillResearcher implements SkillResearcher {
       force: false
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
+    await removeGeneratedResearchFiles(request.candidateSkillDir);
     await applySkillResearchPatch(request.candidateSkillDir, patch);
     await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
-    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
+    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), {
+      flag: "wx"
+    });
     await persistTranscript(join(request.candidateSkillDir, ".autoresearch-transcript.json"), modelRequest, response);
   }
 }
@@ -156,39 +160,7 @@ export async function buildProduceModelRequest(request: EvalAgentRequest): Promi
     system: request.role,
     phase: `producer eval ${request.evalCase.id}`,
     workspaceDir,
-    prompt: [
-      `Run the target skill for "${request.evalCase.title}" (${request.evalCase.id}).`,
-      `Eval type: ${request.evalCase.eval_type}`,
-      `Track: ${request.track.id}`,
-      request.targetSkill ? `Target skill: ${request.targetSkill}` : "Baseline run: no target skill is mounted.",
-      `Authoritative workspace root: ${workspaceDir}`,
-      "Only files under this workspace are authoritative for this producer phase.",
-      "Available paths: ./input, ./reference, ./skill when present.",
-      "",
-      "Eval case JSON:",
-      fencedJson(request.evalCase),
-      "",
-      "Input files:",
-      formatFileSet(inputFiles, `producer eval ${request.evalCase.id} input files`),
-      "",
-      "Reference files:",
-      formatFileSet(referenceFiles, `producer eval ${request.evalCase.id} reference files`),
-      "",
-      "Skill files:",
-      formatFileSet(skillFiles, `producer eval ${request.evalCase.id} skill files`),
-      "",
-      "Produce the concrete eval output files. Do not score your own work.",
-      "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
-      fencedJson({
-        output_files: [
-          {
-            path: "RESULT.md",
-            contents: "The concrete output produced for this eval."
-          }
-        ]
-      }),
-      "Each output_files path must be relative to the eval output directory."
-    ].join("\n")
+    prompt: buildProducePrompt({ request, workspaceDir, inputFiles, referenceFiles, skillFiles })
   });
 }
 
@@ -208,43 +180,13 @@ export async function buildJudgeModelRequest(
     system: request.modelRoles?.judge ?? "judge",
     phase: `judge eval ${request.evalCase.id}`,
     workspaceDir,
-    prompt: [
-      `Judge output for "${request.evalCase.title}" (${request.evalCase.id}).`,
-      `Eval type: ${request.evalCase.eval_type}`,
-      `Track: ${request.track.id}`,
-      `Authoritative workspace root: ${workspaceDir}`,
-      "Only files under this workspace are authoritative for this judge phase.",
-      "Available paths: ./evals, ./reference, ./output.",
-      "",
-      "Eval case JSON:",
-      fencedJson(request.evalCase),
-      "",
-      "Rubric files:",
-      formatFileSet(rubricFiles, `judge eval ${request.evalCase.id} rubric files`),
-      "",
-      "Reference files:",
-      formatFileSet(referenceFiles, `judge eval ${request.evalCase.id} reference files`),
-      "",
-      "Producer output files:",
-      formatFileSet(workspaceOutputFiles, `judge eval ${request.evalCase.id} producer output files`),
-      "",
-      "Score only the producer output. Do not award credit for requirements merely stated in the skill instructions.",
-      "Return only well-formed JSON matching the EvalScore schema. Do not include markdown, code fences, prose, or XML tags:",
-      fencedJson({
-        eval_id: request.evalCase.id,
-        eval_type: request.evalCase.eval_type,
-        track_id: request.track.id,
-        total_score: 0,
-        max_score: request.evalCase.scoring_dimensions.reduce((sum, dimension) => sum + dimension.max_score, 0),
-        dimensions: request.evalCase.scoring_dimensions.map((dimension) => ({
-          id: dimension.id,
-          score: 0,
-          max_score: dimension.max_score,
-          rationale: "Rationale grounded only in the producer output."
-        })),
-        summary: "Concise scoring summary."
-      })
-    ].join("\n")
+    prompt: buildJudgePrompt({
+      request,
+      workspaceDir,
+      referenceFiles,
+      rubricFiles,
+      workspaceOutputFiles
+    })
   });
 }
 
@@ -262,7 +204,11 @@ async function createPhaseWorkspace(
     if (!mount || !(await exists(mount.source))) {
       continue;
     }
-    await cp(mount.source, join(workspaceDir, target.slice(1)), { recursive: true, force: false, errorOnExist: true });
+    await cp(mount.source, join(workspaceDir, target.slice(1)), {
+      recursive: true,
+      force: false,
+      errorOnExist: true
+    });
   }
 
   const evalsMount = request.sandbox.mounts.find((candidate) => candidate.target === "/evals");
@@ -270,7 +216,10 @@ async function createPhaseWorkspace(
     await mkdir(join(workspaceDir, "evals"), { recursive: true });
     const rubricPath = join(evalsMount.source, "rubric.md");
     if (await exists(rubricPath)) {
-      await cp(rubricPath, join(workspaceDir, "evals", "rubric.md"), { force: false, errorOnExist: true });
+      await cp(rubricPath, join(workspaceDir, "evals", "rubric.md"), {
+        force: false,
+        errorOnExist: true
+      });
     }
   }
 
@@ -316,56 +265,15 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
     system: request.project.config.roles.skill_builder,
     phase: `research iteration ${request.iteration}`,
     workspaceDir,
-    prompt: [
-      `Improve skill "${request.project.config.skill_name}" for iteration ${request.iteration}.`,
-      `Topic group: ${request.project.config.topic_group}`,
-      `Target normalized score: ${request.project.config.target_score}`,
-      `Previous normalized score: ${request.previousAggregate.overall.normalizedScore}`,
-      `Authoritative workspace root: ${workspaceDir}`,
-      "Only files under this workspace are authoritative for this research phase.",
-      "Available paths: ./config.json, ./evals, ./reference, ./skill, ./scores.",
-      request.guidanceSkillDir
-        ? "Seed/reference skill guidance is available under ./seed-reference for this research phase."
-        : "No separate seed/reference skill guidance directory is configured for this research phase.",
-      "",
-      "Previous aggregate:",
-      fencedJson(request.previousAggregate),
-      "",
-      "Previous scores:",
-      fencedJson(request.previousScores),
-      "",
-      "Baseline scores:",
-      fencedJson(request.baselineScores),
-      "",
-      "Current skill files:",
-      formatFileSet(skillFiles, `research iteration ${request.iteration} skill files`),
-      "",
-      "Eval and rubric files:",
-      formatFileSet(evalFiles, `research iteration ${request.iteration} eval files`),
-      "",
-      "Reference files:",
-      formatFileSet(referenceFiles, `research iteration ${request.iteration} reference files`),
-      "",
-      ...formatGuidanceContext(request.iteration, seedReferenceFiles, guidanceLedger),
-      "",
-      "Return only well-formed JSON with this shape. Do not include markdown, code fences, prose, or XML tags:",
-      fencedJson({
-        summary: "Brief summary of the intended skill improvement.",
-        guidance: [
-          {
-            source: "seed-reference/SKILL.md",
-            section: "Optional section heading or concise location.",
-            action: "used",
-            reason: "Why this guidance was or was not needed for the current failures.",
-            appliedTo: "SKILL.md"
-          }
-        ],
-        changes: [{ path: "SKILL.md", contents: "Complete replacement file contents." }]
-      }),
-      "Each change path must be relative to the skill directory.",
-      "Use guidance entries to update the guidance ledger whenever you inspect, use, defer, ignore, or need more seed/reference guidance.",
-      "After iteration 1, prefer the guidance ledger and seed/reference index first; pull exact seed/reference content only when the latest failures justify it."
-    ].join("\n")
+    prompt: buildResearchPrompt({
+      request,
+      workspaceDir,
+      skillFiles,
+      referenceFiles,
+      seedReferenceFiles,
+      evalFiles,
+      guidanceLedger
+    })
   });
 }
 
@@ -416,43 +324,6 @@ async function createResearchWorkspace(request: SkillResearchRequest): Promise<s
   return workspaceDir;
 }
 
-function formatGuidanceContext(iteration: number, seedReferenceFiles: MountedFile[], ledger: GuidanceLedger): string[] {
-  if (seedReferenceFiles.length === 0) {
-    return ["Seed/reference skill guidance:", "No seed/reference skill files are configured."];
-  }
-
-  if (iteration === 1) {
-    return [
-      "Seed/reference skill files:",
-      formatFileSet(seedReferenceFiles, `research iteration ${iteration} seed/reference skill files`),
-      "",
-      "Guidance ledger:",
-      fencedJson(ledger)
-    ];
-  }
-
-  return [
-    "Guidance ledger:",
-    fencedJson(ledger),
-    "",
-    "Seed/reference skill index:",
-    formatGuidanceIndex(seedReferenceFiles)
-  ];
-}
-
-function formatGuidanceIndex(files: MountedFile[]): string {
-  return files.map((file) => `- ${file.path}${formatHeadings(file.contents)}`).join("\n");
-}
-
-function formatHeadings(contents: string): string {
-  const headings = contents
-    .split(/\r?\n/)
-    .map((line) => line.match(/^(#{1,6})\s+(.+)$/)?.[2]?.trim())
-    .filter((heading): heading is string => Boolean(heading))
-    .slice(0, 8);
-  return headings.length > 0 ? ` (${headings.join("; ")})` : "";
-}
-
 function roleModel(request: EvalAgentRequest, role: "producer" | "judge"): ModelConfig {
   return request.models?.[role] ?? request.model;
 }
@@ -470,7 +341,9 @@ export async function readGuidanceLedger(path: string | undefined): Promise<Guid
     const raw = JSON.parse(await readFile(path, "utf8")) as unknown;
     return parseWithSchema(GuidanceLedgerSchema, raw, "guidance ledger");
   } catch (error) {
-    throw new Error(`Could not read guidance ledger at ${path}: ${(error as Error).message}`, { cause: error });
+    throw new Error(`Could not read guidance ledger at ${path}: ${(error as Error).message}`, {
+      cause: error
+    });
   }
 }
 
@@ -559,6 +432,14 @@ async function persistTranscript(path: string, request: ModelRequest, response: 
   await writeFile(path, `${JSON.stringify({ request, response }, null, 2)}\n`, { flag: "wx" });
 }
 
+async function removeGeneratedResearchFiles(skillDir: string): Promise<void> {
+  await Promise.all(
+    ["RESEARCH.md", ".autoresearch-transcript.json", ".autoresearch-flue-transcript.json"].map((fileName) =>
+      rm(join(skillDir, fileName), { force: true })
+    )
+  );
+}
+
 async function readFilesFromMount(root: string | undefined): Promise<Array<{ path: string; contents: string }>> {
   if (!root || !(await exists(root))) {
     return [];
@@ -604,8 +485,6 @@ async function exists(path: string): Promise<boolean> {
 
 const MAX_PROMPT_TOKENS = 180_000;
 const APPROX_CHARS_PER_TOKEN = 4;
-const MAX_FILE_CHARS = 80_000;
-const MAX_FILE_SET_CHARS = 240_000;
 
 function checkedModelRequest(request: ModelRequest): ModelRequest {
   const estimatedTokens = estimateTokens(`${request.system}\n${request.prompt}`);
@@ -625,58 +504,4 @@ function checkedModelRequest(request: ModelRequest): ModelRequest {
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / APPROX_CHARS_PER_TOKEN);
-}
-
-function formatFileSet(files: Array<{ path: string; contents: string }>, label: string): string {
-  if (files.length === 0) {
-    return "(none)";
-  }
-  let remainingChars = MAX_FILE_SET_CHARS;
-  const formatted: string[] = [];
-  let omittedFiles = 0;
-
-  for (const file of files) {
-    const separatorOverhead = formatted.length > 0 ? "\n\n".length : 0;
-    const heading = `### ${file.path}\n\n`;
-    const fenceOverhead = fenced("").length;
-    const renderedOverhead = separatorOverhead + heading.length + fenceOverhead;
-
-    if (remainingChars <= renderedOverhead) {
-      omittedFiles++;
-      continue;
-    }
-
-    const maxContentsChars = Math.min(MAX_FILE_CHARS, remainingChars - renderedOverhead);
-    const contents = truncateText(file.contents, maxContentsChars, `${label}/${file.path}`);
-    remainingChars -= renderedOverhead + contents.length;
-    formatted.push(`${heading}${fenced(contents)}`);
-  }
-
-  if (omittedFiles > 0) {
-    formatted.push(
-      `[${omittedFiles} file(s) omitted from ${label}; ${MAX_FILE_SET_CHARS} char file-set budget exhausted.]`
-    );
-  }
-
-  return formatted.join("\n\n");
-}
-
-function fenced(contents: string): string {
-  return `\`\`\`\n${contents}\n\`\`\``;
-}
-
-function truncateText(contents: string, maxChars: number, label: string): string {
-  if (contents.length <= maxChars) {
-    return contents;
-  }
-  if (maxChars <= 0) {
-    return "";
-  }
-  const keptChars = Math.max(0, maxChars - 128);
-  const marker = `\n\n[truncated ${contents.length - keptChars} chars from ${label}; kept first ${keptChars} chars]\n`;
-  return `${contents.slice(0, keptChars)}${marker}`.slice(0, maxChars);
-}
-
-function fencedJson(value: unknown): string {
-  return `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``;
 }

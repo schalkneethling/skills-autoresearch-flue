@@ -69,6 +69,21 @@ test("aggregates arbitrary configured tracks", () => {
   expect(report.overall.normalizedScore).toBe(0.8);
 });
 
+test("aggregates by track id before falling back to eval type", () => {
+  const report = aggregateScores(securityConfig, [
+    score("audit-001", "detect-and-fix", "audit", 2, 2),
+    score("legacy-001", "detect-and-fix", undefined as unknown as string, 1, 2),
+    score("other-001", "detect-and-fix", "other", 2, 2)
+  ]);
+
+  expect(report.tracks.find((track) => track.trackId === "audit")).toMatchObject({
+    score: 3,
+    maxScore: 4,
+    evalCount: 2
+  });
+  expect(report.overall.evalCount).toBe(2);
+});
+
 test("parses judge score JSON and rejects unknown dimensions", () => {
   const evalCase = securityEvals.evals[0];
   const track = trackForEval(securityConfig, evalCase.eval_type);

@@ -4,3 +4,5 @@ allowBuilds:
   esbuild: true
   node-liblzma: true
   protobufjs: true
+  sharp: true
+  workerd: true

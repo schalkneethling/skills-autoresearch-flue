@@ -12,18 +12,17 @@ import {
 } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, SkillResearcher } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
-import {
-  EvalScore,
-  EvalScoreSchema,
-  ModelProduceResponseSchema,
-  SkillResearchPatchSchema
-} from "./schemas.js";
-import { cp, mkdir, writeFile } from "node:fs/promises";
+import { EvalScore, EvalScoreSchema, ModelProduceResponseSchema, SkillResearchPatchSchema } from "./schemas.js";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 export interface FlueAutoresearchOptions extends Omit<OrchestrateOptions, "agent" | "researcher"> {
   session: FlueSession;
 }
+
+const PRODUCER_AGENT = "producer";
+const JUDGE_AGENT = "judge";
+const RESEARCHER_AGENT = "researcher";
 
 export class FlueEvalAgent implements EvalAgent {
   readonly #session: FlueSession;
@@ -35,8 +34,8 @@ export class FlueEvalAgent implements EvalAgent {
   async run(request: EvalAgentRequest): Promise<EvalScore> {
     const produceRequest = await buildProduceModelRequest(request);
     const { data: produced } = await this.#session.task(produceRequest.prompt, {
-      schema: ModelProduceResponseSchema,
-      role: produceRequest.system,
+      result: ModelProduceResponseSchema,
+      agent: PRODUCER_AGENT,
       model: toFlueModel(produceRequest.model),
       cwd: produceRequest.workspaceDir
     });
@@ -48,8 +47,8 @@ export class FlueEvalAgent implements EvalAgent {
 
     const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
     const { data: score } = await this.#session.task(judgeRequest.prompt, {
-      schema: EvalScoreSchema,
-      role: request.modelRoles?.judge,
+      result: EvalScoreSchema,
+      agent: JUDGE_AGENT,
       model: toFlueModel(judgeRequest.model),
       cwd: judgeRequest.workspaceDir
     });
@@ -72,8 +71,8 @@ export class FlueSkillResearcher implements SkillResearcher {
   async improve(request: Parameters<SkillResearcher["improve"]>[0]): Promise<void> {
     const modelRequest = await buildResearchModelRequest(request);
     const { data: patch } = await this.#session.task(modelRequest.prompt, {
-      schema: SkillResearchPatchSchema,
-      role: modelRequest.system,
+      result: SkillResearchPatchSchema,
+      agent: RESEARCHER_AGENT,
       model: toFlueModel(modelRequest.model),
       cwd: modelRequest.workspaceDir
     });
@@ -84,9 +83,12 @@ export class FlueSkillResearcher implements SkillResearcher {
       force: false
     });
     await mkdir(request.candidateSkillDir, { recursive: true });
+    await removeGeneratedResearchFiles(request.candidateSkillDir);
     await applySkillResearchPatch(request.candidateSkillDir, patch);
     await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
-    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), { flag: "wx" });
+    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), {
+      flag: "wx"
+    });
     await writeTranscript(request.candidateSkillDir, ".autoresearch-flue-transcript.json", {
       request: modelRequest,
       response: patch
@@ -109,4 +111,12 @@ export async function runFlueAutoresearch(options: FlueAutoresearchOptions) {
 async function writeTranscript(dir: string, fileName: string, value: unknown): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, fileName), `${JSON.stringify(value, null, 2)}\n`, { flag: "wx" });
+}
+
+async function removeGeneratedResearchFiles(skillDir: string): Promise<void> {
+  await Promise.all(
+    ["RESEARCH.md", ".autoresearch-transcript.json", ".autoresearch-flue-transcript.json"].map((fileName) =>
+      rm(join(skillDir, fileName), { force: true })
+    )
+  );
 }

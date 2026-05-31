@@ -1,5 +1,5 @@
 import { cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { aggregateScores, AggregateReport } from "./aggregate.js";
 import { importBaselineArtefacts } from "./baseline.js";
 import { loadProject, ProjectInputs } from "./project.js";
@@ -11,14 +11,37 @@ export type RunEvent =
   | { type: "baseline-imported"; scores: number; missing: string[] }
   | { type: "baseline-started"; evals: number; countsTowardIterations: false }
   | { type: "baseline-generated"; scores: number }
-  | { type: "iteration-started"; iteration: number; previousSkillDir: string; candidateSkillDir: string }
+  | {
+      type: "iteration-started";
+      iteration: number;
+      previousSkillDir: string;
+      candidateSkillDir: string;
+    }
   | { type: "iteration-generated"; iteration: number; candidateSkillDir: string }
   | { type: "iteration-scored"; iteration: number; scores: number; aggregate: AggregateReport }
   | { type: "baseline-target-score-reached"; normalizedScore: number; targetScore: number }
-  | { type: "target-score-reached"; iteration: number; normalizedScore: number; targetScore: number }
+  | {
+      type: "target-score-reached";
+      iteration: number;
+      normalizedScore: number;
+      targetScore: number;
+    }
+  | {
+      type: "target-score-blocked-by-regression";
+      iteration: number;
+      normalizedScore: number;
+      targetScore: number;
+      regressions: ScoreRegression[];
+    }
   | { type: "max-iterations-reached"; completedIterations: number; maxIterations: number }
   | { type: "research-loop-ready"; completedIterations: number; maxIterations: number }
   | { type: "aggregated"; aggregate: AggregateReport };
+
+export interface ScoreRegression {
+  evalId: string;
+  baselineScore: number;
+  candidateScore: number;
+}
 
 export interface IterationResult {
   iteration: number;
@@ -64,7 +87,9 @@ export interface OrchestrateOptions {
   guidanceSkillDir?: string;
 }
 
-export async function orchestrateBaseline(options: OrchestrateOptions): Promise<OrchestratorResult> {
+export async function orchestrateBaseline(
+  options: OrchestrateOptions,
+): Promise<OrchestratorResult> {
   const events: RunEvent[] = [];
   const project = await loadProject(options.projectRoot);
   events.push({ type: "project-loaded", root: project.root });
@@ -85,7 +110,7 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
     events.push({
       type: "baseline-target-score-reached",
       normalizedScore: aggregate.overall.normalizedScore,
-      targetScore: project.config.target_score
+      targetScore: project.config.target_score,
     });
     return { project, baselineScores, aggregate, completedIterations: 0, iterations: [], events };
   }
@@ -93,7 +118,7 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
   events.push({
     type: "research-loop-ready",
     completedIterations: 0,
-    maxIterations: project.config.max_iterations
+    maxIterations: project.config.max_iterations,
   });
 
   if (!options.runResearch) {
@@ -109,31 +134,37 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
     completedIterations: research.iterations.length,
     iterations: research.iterations,
     bestIteration: research.bestIteration,
-    events
+    events,
   };
 }
 
 async function importRequiredBaseline(
   project: ProjectInputs,
   expectedEvalIds: string[],
-  events: RunEvent[]
+  events: RunEvent[],
 ): Promise<EvalScore[]> {
   if (!project.baselineDir) {
     throw new Error(
-      "Run was started with --with-baseline, but workspace/baseline was not found. Remove --with-baseline to generate an initial baseline run."
+      "Run was started with --with-baseline, but workspace/baseline was not found. Remove --with-baseline to generate an initial baseline run.",
     );
   }
 
   const baseline = await importBaselineArtefacts(project.baselineDir, expectedEvalIds);
-  events.push({ type: "baseline-imported", scores: baseline.scores.length, missing: baseline.missing });
+  events.push({
+    type: "baseline-imported",
+    scores: baseline.scores.length,
+    missing: baseline.missing,
+  });
 
-  const missingScores = expectedEvalIds.filter((evalId) => !baseline.scores.some((score) => score.eval_id === evalId));
+  const missingScores = expectedEvalIds.filter(
+    (evalId) => !baseline.scores.some((score) => score.eval_id === evalId),
+  );
   if (missingScores.length > 0 || baseline.missing.length > 0) {
     throw new Error(
       `Run was started with --with-baseline, but baseline artefacts are incomplete. Missing: ${[
         ...missingScores.map((evalId) => `score:${evalId}`),
-        ...baseline.missing
-      ].join(", ")}`
+        ...baseline.missing,
+      ].join(", ")}`,
     );
   }
 
@@ -143,7 +174,7 @@ async function importRequiredBaseline(
 async function generateInitialBaseline(
   project: ProjectInputs,
   agent: EvalAgent | undefined,
-  events: RunEvent[]
+  events: RunEvent[],
 ): Promise<EvalScore[]> {
   if (!agent) {
     throw new Error("No eval agent was provided to generate the initial baseline run");
@@ -152,21 +183,24 @@ async function generateInitialBaseline(
   events.push({
     type: "baseline-started",
     evals: project.evals.evals.length,
-    countsTowardIterations: false
+    countsTowardIterations: false,
   });
 
   const outputRoot = join(project.root, "workspace", "baseline");
-  const baselineScores = await runWithConcurrency(project.evals.evals, project.config.max_concurrency, (evalCase) =>
-    runEval(
-      {
-        config: project.config,
-        projectRoot: project.root,
-        evalCase,
-        baseline: true,
-        outputRoot
-      },
-      agent
-    )
+  const baselineScores = await runWithConcurrency(
+    project.evals.evals,
+    project.config.max_concurrency,
+    (evalCase) =>
+      runEval(
+        {
+          config: project.config,
+          projectRoot: project.root,
+          evalCase,
+          baseline: true,
+          outputRoot,
+        },
+        agent,
+      ),
   );
   await persistBaselineScores(project.root, baselineScores);
   events.push({ type: "baseline-generated", scores: baselineScores.length });
@@ -178,8 +212,10 @@ async function persistBaselineScores(projectRoot: string, scores: EvalScore[]): 
   await mkdir(baselineDir, { recursive: true });
   await Promise.all(
     scores.map((score, index) =>
-      writeFile(join(baselineDir, `scores-${index}.json`), `${JSON.stringify(score, null, 2)}\n`, { flag: "wx" })
-    )
+      writeFile(join(baselineDir, `scores-${index}.json`), `${JSON.stringify(score, null, 2)}\n`, {
+        flag: "wx",
+      }),
+    ),
   );
 }
 
@@ -188,7 +224,7 @@ async function runResearchIterations(
   baselineScores: EvalScore[],
   baselineAggregate: AggregateReport,
   options: OrchestrateOptions,
-  events: RunEvent[]
+  events: RunEvent[],
 ): Promise<{ iterations: IterationResult[]; bestIteration?: IterationResult }> {
   if (!options.agent) {
     throw new Error("No eval agent was provided to run research iterations");
@@ -199,8 +235,14 @@ async function runResearchIterations(
 
   const agent = options.agent;
   const seedSkillDir = await resolveSeedSkillDir(project, options.seedSkillDir);
-  const guidanceSkillDir = await resolveGuidanceSkillDir(project, options.guidanceSkillDir, seedSkillDir);
-  const guidanceLedgerPath = guidanceSkillDir ? join(project.root, "workspace", "guidance-ledger.json") : undefined;
+  const guidanceSkillDir = await resolveGuidanceSkillDir(
+    project,
+    options.guidanceSkillDir,
+    seedSkillDir,
+  );
+  const guidanceLedgerPath = guidanceSkillDir
+    ? join(project.root, "workspace", "guidance-ledger.json")
+    : undefined;
   const iterations: IterationResult[] = [];
   let previousSkillDir = await resolveInitialResearchSkillDir(project, seedSkillDir);
   let previousScores = baselineScores;
@@ -223,26 +265,29 @@ async function runResearchIterations(
       guidanceLedgerPath,
       baselineScores,
       previousScores,
-      previousAggregate
+      previousAggregate,
     });
     await assertExists(
       candidateSkillDir,
-      `Researcher did not create candidate skill directory for iteration ${iteration}`
+      `Researcher did not create candidate skill directory for iteration ${iteration}`,
     );
     events.push({ type: "iteration-generated", iteration, candidateSkillDir });
 
-    const scores = await runWithConcurrency(project.evals.evals, project.config.max_concurrency, (evalCase) =>
-      runEval(
-        {
-          config: project.config,
-          projectRoot: project.root,
-          evalCase,
-          baseline: false,
-          targetSkillDir: candidateSkillDir,
-          outputRoot: join(iterationDir, "outputs")
-        },
-        agent
-      )
+    const scores = await runWithConcurrency(
+      project.evals.evals,
+      project.config.max_concurrency,
+      (evalCase) =>
+        runEval(
+          {
+            config: project.config,
+            projectRoot: project.root,
+            evalCase,
+            baseline: false,
+            targetSkillDir: candidateSkillDir,
+            outputRoot: join(iterationDir, "outputs"),
+          },
+          agent,
+        ),
     );
     await persistIterationScores(iterationDir, scores);
 
@@ -252,18 +297,32 @@ async function runResearchIterations(
     iterations.push(result);
     events.push({ type: "iteration-scored", iteration, scores: scores.length, aggregate });
 
-    if (!bestIteration || aggregate.overall.normalizedScore > bestIteration.aggregate.overall.normalizedScore) {
+    if (
+      !bestIteration ||
+      aggregate.overall.normalizedScore > bestIteration.aggregate.overall.normalizedScore
+    ) {
       bestIteration = result;
     }
     if (aggregate.overall.normalizedScore >= project.config.target_score) {
-      events.push({
-        type: "target-score-reached",
-        iteration,
-        normalizedScore: aggregate.overall.normalizedScore,
-        targetScore: project.config.target_score
-      });
-      reachedTarget = true;
-      break;
+      const regressions = findScoreRegressions(baselineScores, scores);
+      if (regressions.length > 0) {
+        events.push({
+          type: "target-score-blocked-by-regression",
+          iteration,
+          normalizedScore: aggregate.overall.normalizedScore,
+          targetScore: project.config.target_score,
+          regressions,
+        });
+      } else {
+        events.push({
+          type: "target-score-reached",
+          iteration,
+          normalizedScore: aggregate.overall.normalizedScore,
+          targetScore: project.config.target_score,
+        });
+        reachedTarget = true;
+        break;
+      }
     }
 
     previousSkillDir = candidateSkillDir;
@@ -275,18 +334,43 @@ async function runResearchIterations(
     events.push({
       type: "max-iterations-reached",
       completedIterations: iterations.length,
-      maxIterations: project.config.max_iterations
+      maxIterations: project.config.max_iterations,
     });
   }
 
   return { iterations, bestIteration };
 }
 
+function findScoreRegressions(
+  baselineScores: EvalScore[],
+  candidateScores: EvalScore[],
+): ScoreRegression[] {
+  const baselineByEval = new Map(baselineScores.map((score) => [score.eval_id, score]));
+  return candidateScores
+    .map((candidate) => {
+      const baseline = baselineByEval.get(candidate.eval_id);
+      if (!baseline || candidate.total_score >= baseline.total_score) {
+        return undefined;
+      }
+      return {
+        evalId: candidate.eval_id,
+        baselineScore: baseline.total_score,
+        candidateScore: candidate.total_score,
+      };
+    })
+    .filter((regression): regression is ScoreRegression => Boolean(regression));
+}
+
 async function resolveSeedSkillDir(project: ProjectInputs, seedSkillDir?: string): Promise<string> {
-  const resolved = seedSkillDir ?? project.config.origin_skill;
-  if (!resolved) {
-    throw new Error("No seed skill directory was provided. Set origin_skill in config.json or pass seedSkillDir.");
+  const configured = seedSkillDir ?? project.config.origin_skill;
+  if (!configured) {
+    throw new Error(
+      "No seed skill directory was provided. Set origin_skill in config.json or pass seedSkillDir.",
+    );
   }
+  const resolved = seedSkillDir
+    ? resolve(seedSkillDir)
+    : resolveProjectConfigPath(project, configured);
   await assertExists(resolved, `Seed skill directory was not found: ${resolved}`);
   return resolved;
 }
@@ -294,10 +378,9 @@ async function resolveSeedSkillDir(project: ProjectInputs, seedSkillDir?: string
 async function resolveGuidanceSkillDir(
   project: ProjectInputs,
   guidanceSkillDir: string | undefined,
-  seedSkillDir: string
+  seedSkillDir: string,
 ): Promise<string | undefined> {
-  const configured = guidanceSkillDir ?? project.config.guidance_skill;
-  const resolved = configured ?? (project.config.research_start === "empty" ? seedSkillDir : undefined);
+  const resolved = resolveConfiguredGuidanceSkillDir(project, guidanceSkillDir, seedSkillDir);
   if (!resolved) {
     return undefined;
   }
@@ -305,7 +388,24 @@ async function resolveGuidanceSkillDir(
   return resolved;
 }
 
-async function resolveInitialResearchSkillDir(project: ProjectInputs, seedSkillDir: string): Promise<string> {
+function resolveConfiguredGuidanceSkillDir(
+  project: ProjectInputs,
+  guidanceSkillDir: string | undefined,
+  seedSkillDir: string,
+): string | undefined {
+  if (guidanceSkillDir) {
+    return resolve(guidanceSkillDir);
+  }
+  if (project.config.guidance_skill) {
+    return resolveProjectConfigPath(project, project.config.guidance_skill);
+  }
+  return project.config.research_start === "empty" ? seedSkillDir : undefined;
+}
+
+async function resolveInitialResearchSkillDir(
+  project: ProjectInputs,
+  seedSkillDir: string,
+): Promise<string> {
   if ((project.config.research_start ?? "seed") !== "empty") {
     return seedSkillDir;
   }
@@ -314,6 +414,10 @@ async function resolveInitialResearchSkillDir(project: ProjectInputs, seedSkillD
   await rm(emptySkillDir, { recursive: true, force: true });
   await mkdir(emptySkillDir, { recursive: true });
   return emptySkillDir;
+}
+
+function resolveProjectConfigPath(project: ProjectInputs, path: string): string {
+  return isAbsolute(path) ? path : resolve(project.root, path);
 }
 
 async function assertExists(path: string, message: string): Promise<void> {
@@ -327,8 +431,10 @@ async function assertExists(path: string, message: string): Promise<void> {
 async function persistIterationScores(iterationDir: string, scores: EvalScore[]): Promise<void> {
   await Promise.all(
     scores.map((score, index) =>
-      writeFile(join(iterationDir, `scores-${index}.json`), `${JSON.stringify(score, null, 2)}\n`, { flag: "wx" })
-    )
+      writeFile(join(iterationDir, `scores-${index}.json`), `${JSON.stringify(score, null, 2)}\n`, {
+        flag: "wx",
+      }),
+    ),
   );
 }
 
@@ -340,6 +446,6 @@ export async function copySkillSnapshot(from: string, to: string): Promise<void>
   await cp(from, to, {
     recursive: true,
     errorOnExist: true,
-    force: false
+    force: false,
   });
 }

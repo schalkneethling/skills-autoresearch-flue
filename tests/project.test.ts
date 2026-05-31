@@ -6,7 +6,7 @@ import {
   syntheticConfig,
   syntheticEvals,
   tempProject,
-  writeFixture
+  writeFixture,
 } from "./helpers.js";
 
 test("loads security and synthetic project fixtures without domain branches", async () => {
@@ -27,7 +27,12 @@ test("resolves default model and rejects unsupported providers", async () => {
   await writeFixture(root, syntheticConfig, syntheticEvals);
   const project = await loadProject(root);
 
-  expect(resolveModel(project.config)).toEqual({ provider: "anthropic", name: "claude-sonnet-4-6" });
+  expect(resolveModel(project.config)).toEqual({
+    provider: "anthropic",
+    name: "claude-sonnet-4-6",
+  });
   expect(resolveModel(project.config, { name: "claude-opus-4-6" }).name).toBe("claude-opus-4-6");
-  expect(() => resolveModel(project.config, { provider: "openai" })).toThrow(/Unsupported model provider/);
+  expect(() => resolveModel(project.config, { provider: "openai" })).toThrow(
+    /Unsupported model provider/,
+  );
 });
