@@ -21,7 +21,7 @@
     "env:check": "varlock load"
   },
   "dependencies": {
-    "@flue/runtime": "0.8.0",
+    "@flue/runtime": "0.8.1",
     "valibot": "^1.4.1"
   },
   "devDependencies": {
