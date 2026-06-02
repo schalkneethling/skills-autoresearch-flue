@@ -30,6 +30,16 @@ export async function loadAvailableFlueRoles(rootPath = process.cwd()): Promise<
   return [...new Set(roles.flat())].sort();
 }
 
+function missingRequiredProjectRoleFields(config: ProjectConfig): string[] {
+  const roles = config.roles as Partial<Record<"judge" | "skill_builder", unknown>>;
+  return [
+    ["roles.judge", roles.judge],
+    ["roles.skill_builder", roles.skill_builder],
+  ]
+    .filter(([, role]) => typeof role !== "string" || role.length === 0)
+    .map(([field]) => field as string);
+}
+
 export function configuredFlueRoleReferences(config: ProjectConfig): RoleReference[] {
   return [
     { field: "roles.judge", role: config.roles.judge },
@@ -45,6 +55,13 @@ export function validateConfiguredFlueRoles(
   config: ProjectConfig,
   availableRoles: string[],
 ): void {
+  const missingRequiredFields = missingRequiredProjectRoleFields(config);
+  if (missingRequiredFields.length > 0) {
+    throw new Error(
+      `Configured Flue roles are missing required fields: ${missingRequiredFields.join(", ")}`,
+    );
+  }
+
   const available = new Set(availableRoles);
   const missing = configuredFlueRoleReferences(config).filter(
     (reference) => !available.has(reference.role),
