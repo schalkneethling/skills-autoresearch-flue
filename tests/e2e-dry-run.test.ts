@@ -75,13 +75,15 @@ test("dry run executes baseline, applies a candidate skill patch, and scores one
   expect(result.completedIterations).toBe(1);
   expect(result.aggregate.overall.normalizedScore).toBe(0.9);
   expect(result.events.at(-1)).toMatchObject({ type: "target-score-reached", iteration: 1 });
-  expect(client.requests.map((request) => request.system)).toEqual([
-    "task-producer",
-    "judge",
-    "skill-builder",
-    "task-producer",
-    "judge",
-  ]);
+  expect(client.requests.map((request) => request.system)).toEqual(
+    [
+      ["baseline producer", "task-producer"],
+      ["baseline judge", "eval-judge"],
+      ["researcher", "skill-builder"],
+      ["candidate producer", "task-producer"],
+      ["candidate judge", "eval-judge"],
+    ].map(([, system]) => system),
+  );
 
   await expect(
     readFile(join(root, "workspace", "baseline", evalCase.id, "RESULT.md"), "utf8"),
