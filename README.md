@@ -58,6 +58,25 @@ If you want to point the harness at your own skill, start with [docs/using-the-h
 
 If you want to work on the harness itself, read [CONTRIBUTING.md](CONTRIBUTING.md). It explains the project structure, Flue integration, data contracts, fixtures, test expectations, and alpha limitations.
 
+## Acknowledgements
+
+This project was originally inspired by Andrej Karpathy's
+[`autoresearch`](https://github.com/karpathy/autoresearch) and its compact loop
+for autonomous, auditable research iterations. The skill-specific harness design
+is also influenced by skill-creation guidance from OpenAI Codex's
+[`skill-creator`](https://github.com/openai/skills/blob/main/skills/.system/skill-creator/SKILL.md)
+and Anthropic's open-source
+[`skill-creator`](https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md).
+The ideas adopted here are conceptual: progressive disclosure for skill context,
+trigger-focused metadata, candidate skill review, baseline comparison, repeatable
+eval fixtures, and iterative review loops.
+
+No source text or implementation from those projects is intentionally copied into
+this repository. If future work closely adapts code, templates, prompts, or other
+copyrightable material from the Anthropic skill-creator, preserve its
+[`Apache-2.0` license notice](https://github.com/anthropics/skills/blob/main/skills/skill-creator/LICENSE.txt)
+and document the adapted files here or in a project notice file.
+
 ## Alpha Fixture
 
 The release-notes fixture lives at:
