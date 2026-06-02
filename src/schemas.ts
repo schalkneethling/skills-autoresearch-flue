@@ -13,10 +13,10 @@ export const RoleModelsSchema = v.object({
   researcher: v.optional(ModelConfigSchema),
 });
 
-export const RolesConfigSchema = v.record(
-  v.pipe(v.string(), v.minLength(1)),
-  v.pipe(v.string(), v.minLength(1)),
-);
+export const RolesConfigSchema = v.object({
+  judge: v.pipe(v.string(), v.minLength(1)),
+  skill_builder: v.pipe(v.string(), v.minLength(1)),
+});
 
 export const TrackSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),

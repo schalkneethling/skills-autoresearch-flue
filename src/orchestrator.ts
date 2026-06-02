@@ -2,6 +2,7 @@ import { cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { aggregateScores, AggregateReport } from "./aggregate.js";
 import { importBaselineArtefacts } from "./baseline.js";
+import { loadAvailableFlueRoles, validateConfiguredFlueRoles } from "./flue-roles.js";
 import { loadProject, ProjectInputs } from "./project.js";
 import { runEval, runWithConcurrency, EvalAgent } from "./runner.js";
 import { EvalScore } from "./schemas.js";
@@ -93,6 +94,7 @@ export async function orchestrateBaseline(
   const events: RunEvent[] = [];
   const project = await loadProject(options.projectRoot);
   events.push({ type: "project-loaded", root: project.root });
+  validateConfiguredFlueRoles(project.config, await loadAvailableFlueRoles());
 
   const expectedEvalIds = project.evals.evals.map((evalCase) => evalCase.id);
   const baselineScores = options.withBaseline

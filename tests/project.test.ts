@@ -1,3 +1,4 @@
+import { validateConfiguredFlueRoles } from "../src/flue-roles.js";
 import { loadProject, trackForEval } from "../src/project.js";
 import { resolveModel } from "../src/model.js";
 import {
@@ -35,4 +36,28 @@ test("resolves default model and rejects unsupported providers", async () => {
   expect(() => resolveModel(project.config, { provider: "openai" })).toThrow(
     /Unsupported model provider/,
   );
+});
+
+test("requires judge and skill builder role keys", async () => {
+  const root = await tempProject();
+  await writeFixture(
+    root,
+    {
+      ...syntheticConfig,
+      roles: {},
+    },
+    syntheticEvals,
+  );
+
+  await expect(loadProject(root)).rejects.toThrow(/roles\.judge/);
+
+  expect(() =>
+    validateConfiguredFlueRoles(
+      {
+        ...syntheticConfig,
+        roles: {} as typeof syntheticConfig.roles,
+      },
+      ["eval-judge", "skill-builder", "task-producer"],
+    ),
+  ).toThrow(/missing required fields: roles\.judge, roles\.skill_builder/);
 });

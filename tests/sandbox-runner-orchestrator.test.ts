@@ -146,6 +146,84 @@ test("orchestrator requires complete artefacts when started with withBaseline", 
   ).rejects.toThrow(/--with-baseline/);
 });
 
+test("orchestrator rejects missing configured judge role before baseline work", async () => {
+  const root = await tempProject();
+  await writeFixture(
+    root,
+    {
+      ...syntheticConfig,
+      roles: {
+        ...syntheticConfig.roles,
+        judge: "release-notes-judge",
+      },
+    },
+    syntheticEvals,
+  );
+
+  await expect(orchestrateBaseline({ projectRoot: root, withBaseline: true })).rejects.toThrow(
+    new RegExp(
+      [
+        "Configured Flue roles are not registered.",
+        "release-notes-judge: roles.judge",
+        "Available roles: eval-judge, skill-builder, task-producer",
+        "Define roles as markdown files in roles/ or .flue/roles/.",
+      ].join("(.|\n)*"),
+    ),
+  );
+  await expect(stat(join(root, "workspace", "baseline"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+});
+
+test("orchestrator rejects missing producer track role before running evals", async () => {
+  const root = await tempProject();
+  await writeFixture(
+    root,
+    {
+      ...syntheticConfig,
+      tracks: [
+        {
+          ...syntheticConfig.tracks[0],
+          role: "release-editor",
+        },
+      ],
+    },
+    syntheticEvals,
+  );
+  let agentRuns = 0;
+  const agent: EvalAgent = {
+    async run(request) {
+      agentRuns++;
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id);
+    },
+  };
+
+  await expect(orchestrateBaseline({ projectRoot: root, agent })).rejects.toThrow(
+    /release-editor: tracks\[0\]\.role/,
+  );
+  expect(agentRuns).toBe(0);
+  await expect(stat(join(root, "workspace", "baseline"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+});
+
+test("orchestrator accepts valid configured Flue roles", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  let agentRuns = 0;
+  const agent: EvalAgent = {
+    async run(request) {
+      agentRuns++;
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id);
+    },
+  };
+
+  const result = await orchestrateBaseline({ projectRoot: root, agent });
+
+  expect(agentRuns).toBe(1);
+  expect(result.events[1]).toMatchObject({ type: "baseline-started" });
+});
+
 test("orchestrator generates initial baseline by default without counting it as an iteration", async () => {
   const generateRoot = await tempProject();
   await writeFixture(generateRoot, syntheticConfig, syntheticEvals);

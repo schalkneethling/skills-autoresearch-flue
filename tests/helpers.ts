@@ -30,7 +30,7 @@ export const securityConfig = {
     name: "claude-sonnet-4-6"
   },
   roles: {
-    judge: "judge",
+    judge: "eval-judge",
     skill_builder: "skill-builder"
   },
   tracks: [
@@ -58,7 +58,7 @@ export const syntheticConfig = {
   max_iterations: 3,
   max_concurrency: 1,
   roles: {
-    judge: "judge",
+    judge: "eval-judge",
     skill_builder: "skill-builder"
   },
   tracks: [
