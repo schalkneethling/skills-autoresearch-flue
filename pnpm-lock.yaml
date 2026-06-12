@@ -26,7 +26,7 @@ importers:
         version: 25.9.1
       '@varlock/1password-plugin':
         specifier: ^1.1.0
-        version: 1.1.0(varlock@1.4.0)
+        version: 1.1.0(varlock@1.5.1)
       eslint:
         specifier: ^10.4.1
         version: 10.4.1
@@ -40,8 +40,8 @@ importers:
         specifier: ^8.60.1
         version: 8.60.1(eslint@10.4.1)(typescript@6.0.3)
       varlock:
-        specifier: ^1.4.0
-        version: 1.4.0
+        specifier: ^1.5.1
+        version: 1.5.1
       vitest:
         specifier: ^4.1.8
         version: 4.1.8(@types/node@25.9.1)(vite@8.0.16(@types/node@25.9.1)(esbuild@0.27.3)(yaml@2.9.0))
@@ -2275,8 +2275,8 @@ packages:
       typescript:
         optional: true
 
-  varlock@1.4.0:
-    resolution: {integrity: sha512-dVQyJlcZjTVnBiCs4/AyyH1pxPU+cqXSTauWcWFeKng6NrjX3y84klK1g2oiBHkfESOtzpkx/oYP7oJCGU4NuA==}
+  varlock@1.5.1:
+    resolution: {integrity: sha512-mJZGABXguQn4JHUm0ZkJpjffYZnmIe5oMyjPaMxsyYBsI1lsuvj8s2R4aq2bCLRz0glanjW7pYmIUSdyiqU2eQ==}
     engines: {bun: '>=1.3.3', node: '>=22'}
     hasBin: true
 
@@ -3531,9 +3531,9 @@ snapshots:
     dependencies:
       valibot: 1.4.1(typescript@6.0.3)
 
-  '@varlock/1password-plugin@1.1.0(varlock@1.4.0)':
+  '@varlock/1password-plugin@1.1.0(varlock@1.5.1)':
     dependencies:
-      varlock: 1.4.0
+      varlock: 1.5.1
 
   '@vercel/detect-agent@1.2.3': {}
 
@@ -4822,7 +4822,7 @@ snapshots:
     optionalDependencies:
       typescript: 6.0.3
 
-  varlock@1.4.0: {}
+  varlock@1.5.1: {}
 
   vary@1.1.2: {}
 
