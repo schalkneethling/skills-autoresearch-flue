@@ -445,9 +445,15 @@ test("AnthropicMessagesClient posts messages request and extracts text response"
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const fetchStub: typeof fetch = async (url, init) => {
     calls.push({ url: String(url), init: init ?? {} });
-    return new Response(JSON.stringify({ content: [{ type: "text", text: "Done" }] }), {
-      status: 200
-    });
+    return new Response(
+      JSON.stringify({
+        content: [{ type: "text", text: "Done" }],
+        usage: { input_tokens: 12, output_tokens: 3 }
+      }),
+      {
+        status: 200
+      }
+    );
   };
   const client = new AnthropicMessagesClient({ apiKey: "test-key", fetch: fetchStub });
 
@@ -457,7 +463,7 @@ test("AnthropicMessagesClient posts messages request and extracts text response"
     prompt: "user prompt"
   });
 
-  expect(result).toBe("Done");
+  expect(result).toMatchObject({ text: "Done", usage: { inputTokens: 12, outputTokens: 3 } });
   expect(calls[0].url).toBe("https://api.anthropic.com/v1/messages");
   expect((calls[0].init.headers as Record<string, string>)["x-api-key"]).toBe("test-key");
   expect(JSON.parse(String(calls[0].init.body))).toMatchObject({

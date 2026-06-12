@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { ModelRunCostTracker } from "./cost.js";
 import { resolveModel } from "./model.js";
 import { trackForEval } from "./project.js";
 import { createEvalSandbox, EvalSandbox } from "./sandbox.js";
@@ -12,18 +13,21 @@ export interface EvalRunRequest {
   targetSkillDir?: string;
   outputRoot: string;
   model?: Partial<ModelConfig>;
+  costTracker?: ModelRunCostTracker;
 }
 
 export interface EvalAgentRequest {
   evalCase: EvalCase;
   track: Track;
   role: string;
+  baseline?: boolean;
   modelRoles?: {
     judge?: string;
   };
   targetSkill?: string;
   model: ModelConfig;
   models?: RoleModels;
+  costTracker?: ModelRunCostTracker;
   sandbox: EvalSandbox;
 }
 
@@ -48,12 +52,14 @@ export async function runEval(request: EvalRunRequest, agent: EvalAgent): Promis
     evalCase: request.evalCase,
     track,
     role,
+    baseline: request.baseline,
     modelRoles: {
       judge: request.config.roles.judge
     },
     targetSkill: request.baseline ? undefined : track.target_skill,
     model,
     models: request.config.models,
+    costTracker: request.costTracker,
     sandbox
   });
 }

@@ -1,5 +1,6 @@
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { ModelCallRole, ModelUsage } from "./cost.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
 import { buildJudgePrompt } from "./prompts/judge-prompt.js";
@@ -24,16 +25,20 @@ import {
 export interface ModelRequest {
   system: string;
   prompt: string;
-  model: {
-    provider: string;
-    name: string;
-  };
+  model: ModelConfig;
   phase?: string;
   workspaceDir?: string;
 }
 
+export interface ModelCompletionResponse {
+  text: string;
+  usage?: ModelUsage;
+}
+
+export type ModelCompletion = string | ModelCompletionResponse;
+
 export interface ModelClient {
-  complete(request: ModelRequest): Promise<string>;
+  complete(request: ModelRequest): Promise<ModelCompletion>;
 }
 
 export interface AnthropicMessagesClientOptions {
@@ -60,7 +65,7 @@ export class AnthropicMessagesClient implements ModelClient {
     this.#fetch = options.fetch ?? fetch;
   }
 
-  async complete(request: ModelRequest): Promise<string> {
+  async complete(request: ModelRequest): Promise<ModelCompletion> {
     if (request.model.provider !== "anthropic") {
       throw new Error(`AnthropicMessagesClient cannot run provider "${request.model.provider}"`);
     }
@@ -84,7 +89,15 @@ export class AnthropicMessagesClient implements ModelClient {
       throw new Error(`Anthropic request failed with ${response.status}: ${await response.text()}`);
     }
 
-    const body = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
+    const body = (await response.json()) as {
+      content?: Array<{ type?: string; text?: string }>;
+      usage?: {
+        input_tokens?: number;
+        output_tokens?: number;
+        cache_creation_input_tokens?: number;
+        cache_read_input_tokens?: number;
+      };
+    };
     const text = body.content
       ?.filter((item) => item.type === "text" && typeof item.text === "string")
       .map((item) => item.text)
@@ -92,7 +105,15 @@ export class AnthropicMessagesClient implements ModelClient {
     if (!text) {
       throw new Error("Anthropic response did not include text content");
     }
-    return text;
+    return {
+      text,
+      usage: {
+        inputTokens: body.usage?.input_tokens,
+        outputTokens: body.usage?.output_tokens,
+        cacheCreationInputTokens: body.usage?.cache_creation_input_tokens,
+        cacheReadInputTokens: body.usage?.cache_read_input_tokens
+      }
+    };
   }
 }
 
@@ -105,7 +126,12 @@ export class ModelEvalAgent implements EvalAgent {
 
   async run(request: EvalAgentRequest): Promise<EvalScore> {
     const produceRequest = await buildProduceModelRequest(request);
-    const produceResponse = await this.#client.complete(produceRequest);
+    const produceResponse = await completeTrackedModelRequest(
+      this.#client,
+      produceRequest,
+      request.baseline ? "baseline_producer" : "iteration_producer",
+      request.costTracker
+    );
     await persistTranscript(
       join(request.sandbox.outputDir, "producer-transcript.json"),
       produceRequest,
@@ -115,7 +141,12 @@ export class ModelEvalAgent implements EvalAgent {
     await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
 
     const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
-    const judgeResponse = await this.#client.complete(judgeRequest);
+    const judgeResponse = await completeTrackedModelRequest(
+      this.#client,
+      judgeRequest,
+      request.baseline ? "baseline_judge" : "iteration_judge",
+      request.costTracker
+    );
     await persistTranscript(join(request.sandbox.outputDir, "judge-transcript.json"), judgeRequest, judgeResponse);
     return parseModelJudgeResponse(judgeResponse, request.evalCase, request.track);
   }
@@ -130,7 +161,7 @@ export class ModelSkillResearcher implements SkillResearcher {
 
   async improve(request: SkillResearchRequest): Promise<void> {
     const modelRequest = await buildResearchModelRequest(request);
-    const response = await this.#client.complete(modelRequest);
+    const response = await completeTrackedModelRequest(this.#client, modelRequest, "researcher", request.costTracker);
     const patch = parseSkillResearchPatch(response);
     validateSkillResearchPatch(request.candidateSkillDir, patch);
     await cp(request.previousSkillDir, request.candidateSkillDir, {
@@ -147,6 +178,31 @@ export class ModelSkillResearcher implements SkillResearcher {
     });
     await persistTranscript(join(request.candidateSkillDir, ".autoresearch-transcript.json"), modelRequest, response);
   }
+}
+
+async function completeTrackedModelRequest(
+  client: ModelClient,
+  request: ModelRequest,
+  role: ModelCallRole,
+  tracker: SkillResearchRequest["costTracker"] | EvalAgentRequest["costTracker"]
+): Promise<string> {
+  tracker?.assertCanStartModelCall();
+  const completion = await client.complete(request);
+  tracker?.recordModelCall({
+    role,
+    phase: request.phase,
+    model: request.model,
+    usage: modelCompletionUsage(completion)
+  });
+  return modelCompletionText(completion);
+}
+
+export function modelCompletionText(completion: ModelCompletion): string {
+  return typeof completion === "string" ? completion : completion.text;
+}
+
+export function modelCompletionUsage(completion: ModelCompletion): ModelUsage | undefined {
+  return typeof completion === "string" ? undefined : completion.usage;
 }
 
 export async function buildProduceModelRequest(request: EvalAgentRequest): Promise<ModelRequest> {
