@@ -11,3 +11,5 @@ export * from "./adapters.js";
 export * from "./logger.js";
 export * from "./model-agent.js";
 export * from "./flue-harness.js";
+export * from "./cost.js";
+export * from "./pricing.js";

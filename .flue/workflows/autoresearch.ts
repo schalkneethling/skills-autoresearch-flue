@@ -11,6 +11,7 @@ interface AutoresearchPayload {
   forceResearch?: boolean;
   seedSkillDir?: string;
   guidanceSkillDir?: string;
+  budgetUsd?: number;
   sessionId?: string;
   model?: string;
 }
@@ -20,7 +21,7 @@ export async function run({ init, payload, env }: FlueContext<AutoresearchPayloa
   const autoresearch = createAgent(() => ({
     sandbox: local(),
     model,
-    subagents: autoresearchProfiles,
+    subagents: autoresearchProfiles
   }));
   const harness = await init(autoresearch);
   const session = await harness.session(payload.sessionId ?? "autoresearch");
@@ -32,12 +33,14 @@ export async function run({ init, payload, env }: FlueContext<AutoresearchPayloa
     forceResearch: payload.forceResearch,
     seedSkillDir: payload.seedSkillDir,
     guidanceSkillDir: payload.guidanceSkillDir,
+    budgetUsd: payload.budgetUsd
   });
 
   return {
     completedIterations: result.completedIterations,
     normalizedScore: result.aggregate.overall.normalizedScore,
     bestSkillDir: result.bestIteration?.skillDir,
-    events: result.events.map((event) => event.type),
+    cost: result.cost,
+    events: result.events.map((event) => event.type)
   };
 }

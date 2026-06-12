@@ -100,6 +100,7 @@ The important parts are not the exact directory names for every project, but tha
   "target_score": 0.8,
   "max_iterations": 1,
   "max_concurrency": 1,
+  "budget_usd": 0.5,
   "model": {
     "provider": "anthropic",
     "name": "claude-sonnet-4-6"
@@ -140,6 +141,8 @@ Important fields:
 - `guidance_skill`: optional path to a skill used only as seed/reference guidance, relative to the project root unless absolute. Use this when the candidate should start from `origin_skill`, but the researcher should consult a different reference skill; or when `research_start` is `"empty"` and the guidance source should be different from `origin_skill`. When `research_start` is `"empty"` and `guidance_skill` is omitted, the harness uses `origin_skill` as the guidance skill.
 - `target_score`: normalized score required to stop early.
 - `max_iterations`: maximum candidate-improvement attempts.
+- `max_concurrency`: maximum eval cases to run at the same time. This changes parallelism, not the total number of planned calls.
+- `budget_usd`: optional observed-cost cap. When provider usage and known pricing are available, the harness stops before starting more model calls once observed cost reaches this amount.
 - `models.producer`: model that produces eval outputs. The default config uses a cheaper/smaller model here.
 - `models.judge`: model that scores producer outputs. The default config uses a stronger model here.
 - `models.researcher`: model that patches the skill.
@@ -151,6 +154,36 @@ These role/model choices are starting suggestions, not requirements. Try differe
 Flue subagent profiles live in `.flue/profiles.ts`. The configured role labels are still passed through prompts as project context, while Flue behavior comes from the named `producer`, `judge`, and `researcher` profiles.
 
 For a multi-skill project, use one track per skill or skill responsibility. For example, a security project might have an `audit` track that targets `skills/security-audit` and an `authoring` track that targets `skills/secure-authoring`.
+
+## Cost Preview And Budget
+
+Before model-backed work starts, the harness emits a cost preview with the maximum planned model-call count by role:
+
+```text
+baseline producer calls = eval count when generating a fresh baseline
+baseline judge calls = eval count when generating a fresh baseline
+researcher calls = max_iterations when runResearch is true
+iteration producer calls = eval count * max_iterations when runResearch is true
+iteration judge calls = eval count * max_iterations when runResearch is true
+```
+
+Imported baseline smoke runs with `withBaseline:true` plan no baseline producer or judge calls. `max_concurrency` controls how many evals can run at once; it does not reduce the number of producer or judge calls.
+
+Set `budget_usd` in `config.json` to cap observed spend for repeated runs, or pass `--budget-usd <amount>` to the CLI for a one-off override. Flue payloads accept `budgetUsd`:
+
+```bash
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"budgetUsd":0.5,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+```
+
+The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue runs currently record call counts, but they do not expose token usage to this harness, so dollar-cost caps only take effect when usage and known pricing are available. Treat the dollar estimate as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
+
+Each successful run writes:
+
+```text
+workspace/cost-summary.json
+```
+
+That file includes planned calls, observed calls by role, token usage when available, and observed estimated cost when known.
 
 ## Seed Skill Selection
 

@@ -10,7 +10,7 @@ import {
   syntheticConfig,
   syntheticEvals,
   tempProject,
-  writeFixture,
+  writeFixture
 } from "./helpers.js";
 
 test("sandbox rejects mutations in read-only mounts with EROFS", async () => {
@@ -27,7 +27,7 @@ test("sandbox rejects mutations in read-only mounts with EROFS", async () => {
     referenceDir: join(root, "reference"),
     evalsDir: join(root, "evals"),
     skillDir: join(root, "skill"),
-    outputDir: join(root, "out"),
+    outputDir: join(root, "out")
   });
 
   const readonlyPaths = [
@@ -36,7 +36,7 @@ test("sandbox rejects mutations in read-only mounts with EROFS", async () => {
     () => sandbox.mkdir(join(root, "evals", "new")),
     () => sandbox.rm(join(root, "skill", "SKILL.md")),
     () => sandbox.cp(join(root, "reference", "ref.txt"), join(root, "input", "copy.txt")),
-    () => sandbox.chmod(join(root, "reference", "ref.txt"), 0o600),
+    () => sandbox.chmod(join(root, "reference", "ref.txt"), 0o600)
   ];
 
   for (const action of readonlyPaths) {
@@ -55,7 +55,7 @@ test("runEval maps eval type to role and target skill through config", async () 
     async run(request) {
       calls.push(request);
       return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 1, 2);
-    },
+    }
   };
 
   await runEval(
@@ -64,9 +64,9 @@ test("runEval maps eval type to role and target skill through config", async () 
       projectRoot: root,
       evalCase: securityEvals.evals[0],
       baseline: true,
-      outputRoot: join(root, "workspace", "baseline", "outputs"),
+      outputRoot: join(root, "workspace", "baseline", "outputs")
     },
-    agent,
+    agent
   );
   await runEval(
     {
@@ -75,22 +75,18 @@ test("runEval maps eval type to role and target skill through config", async () 
       evalCase: securityEvals.evals[1],
       baseline: false,
       targetSkillDir: join(root, "skills", "secure-authoring"),
-      outputRoot: join(root, "workspace", "iterations", "1"),
+      outputRoot: join(root, "workspace", "iterations", "1")
     },
-    agent,
+    agent
   );
 
   expect(calls).toHaveLength(2);
   expect((calls[0] as any).role).toBe("security-auditor");
   expect((calls[0] as any).targetSkill).toBeUndefined();
-  expect((calls[0] as any).sandbox.mounts.some((mount: any) => mount.target === "/skill")).toBe(
-    false,
-  );
+  expect((calls[0] as any).sandbox.mounts.some((mount: any) => mount.target === "/skill")).toBe(false);
   expect((calls[1] as any).role).toBe("secure-author");
   expect((calls[1] as any).targetSkill).toBe("secure-authoring");
-  expect(
-    (calls[1] as any).sandbox.mounts.find((mount: any) => mount.target === "/skill").readOnly,
-  ).toBe(true);
+  expect((calls[1] as any).sandbox.mounts.find((mount: any) => mount.target === "/skill").readOnly).toBe(true);
 });
 
 test("runWithConcurrency respects the configured limit", async () => {
@@ -114,36 +110,24 @@ test("orchestrator requires complete artefacts when started with withBaseline", 
   await mkdir(join(reuseRoot, "workspace", "baseline", "notes-001", "output"), { recursive: true });
   await writeFile(
     join(reuseRoot, "workspace", "baseline", "scores-0.json"),
-    JSON.stringify(score("notes-001", "summarise-changelog", "summarise")),
+    JSON.stringify(score("notes-001", "summarise-changelog", "summarise"))
   );
   await writeFile(join(reuseRoot, "workspace", "baseline", "notes-001", "task.md"), "Task");
-  await writeFile(
-    join(reuseRoot, "workspace", "baseline", "notes-001", "input", "SPEC.md"),
-    "Input",
-  );
-  await writeFile(
-    join(reuseRoot, "workspace", "baseline", "notes-001", "output", "SPEC.md"),
-    "Output",
-  );
-  await writeFile(
-    join(reuseRoot, "workspace", "baseline", "summary.json"),
-    JSON.stringify({ average: 1 }),
-  );
-  await writeFile(
-    join(reuseRoot, "workspace", "baseline", "summary-summarise.json"),
-    JSON.stringify({ average: 1 }),
-  );
+  await writeFile(join(reuseRoot, "workspace", "baseline", "notes-001", "input", "SPEC.md"), "Input");
+  await writeFile(join(reuseRoot, "workspace", "baseline", "notes-001", "output", "SPEC.md"), "Output");
+  await writeFile(join(reuseRoot, "workspace", "baseline", "summary.json"), JSON.stringify({ average: 1 }));
+  await writeFile(join(reuseRoot, "workspace", "baseline", "summary-summarise.json"), JSON.stringify({ average: 1 }));
   await writeFile(join(reuseRoot, "workspace", "baseline", "analysis-summarise.md"), "Analysis");
 
   const reused = await orchestrateBaseline({ projectRoot: reuseRoot, withBaseline: true });
-  expect(reused.events[1]).toMatchObject({ type: "baseline-imported", scores: 1 });
+  expect(reused.events[2]).toMatchObject({ type: "baseline-imported", scores: 1 });
   expect(reused.completedIterations).toBe(0);
 
   const missingRoot = await tempProject();
   await writeFixture(missingRoot, syntheticConfig, syntheticEvals);
-  await expect(
-    orchestrateBaseline({ projectRoot: missingRoot, withBaseline: true }),
-  ).rejects.toThrow(/--with-baseline/);
+  await expect(orchestrateBaseline({ projectRoot: missingRoot, withBaseline: true })).rejects.toThrow(
+    /--with-baseline/
+  );
 });
 
 test("orchestrator rejects missing configured judge role before baseline work", async () => {
@@ -154,10 +138,10 @@ test("orchestrator rejects missing configured judge role before baseline work", 
       ...syntheticConfig,
       roles: {
         ...syntheticConfig.roles,
-        judge: "release-notes-judge",
-      },
+        judge: "release-notes-judge"
+      }
     },
-    syntheticEvals,
+    syntheticEvals
   );
 
   await expect(orchestrateBaseline({ projectRoot: root, withBaseline: true })).rejects.toThrow(
@@ -166,12 +150,12 @@ test("orchestrator rejects missing configured judge role before baseline work", 
         "Configured Flue roles are not registered.",
         "release-notes-judge: roles.judge",
         "Available roles: eval-judge, skill-builder, task-producer",
-        "Define roles as markdown files in roles/ or .flue/roles/.",
-      ].join("(.|\n)*"),
-    ),
+        "Define roles as markdown files in roles/ or .flue/roles/."
+      ].join("(.|\n)*")
+    )
   );
   await expect(stat(join(root, "workspace", "baseline"))).rejects.toMatchObject({
-    code: "ENOENT",
+    code: "ENOENT"
   });
 });
 
@@ -184,26 +168,24 @@ test("orchestrator rejects missing producer track role before running evals", as
       tracks: [
         {
           ...syntheticConfig.tracks[0],
-          role: "release-editor",
-        },
-      ],
+          role: "release-editor"
+        }
+      ]
     },
-    syntheticEvals,
+    syntheticEvals
   );
   let agentRuns = 0;
   const agent: EvalAgent = {
     async run(request) {
       agentRuns++;
       return score(request.evalCase.id, request.evalCase.eval_type, request.track.id);
-    },
+    }
   };
 
-  await expect(orchestrateBaseline({ projectRoot: root, agent })).rejects.toThrow(
-    /release-editor: tracks\[0\]\.role/,
-  );
+  await expect(orchestrateBaseline({ projectRoot: root, agent })).rejects.toThrow(/release-editor: tracks\[0\]\.role/);
   expect(agentRuns).toBe(0);
   await expect(stat(join(root, "workspace", "baseline"))).rejects.toMatchObject({
-    code: "ENOENT",
+    code: "ENOENT"
   });
 });
 
@@ -215,13 +197,13 @@ test("orchestrator accepts valid configured Flue roles", async () => {
     async run(request) {
       agentRuns++;
       return score(request.evalCase.id, request.evalCase.eval_type, request.track.id);
-    },
+    }
   };
 
   const result = await orchestrateBaseline({ projectRoot: root, agent });
 
   expect(agentRuns).toBe(1);
-  expect(result.events[1]).toMatchObject({ type: "baseline-started" });
+  expect(result.events[2]).toMatchObject({ type: "baseline-started" });
 });
 
 test("orchestrator generates initial baseline by default without counting it as an iteration", async () => {
@@ -230,22 +212,22 @@ test("orchestrator generates initial baseline by default without counting it as 
   const agent: EvalAgent = {
     async run(request) {
       return score(request.evalCase.id, request.evalCase.eval_type, request.track.id);
-    },
+    }
   };
   const generated = await orchestrateBaseline({ projectRoot: generateRoot, agent });
-  expect(generated.events[1]).toMatchObject({
+  expect(generated.events[2]).toMatchObject({
     type: "baseline-started",
-    countsTowardIterations: false,
+    countsTowardIterations: false
   });
-  expect(generated.events[2]).toMatchObject({ type: "baseline-generated", scores: 1 });
+  expect(generated.events[3]).toMatchObject({ type: "baseline-generated", scores: 1 });
   expect(generated.completedIterations).toBe(0);
   expect(generated.events.at(-1)).toMatchObject({
     type: "research-loop-ready",
-    completedIterations: 0,
+    completedIterations: 0
   });
-  await expect(
-    readFile(join(generateRoot, "workspace", "baseline", "scores-0.json"), "utf8"),
-  ).resolves.toContain("notes-001");
+  await expect(readFile(join(generateRoot, "workspace", "baseline", "scores-0.json"), "utf8")).resolves.toContain(
+    "notes-001"
+  );
 });
 
 test("orchestrator skips research when the baseline already reaches target score", async () => {
@@ -254,19 +236,19 @@ test("orchestrator skips research when the baseline already reaches target score
   const agent: EvalAgent = {
     async run(request) {
       return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.95);
-    },
+    }
   };
   const researcher: SkillResearcher = {
     async improve() {
       throw new Error("researcher should not run when baseline reaches target");
-    },
+    }
   };
 
   const result = await orchestrateBaseline({
     projectRoot: root,
     agent,
     researcher,
-    runResearch: true,
+    runResearch: true
   });
 
   expect(result.completedIterations).toBe(0);
@@ -275,10 +257,10 @@ test("orchestrator skips research when the baseline already reaches target score
   expect(result.events.at(-1)).toMatchObject({
     type: "baseline-target-score-reached",
     normalizedScore: 0.95,
-    targetScore: syntheticConfig.target_score,
+    targetScore: syntheticConfig.target_score
   });
   await expect(stat(join(root, "workspace", "iterations", "1"))).rejects.toMatchObject({
-    code: "ENOENT",
+    code: "ENOENT"
   });
 });
 
@@ -295,12 +277,12 @@ test("orchestrator can force research when the baseline already reaches target s
       return request.targetSkill
         ? score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.96)
         : score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.95);
-    },
+    }
   };
   const researcher: SkillResearcher = {
     async improve(request) {
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
-    },
+    }
   };
 
   const result = await orchestrateBaseline({
@@ -309,7 +291,7 @@ test("orchestrator can force research when the baseline already reaches target s
     researcher,
     runResearch: true,
     forceResearch: true,
-    seedSkillDir: seedSkill,
+    seedSkillDir: seedSkill
   });
 
   expect(result.completedIterations).toBe(1);
@@ -334,16 +316,13 @@ test("orchestrator runs research iterations until target score is reached", asyn
       evalRuns++;
       const total = evalRuns === 1 ? 0.5 : 0.9;
       return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, total);
-    },
+    }
   };
   const researcher: SkillResearcher = {
     async improve(request) {
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
-      await writeFile(
-        join(request.candidateSkillDir, `iteration-${request.iteration}.txt`),
-        "candidate\n",
-      );
-    },
+      await writeFile(join(request.candidateSkillDir, `iteration-${request.iteration}.txt`), "candidate\n");
+    }
   };
 
   const result = await orchestrateBaseline({
@@ -351,19 +330,19 @@ test("orchestrator runs research iterations until target score is reached", asyn
     agent,
     researcher,
     runResearch: true,
-    seedSkillDir: seedSkill,
+    seedSkillDir: seedSkill
   });
 
   expect(result.completedIterations).toBe(2);
   expect(result.bestIteration?.iteration).toBe(2);
   expect(result.aggregate.overall.normalizedScore).toBe(0.9);
   expect(result.events.at(-1)).toMatchObject({ type: "target-score-reached", iteration: 2 });
-  await expect(
-    readFile(join(root, "workspace", "iterations", "2", "scores-0.json"), "utf8"),
-  ).resolves.toContain("notes-001");
-  await expect(
-    readFile(join(root, "workspace", "iterations", "2", "skill", "iteration-2.txt"), "utf8"),
-  ).resolves.toBe("candidate\n");
+  await expect(readFile(join(root, "workspace", "iterations", "2", "scores-0.json"), "utf8")).resolves.toContain(
+    "notes-001"
+  );
+  await expect(readFile(join(root, "workspace", "iterations", "2", "skill", "iteration-2.txt"), "utf8")).resolves.toBe(
+    "candidate\n"
+  );
 });
 
 test("orchestrator keeps iterating when aggregate target has a baseline regression", async () => {
@@ -375,23 +354,23 @@ test("orchestrator keeps iterating when aggregate target has a baseline regressi
     tracks: [
       {
         ...syntheticConfig.tracks[0],
-        eval_type: "two-case-eval",
-      },
-    ],
+        eval_type: "two-case-eval"
+      }
+    ]
   };
   const evals = {
     evals: [
       {
         ...syntheticEvals.evals[0],
         id: "case-a",
-        eval_type: "two-case-eval",
+        eval_type: "two-case-eval"
       },
       {
         ...syntheticEvals.evals[0],
         id: "case-b",
-        eval_type: "two-case-eval",
-      },
-    ],
+        eval_type: "two-case-eval"
+      }
+    ]
   };
   await writeFixture(root, config, evals);
   const seedSkill = join(root, "seed-skill");
@@ -409,16 +388,16 @@ test("orchestrator keeps iterating when aggregate target has a baseline regressi
           request.evalCase.id,
           request.evalCase.eval_type,
           request.track.id,
-          request.evalCase.id === "case-a" ? 1 : 0.7,
+          request.evalCase.id === "case-a" ? 1 : 0.7
         );
       }
       return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.9);
-    },
+    }
   };
   const researcher: SkillResearcher = {
     async improve(request) {
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
-    },
+    }
   };
 
   const result = await orchestrateBaseline({
@@ -426,7 +405,7 @@ test("orchestrator keeps iterating when aggregate target has a baseline regressi
     agent,
     researcher,
     runResearch: true,
-    seedSkillDir: seedSkill,
+    seedSkillDir: seedSkill
   });
 
   expect(result.completedIterations).toBe(2);
@@ -435,7 +414,7 @@ test("orchestrator keeps iterating when aggregate target has a baseline regressi
     iteration: 1,
     normalizedScore: 0.85,
     targetScore: 0.85,
-    regressions: [{ evalId: "case-b", baselineScore: 0.8, candidateScore: 0.7 }],
+    regressions: [{ evalId: "case-b", baselineScore: 0.8, candidateScore: 0.7 }]
   });
   expect(result.events.at(-1)).toMatchObject({ type: "target-score-reached", iteration: 2 });
 });
@@ -457,31 +436,23 @@ test("orchestrator can start research from an empty skill while using the seed a
         return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.2);
       }
       evalRuns++;
-      return score(
-        request.evalCase.id,
-        request.evalCase.eval_type,
-        request.track.id,
-        evalRuns === 1 ? 0.5 : 0.9,
-      );
-    },
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, evalRuns === 1 ? 0.5 : 0.9);
+    }
   };
   const researcher: SkillResearcher = {
     async improve(request) {
       previousSkillDirs.push(request.previousSkillDir);
       guidanceSkillDirs.push(request.guidanceSkillDir);
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
-      await writeFile(
-        join(request.candidateSkillDir, `iteration-${request.iteration}.txt`),
-        "candidate\n",
-      );
-    },
+      await writeFile(join(request.candidateSkillDir, `iteration-${request.iteration}.txt`), "candidate\n");
+    }
   };
 
   const result = await orchestrateBaseline({
     projectRoot: root,
     agent,
     researcher,
-    runResearch: true,
+    runResearch: true
   });
 
   expect(result.completedIterations).toBe(2);
@@ -489,10 +460,8 @@ test("orchestrator can start research from an empty skill while using the seed a
   expect(await readdir(previousSkillDirs[0])).toEqual([]);
   expect(previousSkillDirs[1]).toBe(join(root, "workspace", "iterations", "1", "skill"));
   expect(guidanceSkillDirs).toEqual([seedSkill, seedSkill]);
-  await expect(
-    stat(join(root, "workspace", "iterations", "1", "skill", "SKILL.md")),
-  ).rejects.toMatchObject({
-    code: "ENOENT",
+  await expect(stat(join(root, "workspace", "iterations", "1", "skill", "SKILL.md"))).rejects.toMatchObject({
+    code: "ENOENT"
   });
 });
 
@@ -505,7 +474,7 @@ test("orchestrator resolves config skill paths relative to the project root", as
     origin_skill: "skills/security-audit",
     guidance_skill: "skills/guidance-reference",
     research_start: "empty" as const,
-    max_iterations: 1,
+    max_iterations: 1
   };
   await writeFixture(root, config, syntheticEvals);
   await mkdir(seedSkill, { recursive: true });
@@ -517,13 +486,8 @@ test("orchestrator resolves config skill paths relative to the project root", as
   let guidanceSkillDir = "";
   const agent: EvalAgent = {
     async run(request) {
-      return score(
-        request.evalCase.id,
-        request.evalCase.eval_type,
-        request.track.id,
-        request.targetSkill ? 0.9 : 0.2,
-      );
-    },
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, request.targetSkill ? 0.9 : 0.2);
+    }
   };
   const researcher: SkillResearcher = {
     async improve(request) {
@@ -531,14 +495,14 @@ test("orchestrator resolves config skill paths relative to the project root", as
       guidanceSkillDir = request.guidanceSkillDir ?? "";
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
       await writeFile(join(request.candidateSkillDir, "SKILL.md"), "# Candidate\n");
-    },
+    }
   };
 
   const result = await orchestrateBaseline({
     projectRoot: root,
     agent,
     researcher,
-    runResearch: true,
+    runResearch: true
   });
 
   expect(result.completedIterations).toBe(1);
@@ -549,37 +513,28 @@ test("orchestrator resolves config skill paths relative to the project root", as
 test("orchestrator preserves absolute origin_skill paths", async () => {
   const root = await tempProject();
   const seedSkill = join(root, "absolute-seed");
-  await writeFixture(
-    root,
-    { ...syntheticConfig, origin_skill: seedSkill, max_iterations: 1 },
-    syntheticEvals,
-  );
+  await writeFixture(root, { ...syntheticConfig, origin_skill: seedSkill, max_iterations: 1 }, syntheticEvals);
   await mkdir(seedSkill, { recursive: true });
   await writeFile(join(seedSkill, "SKILL.md"), "# Seed\n");
 
   let previousSkillDir = "";
   const agent: EvalAgent = {
     async run(request) {
-      return score(
-        request.evalCase.id,
-        request.evalCase.eval_type,
-        request.track.id,
-        request.targetSkill ? 0.9 : 0.2,
-      );
-    },
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, request.targetSkill ? 0.9 : 0.2);
+    }
   };
   const researcher: SkillResearcher = {
     async improve(request) {
       previousSkillDir = request.previousSkillDir;
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
-    },
+    }
   };
 
   await orchestrateBaseline({
     projectRoot: root,
     agent,
     researcher,
-    runResearch: true,
+    runResearch: true
   });
 
   expect(previousSkillDir).toBe(seedSkill);
@@ -599,18 +554,13 @@ test("orchestrator stops research at max iterations and keeps the best candidate
         return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.2);
       }
       candidateRuns++;
-      return score(
-        request.evalCase.id,
-        request.evalCase.eval_type,
-        request.track.id,
-        candidateRuns === 2 ? 0.6 : 0.4,
-      );
-    },
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, candidateRuns === 2 ? 0.6 : 0.4);
+    }
   };
   const researcher: SkillResearcher = {
     async improve(request) {
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
-    },
+    }
   };
 
   const result = await orchestrateBaseline({
@@ -618,7 +568,7 @@ test("orchestrator stops research at max iterations and keeps the best candidate
     agent,
     researcher,
     runResearch: true,
-    seedSkillDir: seedSkill,
+    seedSkillDir: seedSkill
   });
 
   expect(result.completedIterations).toBe(syntheticConfig.max_iterations);
@@ -626,6 +576,6 @@ test("orchestrator stops research at max iterations and keeps the best candidate
   expect(result.aggregate.overall.normalizedScore).toBe(0.6);
   expect(result.events.at(-1)).toMatchObject({
     type: "max-iterations-reached",
-    completedIterations: syntheticConfig.max_iterations,
+    completedIterations: syntheticConfig.max_iterations
   });
 });

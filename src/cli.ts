@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { FileScoreAgent, SnapshotResearcher } from "./adapters.js";
+import { formatCallCounts } from "./cost.js";
 import { createLogger, Logger, LogLevel } from "./logger.js";
 import { AnthropicMessagesClient, ModelEvalAgent, ModelSkillResearcher } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, RunEvent } from "./orchestrator.js";
@@ -13,6 +14,7 @@ interface CliOptions {
   seedSkillDir?: string;
   scoreDir?: string;
   modelClient?: "anthropic";
+  budgetUsd?: number;
   json: boolean;
 }
 
@@ -28,8 +30,9 @@ function usage(): string {
     "  --seed-skill <dir>    Seed skill directory for research iterations.",
     "  --score-dir <dir>     Directory of file-backed EvalScore JSON files.",
     "  --model-client <name> Use a model client. Supported: anthropic.",
+    "  --budget-usd <amount> Stop before additional model calls once observed cost reaches this cap.",
     "  --json                Print the full orchestrator result as JSON.",
-    "  -h, --help            Show this help.",
+    "  -h, --help            Show this help."
   ].join("\n");
 }
 
@@ -44,11 +47,12 @@ export function parseCliArgs(argv: string[]): CliOptions {
       "seed-skill": { type: "string" },
       "score-dir": { type: "string" },
       "model-client": { type: "string" },
+      "budget-usd": { type: "string" },
       json: { type: "boolean" },
-      help: { type: "boolean", short: "h" },
+      help: { type: "boolean", short: "h" }
     },
     strict: true,
-    allowPositionals: false,
+    allowPositionals: false
   });
 
   if (parsed.values.help) {
@@ -64,7 +68,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
     seedSkillDir: parsed.values["seed-skill"],
     scoreDir: parsed.values["score-dir"],
     modelClient: parseModelClient(parsed.values["model-client"]),
-    json: parsed.values.json ?? false,
+    budgetUsd: parseBudgetUsd(parsed.values["budget-usd"]),
+    json: parsed.values.json ?? false
   };
 
   if (options.scoreDir && options.modelClient) {
@@ -78,6 +83,20 @@ export function parseCliArgs(argv: string[]): CliOptions {
   }
 
   return options;
+}
+
+function parseBudgetUsd(value: string | boolean | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new Error("--budget-usd must be a non-negative number.");
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("--budget-usd must be a non-negative number.");
+  }
+  return parsed;
 }
 
 function parseModelClient(value: string | boolean | undefined): "anthropic" | undefined {
@@ -100,6 +119,14 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     runResearch: cli.runResearch,
     forceResearch: cli.forceResearch,
     seedSkillDir: cli.seedSkillDir,
+    budgetUsd: cli.budgetUsd,
+    modelBacked: Boolean(modelClient),
+    onEvent: cli.json
+      ? undefined
+      : (event) => {
+          const formatted = formatEvent(event);
+          logger.write(formatted.level, formatted.message);
+        },
     agent: modelClient
       ? new ModelEvalAgent(modelClient)
       : cli.scoreDir
@@ -109,7 +136,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       ? new ModelSkillResearcher(modelClient)
       : cli.runResearch
         ? new SnapshotResearcher()
-        : undefined,
+        : undefined
   };
 
   const result = await orchestrateBaseline(options);
@@ -118,12 +145,15 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     return;
   }
 
-  writeEvents(result.events, logger);
   logger.write(
     "log",
     `Final score: ${result.aggregate.overall.normalizedScore.toFixed(3)} ` +
-      `(${result.aggregate.overall.score}/${result.aggregate.overall.maxScore})`,
+      `(${result.aggregate.overall.score}/${result.aggregate.overall.maxScore})`
   );
+  logger.write("log", `Model calls: ${formatCallCounts(result.cost.actual.calls)}`);
+  if (result.cost.actual.costUsd !== undefined) {
+    logger.write("log", `Observed model cost: $${result.cost.actual.costUsd.toFixed(4)}`);
+  }
   if (result.bestIteration) {
     logger.write("log", `Best skill: ${result.bestIteration.skillDir}`);
   }
@@ -140,6 +170,17 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
   switch (event.type) {
     case "project-loaded":
       return { level: "debug", message: `Loaded project: ${event.root}` };
+    case "cost-preview":
+      return {
+        level: event.summary.planned.totalCalls > 20 ? "warn" : "log",
+        message:
+          `Model call preview: ${event.summary.planned.totalCalls} maximum planned call(s) ` +
+          `across ${event.summary.planned.evalCount} eval(s), ` +
+          `${event.summary.planned.maxIterations} max iteration(s), ` +
+          `concurrency ${event.summary.planned.maxConcurrency}. ` +
+          `By role: ${formatCallCounts(event.summary.planned.calls)}` +
+          (event.summary.budgetUsd === undefined ? "" : `. Budget: $${event.summary.budgetUsd.toFixed(2)}`)
+      };
     case "baseline-imported":
       return { level: "log", message: `Imported baseline: ${event.scores} scores` };
     case "baseline-started":
@@ -149,44 +190,49 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
     case "aggregated":
       return {
         level: "log",
-        message: `Aggregated score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`,
+        message: `Aggregated score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`
       };
     case "research-loop-ready":
       return {
         level: "debug",
-        message: `Research loop ready: ${event.completedIterations}/${event.maxIterations} iterations complete`,
+        message: `Research loop ready: ${event.completedIterations}/${event.maxIterations} iterations complete`
       };
     case "iteration-started":
       return { level: "log", message: `Iteration ${event.iteration} started` };
     case "iteration-generated":
       return {
         level: "debug",
-        message: `Iteration ${event.iteration} skill: ${event.candidateSkillDir}`,
+        message: `Iteration ${event.iteration} skill: ${event.candidateSkillDir}`
       };
     case "iteration-scored":
       return {
         level: "log",
-        message: `Iteration ${event.iteration} score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`,
+        message: `Iteration ${event.iteration} score: ${event.aggregate.overall.normalizedScore.toFixed(3)}`
       };
     case "baseline-target-score-reached":
       return {
         level: "log",
-        message: `Baseline reached target: ${event.normalizedScore.toFixed(3)} >= ${event.targetScore.toFixed(3)}`,
+        message: `Baseline reached target: ${event.normalizedScore.toFixed(3)} >= ${event.targetScore.toFixed(3)}`
       };
     case "target-score-reached":
       return {
         level: "log",
-        message: `Target reached at iteration ${event.iteration}: ${event.normalizedScore.toFixed(3)}`,
+        message: `Target reached at iteration ${event.iteration}: ${event.normalizedScore.toFixed(3)}`
       };
     case "target-score-blocked-by-regression":
       return {
         level: "warn",
-        message: `Target score met at iteration ${event.iteration}, but ${event.regressions.length} eval(s) regressed from baseline`,
+        message: `Target score met at iteration ${event.iteration}, but ${event.regressions.length} eval(s) regressed from baseline`
       };
     case "max-iterations-reached":
       return {
         level: "warn",
-        message: `Max iterations reached: ${event.completedIterations}/${event.maxIterations}`,
+        message: `Max iterations reached: ${event.completedIterations}/${event.maxIterations}`
+      };
+    case "budget-reached":
+      return {
+        level: "warn",
+        message: `Budget reached after ${event.completedIterations} iteration(s): $${event.actualCostUsd.toFixed(4)} >= $${event.budgetUsd.toFixed(4)}`
       };
   }
 }
