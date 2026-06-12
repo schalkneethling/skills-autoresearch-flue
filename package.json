@@ -33,7 +33,7 @@
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.1",
-    "varlock": "^1.4.0",
+    "varlock": "^1.5.1",
     "vitest": "^4.1.8"
   },
   "engines": {
