@@ -16,7 +16,7 @@ export interface ModelPricingRule {
 export const MODEL_PRICING_RULES: readonly ModelPricingRule[] = [
   {
     provider: "anthropic",
-    modelPattern: /claude-haiku-4-5/,
+    modelPattern: /^claude-haiku-4-5(?:-\d+)?$/,
     pricing: {
       inputUsdPerMillion: 1,
       outputUsdPerMillion: 5,
@@ -26,7 +26,7 @@ export const MODEL_PRICING_RULES: readonly ModelPricingRule[] = [
   },
   {
     provider: "anthropic",
-    modelPattern: /claude-sonnet-4(?:-\d)?/,
+    modelPattern: /^claude-sonnet-4(?:-\d+)?$/,
     pricing: {
       inputUsdPerMillion: 3,
       outputUsdPerMillion: 15,
