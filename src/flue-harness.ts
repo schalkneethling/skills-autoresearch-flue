@@ -1,4 +1,4 @@
-import type { FlueSession } from "@flue/runtime/client";
+import type { FlueSession } from "@flue/runtime";
 import { ModelCallRole } from "./cost.js";
 import {
   applyOutputFiles,
@@ -18,6 +18,7 @@ import {
   EvalScoreSchema,
   ModelConfig,
   ModelProduceResponseSchema,
+  OutputFile,
   SkillResearchPatchSchema
 } from "./schemas.js";
 import { cp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -54,7 +55,11 @@ export class FlueEvalAgent implements EvalAgent {
       response: produced
     });
 
-    const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
+    return this.judge(request, produced.output_files);
+  }
+
+  async judge(request: EvalAgentRequest, outputFiles: OutputFile[]): Promise<EvalScore> {
+    const judgeRequest = await buildJudgeModelRequest(request, outputFiles);
     request.costTracker?.assertCanStartModelCall();
     const { data: score } = await this.#session.task(judgeRequest.prompt, {
       result: EvalScoreSchema,

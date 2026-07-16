@@ -140,7 +140,11 @@ export class ModelEvalAgent implements EvalAgent {
     const produced = parseModelProduceResponse(produceResponse);
     await applyOutputFiles(request.sandbox.outputDir, produced.output_files);
 
-    const judgeRequest = await buildJudgeModelRequest(request, produced.output_files);
+    return this.judge(request, produced.output_files);
+  }
+
+  async judge(request: EvalAgentRequest, outputFiles: OutputFile[]): Promise<EvalScore> {
+    const judgeRequest = await buildJudgeModelRequest(request, outputFiles);
     const judgeResponse = await completeTrackedModelRequest(
       this.#client,
       judgeRequest,

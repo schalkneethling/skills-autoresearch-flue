@@ -3,7 +3,7 @@ import { ModelRunCostTracker } from "./cost.js";
 import { resolveModel } from "./model.js";
 import { trackForEval } from "./project.js";
 import { createEvalSandbox, EvalSandbox } from "./sandbox.js";
-import { EvalCase, EvalScore, ModelConfig, ProjectConfig, RoleModels, Track } from "./schemas.js";
+import { EvalCase, EvalScore, ModelConfig, OutputFile, ProjectConfig, RoleModels, Track } from "./schemas.js";
 
 export interface EvalRunRequest {
   config: ProjectConfig;
@@ -33,9 +33,28 @@ export interface EvalAgentRequest {
 
 export interface EvalAgent {
   run(request: EvalAgentRequest): Promise<EvalScore>;
+  judge?(request: EvalAgentRequest, outputFiles: OutputFile[]): Promise<EvalScore>;
 }
 
 export async function runEval(request: EvalRunRequest, agent: EvalAgent): Promise<EvalScore> {
+  return agent.run(createEvalAgentRequest(request));
+}
+
+export async function judgeEval(
+  request: EvalRunRequest,
+  agent: EvalAgent,
+  outputFiles: OutputFile[]
+): Promise<EvalScore> {
+  if (!agent.judge) {
+    throw new Error(
+      `Eval agent cannot resume the judge phase for "${request.evalCase.id}". ` +
+        "Use a model-backed agent that supports judge-only resume."
+    );
+  }
+  return agent.judge(createEvalAgentRequest(request), outputFiles);
+}
+
+function createEvalAgentRequest(request: EvalRunRequest): EvalAgentRequest {
   const track = trackForEval(request.config, request.evalCase.eval_type);
   const model = resolveModel(request.config, request.model);
   const role = track.role;
@@ -48,7 +67,7 @@ export async function runEval(request: EvalRunRequest, agent: EvalAgent): Promis
     skillDir: request.baseline ? undefined : request.targetSkillDir
   });
 
-  return agent.run({
+  return {
     evalCase: request.evalCase,
     track,
     role,
@@ -61,7 +80,7 @@ export async function runEval(request: EvalRunRequest, agent: EvalAgent): Promis
     models: request.config.models,
     costTracker: request.costTracker,
     sandbox
-  });
+  };
 }
 
 export async function runWithConcurrency<TInput, TOutput>(
