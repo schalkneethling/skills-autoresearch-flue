@@ -15,7 +15,7 @@ function sink() {
     },
     error(message) {
       calls.push({ level: "error", message });
-    },
+    }
   };
   return { calls, target };
 }
@@ -33,7 +33,7 @@ test("createLogger routes messages by constant log level", () => {
     { level: "log", message: "info" },
     { level: "warn", message: "careful" },
     { level: "debug", message: "trace" },
-    { level: "error", message: "broken" },
+    { level: "error", message: "broken" }
   ]);
 });
 
@@ -44,14 +44,14 @@ test("writeEvents uses the severity returned by formatEvent", () => {
   writeEvents(
     [
       { type: "project-loaded", root: "/tmp/project" },
-      { type: "max-iterations-reached", completedIterations: 3, maxIterations: 3 },
+      { type: "max-iterations-reached", completedIterations: 3, maxIterations: 3 }
     ],
-    logger,
+    logger
   );
 
   expect(calls).toEqual([
     { level: "debug", message: "Loaded project: /tmp/project" },
-    { level: "warn", message: "Max iterations reached: 3/3" },
+    { level: "warn", message: "Max iterations reached: 3/3" }
   ]);
 });
 
@@ -61,8 +61,8 @@ test("formatEvent classifies target completion as a regular log", () => {
       type: "target-score-reached",
       iteration: 2,
       normalizedScore: 0.9,
-      targetScore: 0.8,
-    }),
+      targetScore: 0.8
+    })
   ).toEqual({ level: "log", message: "Target reached at iteration 2: 0.900" });
 });
 
@@ -71,7 +71,7 @@ test("formatEvent explains baseline target completion", () => {
     formatEvent({
       type: "baseline-target-score-reached",
       normalizedScore: 0.95,
-      targetScore: 0.8,
-    }),
+      targetScore: 0.8
+    })
   ).toEqual({ level: "log", message: "Baseline reached target: 0.950 >= 0.800" });
 });

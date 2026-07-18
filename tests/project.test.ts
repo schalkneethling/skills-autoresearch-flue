@@ -7,7 +7,7 @@ import {
   syntheticConfig,
   syntheticEvals,
   tempProject,
-  writeFixture,
+  writeFixture
 } from "./helpers.js";
 
 test("loads security and synthetic project fixtures without domain branches", async () => {
@@ -30,12 +30,10 @@ test("resolves default model and rejects unsupported providers", async () => {
 
   expect(resolveModel(project.config)).toEqual({
     provider: "anthropic",
-    name: "claude-sonnet-4-6",
+    name: "claude-sonnet-4-6"
   });
   expect(resolveModel(project.config, { name: "claude-opus-4-6" }).name).toBe("claude-opus-4-6");
-  expect(() => resolveModel(project.config, { provider: "openai" })).toThrow(
-    /Unsupported model provider/,
-  );
+  expect(() => resolveModel(project.config, { provider: "openai" })).toThrow(/Unsupported model provider/);
 });
 
 test("requires judge and skill builder role keys", async () => {
@@ -44,9 +42,9 @@ test("requires judge and skill builder role keys", async () => {
     root,
     {
       ...syntheticConfig,
-      roles: {},
+      roles: {}
     },
-    syntheticEvals,
+    syntheticEvals
   );
 
   await expect(loadProject(root)).rejects.toThrow(/roles\.judge/);
@@ -55,9 +53,9 @@ test("requires judge and skill builder role keys", async () => {
     validateConfiguredFlueRoles(
       {
         ...syntheticConfig,
-        roles: {} as typeof syntheticConfig.roles,
+        roles: {} as typeof syntheticConfig.roles
       },
-      ["eval-judge", "skill-builder", "task-producer"],
-    ),
+      ["eval-judge", "skill-builder", "task-producer"]
+    )
   ).toThrow(/missing required fields: roles\.judge, roles\.skill_builder/);
 });

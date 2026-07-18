@@ -16,12 +16,12 @@ export class SnapshotResearcher implements SkillResearcher {
           iteration: request.iteration,
           previousSkillDir: request.previousSkillDir,
           previousNormalizedScore: request.previousAggregate.overall.normalizedScore,
-          manifest: await createResearchSnapshotManifest(request.candidateSkillDir),
+          manifest: await createResearchSnapshotManifest(request.candidateSkillDir)
         },
         null,
-        2,
+        2
       )}\n`,
-      { flag: "wx" },
+      { flag: "wx" }
     );
   }
 }
@@ -46,7 +46,7 @@ export class FileScoreAgent implements EvalAgent {
     const candidates = [
       join(this.#scoreDir, `${key}-${count}.json`),
       join(this.#scoreDir, `${key}.json`),
-      join(this.#scoreDir, `scores-${count}.json`),
+      join(this.#scoreDir, `scores-${count}.json`)
     ];
 
     for (const path of candidates) {

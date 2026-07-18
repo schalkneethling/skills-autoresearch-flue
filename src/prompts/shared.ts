@@ -30,7 +30,7 @@ export function formatFileSet(files: MountedFile[], label: string): string {
 
   if (omittedFiles > 0) {
     formatted.push(
-      `[${omittedFiles} file(s) omitted from ${label}; ${MAX_FILE_SET_CHARS} char file-set budget exhausted.]`,
+      `[${omittedFiles} file(s) omitted from ${label}; ${MAX_FILE_SET_CHARS} char file-set budget exhausted.]`
     );
   }
 

@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/index.ts", ".flue/workflows/**/*.ts", "tests/**/*.test.ts"],
+  "ignoreFiles": ["fixtures/**/*.{js,jsx}"],
+  "ignoreDependencies": ["@varlock/1password-plugin", "wrangler"],
+  "ignoreExportsUsedInFile": true
+}

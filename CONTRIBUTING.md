@@ -164,6 +164,7 @@ Run the full local verification suite:
 ```bash
 pnpm run lint
 pnpm run format:check
+pnpm run knip
 pnpm run typecheck
 pnpm test
 pnpm run build

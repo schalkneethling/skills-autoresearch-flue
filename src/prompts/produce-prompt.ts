@@ -14,16 +14,14 @@ export function buildProducePrompt({
   workspaceDir,
   inputFiles,
   referenceFiles,
-  skillFiles,
+  skillFiles
 }: ProducePromptInput): string {
   return [
     `Run the target skill for "${request.evalCase.title}" (${request.evalCase.id}).`,
     `Eval type: ${request.evalCase.eval_type}`,
     `Track: ${request.track.id}`,
     `Producer role: ${request.role}`,
-    request.targetSkill
-      ? `Target skill: ${request.targetSkill}`
-      : "Baseline run: no target skill is mounted.",
+    request.targetSkill ? `Target skill: ${request.targetSkill}` : "Baseline run: no target skill is mounted.",
     `Authoritative workspace root: ${workspaceDir}`,
     "Only files under this workspace are authoritative for this producer phase.",
     "Available paths: ./input, ./reference, ./skill when present.",
@@ -46,10 +44,10 @@ export function buildProducePrompt({
       output_files: [
         {
           path: "RESULT.md",
-          contents: "The concrete output produced for this eval.",
-        },
-      ],
+          contents: "The concrete output produced for this eval."
+        }
+      ]
     }),
-    "Each output_files path must be relative to the eval output directory.",
+    "Each output_files path must be relative to the eval output directory."
   ].join("\n");
 }
