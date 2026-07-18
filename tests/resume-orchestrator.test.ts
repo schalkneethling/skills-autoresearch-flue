@@ -2,6 +2,7 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ModelClient, ModelCompletion, ModelEvalAgent, ModelRequest } from "../src/model-agent.js";
 import { copySkillSnapshot, orchestrateBaseline, SkillResearcher } from "../src/orchestrator.js";
+import { createResearchSnapshotManifest } from "../src/resume.js";
 import { EvalAgent } from "../src/runner.js";
 import { score, syntheticConfig, syntheticEvals, tempProject, writeFixture } from "./helpers.js";
 
@@ -43,7 +44,10 @@ async function writeCompletedResearch(root: string, iteration = 1): Promise<stri
     join(candidateSkillDir, ".autoresearch-transcript.json"),
     JSON.stringify({
       request: { phase: `research iteration ${iteration}` },
-      response: JSON.stringify({ summary: "complete", changes: [{ path: "SKILL.md", contents: "# Candidate\n" }] })
+      response: JSON.stringify({
+        summary: "complete",
+        changes: [{ path: "SKILL.md", contents: `# Candidate ${iteration}\n` }]
+      })
     })
   );
   return candidateSkillDir;
@@ -120,6 +124,119 @@ test("baseline scores survive another concurrent eval failure and are reused on 
 
   expect(resumedCalls).toEqual(["notes-002"]);
   expect(result.baselineScores.map((item) => item.total_score)).toEqual([0.6, 0.7]);
+});
+
+test("a failed concurrent run drains a slow success before resume begins", async () => {
+  const root = await tempProject();
+  const evals = {
+    evals: [syntheticEvals.evals[0], { ...syntheticEvals.evals[0], id: "notes-002", title: "Summarise another change" }]
+  };
+  await writeFixture(root, { ...syntheticConfig, max_concurrency: 2 }, evals);
+  const order: string[] = [];
+  const firstAgent: EvalAgent = {
+    async run(request) {
+      if (request.evalCase.id === "notes-001") {
+        order.push("fast-failure");
+        throw new Error("first eval interrupted");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      order.push("slow-success");
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.6);
+    }
+  };
+
+  await expect(orchestrateBaseline({ projectRoot: root, agent: firstAgent })).rejects.toThrow("first eval interrupted");
+  expect(order).toEqual(["fast-failure", "slow-success"]);
+  await expect(readFile(join(root, "workspace", "baseline", "scores-1.json"), "utf8")).resolves.toContain(
+    '"eval_id": "notes-002"'
+  );
+
+  const resumedCalls: string[] = [];
+  await orchestrateBaseline({
+    projectRoot: root,
+    resume: true,
+    agent: {
+      async run(request) {
+        resumedCalls.push(request.evalCase.id);
+        return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.7);
+      }
+    }
+  });
+  expect(resumedCalls).toEqual(["notes-001"]);
+});
+
+test("a failed concurrent iteration drains a slow success before resume begins", async () => {
+  const root = await tempProject();
+  const evals = {
+    evals: [syntheticEvals.evals[0], { ...syntheticEvals.evals[0], id: "notes-002", title: "Summarise another change" }]
+  };
+  await writeFixture(root, { ...syntheticConfig, max_iterations: 1, max_concurrency: 2 }, evals);
+  const seedSkillDir = await writeSeed(root);
+  await writeScore(root, join("workspace", "baseline"), 0, score("notes-001", "summarise-changelog", "summarise", 0.2));
+  await writeScore(root, join("workspace", "baseline"), 1, score("notes-002", "summarise-changelog", "summarise", 0.2));
+  await writeCompletedResearch(root);
+
+  const order: string[] = [];
+  await expect(
+    orchestrateBaseline({
+      projectRoot: root,
+      resume: true,
+      runResearch: true,
+      seedSkillDir,
+      researcher: shouldNotResearch,
+      agent: {
+        async run(request) {
+          if (request.evalCase.id === "notes-001") {
+            order.push("fast-failure");
+            throw new Error("first iteration eval interrupted");
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          order.push("slow-success");
+          return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.6);
+        }
+      }
+    })
+  ).rejects.toThrow("first iteration eval interrupted");
+  expect(order).toEqual(["fast-failure", "slow-success"]);
+  await expect(readFile(join(root, "workspace", "iterations", "1", "scores-1.json"), "utf8")).resolves.toContain(
+    '"eval_id": "notes-002"'
+  );
+
+  const resumedCalls: string[] = [];
+  await orchestrateBaseline({
+    projectRoot: root,
+    resume: true,
+    runResearch: true,
+    seedSkillDir,
+    researcher: shouldNotResearch,
+    agent: {
+      async run(request) {
+        resumedCalls.push(request.evalCase.id);
+        return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.9);
+      }
+    }
+  });
+  expect(resumedCalls).toEqual(["notes-001"]);
+});
+
+test("resume reuses a complete generated baseline without an eval adapter", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  await writeScore(root, join("workspace", "baseline"), 0, score("notes-001", "summarise-changelog", "summarise", 0.6));
+
+  const result = await orchestrateBaseline({ projectRoot: root, resume: true });
+
+  expect(result.baselineScores[0].total_score).toBe(0.6);
+  expect(result.events).toContainEqual({ type: "baseline-resumed", scores: 1, remaining: 0 });
+});
+
+test("resume still requires an eval adapter when recovery cannot supply a baseline score", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+
+  await expect(orchestrateBaseline({ projectRoot: root, resume: true })).rejects.toThrow(
+    "No eval agent was provided to resume the incomplete baseline run"
+  );
 });
 
 test("resume reuses completed research and scores, then rebuilds a missing iteration summary", async () => {
@@ -214,7 +331,7 @@ test("resume runs only a missing judge from validated producer output", async ()
   );
 });
 
-test("resume rebuilds a missing score from a completed judge transcript", async () => {
+test("resume rebuilds a missing score from a completed judge transcript without adapters", async () => {
   const root = await tempProject();
   await writeFixture(root, { ...syntheticConfig, max_iterations: 1 }, syntheticEvals);
   const seedSkillDir = await writeSeed(root);
@@ -230,27 +347,53 @@ test("resume rebuilds a missing score from a completed judge transcript", async 
     })
   );
 
-  const agent: EvalAgent = {
-    async run() {
-      throw new Error("producer must not run");
-    },
-    async judge() {
-      throw new Error("judge must not run");
-    }
-  };
   const result = await orchestrateBaseline({
     projectRoot: root,
     resume: true,
     runResearch: true,
-    seedSkillDir,
-    researcher: shouldNotResearch,
-    agent
+    seedSkillDir
   });
 
   expect(result.events).toContainEqual({ type: "eval-judge-resumed", iteration: 1, evalId: "notes-001" });
   await expect(readFile(join(root, "workspace", "iterations", "1", "scores-0.json"), "utf8")).resolves.toContain(
     '"total_score": 0.9'
   );
+});
+
+test.each([
+  { label: "baseline", scoreDir: join("workspace", "baseline"), outputDir: join("workspace", "baseline") },
+  {
+    label: "iteration",
+    scoreDir: join("workspace", "iterations", "1"),
+    outputDir: join("workspace", "iterations", "1", "outputs")
+  }
+])("resume rejects a $label score that conflicts with its judge transcript", async ({ label, scoreDir, outputDir }) => {
+  const root = await tempProject();
+  await writeFixture(root, { ...syntheticConfig, max_iterations: 1 }, syntheticEvals);
+  const seedSkillDir = await writeSeed(root);
+  await writeScore(root, join("workspace", "baseline"), 0, score("notes-001", "summarise-changelog", "summarise", 0.2));
+  if (label === "iteration") {
+    await writeCompletedResearch(root);
+    await writeScore(root, scoreDir, 0, score("notes-001", "summarise-changelog", "summarise", 0.8));
+  }
+  const evalOutputDir = join(root, outputDir, "notes-001");
+  await mkdir(evalOutputDir, { recursive: true });
+  await writeFile(
+    join(evalOutputDir, "judge-flue-transcript.json"),
+    JSON.stringify({
+      request: { phase: "judge eval notes-001" },
+      response: score("notes-001", "summarise-changelog", "summarise", 0.9)
+    })
+  );
+
+  await expect(
+    orchestrateBaseline({
+      projectRoot: root,
+      resume: true,
+      runResearch: label === "iteration",
+      seedSkillDir
+    })
+  ).rejects.toThrow("persisted score does not match judge transcript");
 });
 
 test("resume archives incomplete research before rerunning the researcher", async () => {
@@ -269,7 +412,10 @@ test("resume archives incomplete research before rerunning the researcher", asyn
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
       await writeFile(
         join(request.candidateSkillDir, ".autoresearch-iteration.json"),
-        JSON.stringify({ iteration: 1 })
+        JSON.stringify({
+          iteration: 1,
+          manifest: await createResearchSnapshotManifest(request.candidateSkillDir)
+        })
       );
     }
   };
@@ -434,7 +580,10 @@ test("resume completes the current partial iteration before researching a later 
       await copySkillSnapshot(request.previousSkillDir, request.candidateSkillDir);
       await writeFile(
         join(request.candidateSkillDir, ".autoresearch-iteration.json"),
-        JSON.stringify({ iteration: request.iteration })
+        JSON.stringify({
+          iteration: request.iteration,
+          manifest: await createResearchSnapshotManifest(request.candidateSkillDir)
+        })
       );
     }
   };

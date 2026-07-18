@@ -91,16 +91,28 @@ export async function runWithConcurrency<TInput, TOutput>(
   const results: TOutput[] = [];
   results.length = inputs.length;
   let cursor = 0;
+  let firstFailure: { error: unknown } | undefined;
 
   async function runNext(): Promise<void> {
+    if (firstFailure) {
+      return;
+    }
     const index = cursor++;
     if (index >= inputs.length) {
       return;
     }
-    results[index] = await worker(inputs[index], index);
+    try {
+      results[index] = await worker(inputs[index], index);
+    } catch (error) {
+      firstFailure ??= { error };
+      return;
+    }
     await runNext();
   }
 
   await Promise.all(Array.from({ length: Math.min(limit, inputs.length) }, () => runNext()));
+  if (firstFailure) {
+    throw firstFailure.error;
+  }
   return results;
 }

@@ -31,6 +31,8 @@ test("parseCliArgs validates currently required adapters", () => {
     resume: true,
     runResearch: true
   });
+  expect(parseCliArgs(["--resume"])).toMatchObject({ resume: true });
+  expect(parseCliArgs(["--resume", "--research"])).toMatchObject({ resume: true, runResearch: true });
   expect(() => parseCliArgs([])).toThrow(/--score-dir or --model-client/);
   expect(() => parseCliArgs(["--with-baseline", "--research"])).toThrow(
     /Research iterations require --score-dir or --model-client/

@@ -79,10 +79,10 @@ export function parseCliArgs(argv: string[]): CliOptions {
   if (options.scoreDir && options.modelClient) {
     throw new Error("Use either --score-dir or --model-client, not both.");
   }
-  if (!options.withBaseline && !options.scoreDir && !options.modelClient) {
+  if (!options.resume && !options.withBaseline && !options.scoreDir && !options.modelClient) {
     throw new Error("Generating a baseline requires --score-dir or --model-client anthropic.");
   }
-  if (options.runResearch && !options.scoreDir && !options.modelClient) {
+  if (!options.resume && options.runResearch && !options.scoreDir && !options.modelClient) {
     throw new Error("Research iterations require --score-dir or --model-client anthropic.");
   }
 

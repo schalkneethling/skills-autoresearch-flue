@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { aggregateScores } from "../src/aggregate.js";
 import {
+  createResearchSnapshotManifest,
   findUnexpectedScoreFiles,
   inspectJudgeArtifact,
   inspectProducerArtifact,
@@ -31,6 +32,32 @@ test("inspectScoreArtifact validates the score at the configured eval position",
   const invalid = await inspectScoreArtifact({ directory: root, index: 1, evalCase, track });
   expect(invalid).toMatchObject({ status: "invalid" });
   expect(invalid.status === "invalid" && invalid.reason).toContain('expected "notes-001"');
+});
+
+test("inspectScoreArtifact requires complete, unique, rubric-compatible dimensions", async () => {
+  const root = await tempProject();
+  const valid = score(evalCase.id, evalCase.eval_type, track.id, 0.6);
+  const cases = [
+    { dimensions: [], message: "Expected >=1" },
+    { dimensions: [...valid.dimensions, valid.dimensions[0]], message: "duplicate dimensions: clarity" },
+    { dimensions: [{ ...valid.dimensions[0], max_score: 2 }], message: "max_score 2, expected 1" }
+  ];
+
+  for (const [index, candidate] of cases.entries()) {
+    await writeFile(join(root, `scores-${index}.json`), JSON.stringify({ ...valid, ...candidate }));
+    const artifact = await inspectScoreArtifact({ directory: root, index, evalCase, track });
+    expect(artifact).toMatchObject({ status: "invalid" });
+    expect(artifact.status === "invalid" && artifact.reason).toContain(candidate.message);
+  }
+
+  const twoDimensionEval = {
+    ...evalCase,
+    scoring_dimensions: [...evalCase.scoring_dimensions, { id: "risk", label: "Risk", max_score: 1 }]
+  };
+  await writeFile(join(root, "scores-3.json"), JSON.stringify(valid));
+  const missing = await inspectScoreArtifact({ directory: root, index: 3, evalCase: twoDimensionEval, track });
+  expect(missing).toMatchObject({ status: "invalid" });
+  expect(missing.status === "invalid" && missing.reason).toContain("missing dimensions: risk");
 });
 
 test("findUnexpectedScoreFiles reports positional score artifacts beyond the eval set", async () => {
@@ -79,12 +106,68 @@ test("inspectResearchArtifact supports the non-model snapshot completion marker"
   const skillDir = join(root, "skill");
   await mkdir(skillDir);
   await writeFile(join(skillDir, "SKILL.md"), "# Candidate\n");
-  await writeFile(join(skillDir, ".autoresearch-iteration.json"), JSON.stringify({ iteration: 2 }));
+  await writeFile(
+    join(skillDir, ".autoresearch-iteration.json"),
+    JSON.stringify({ iteration: 2, manifest: await createResearchSnapshotManifest(skillDir) })
+  );
 
   await expect(inspectResearchArtifact(skillDir, 2)).resolves.toMatchObject({ status: "complete" });
   const wrongIteration = await inspectResearchArtifact(skillDir, 1);
   expect(wrongIteration).toMatchObject({ status: "invalid" });
   expect(wrongIteration.status === "invalid" && wrongIteration.reason).toContain("expected 1");
+
+  await writeFile(join(skillDir, ".autoresearch-iteration.json"), JSON.stringify({ iteration: 2 }));
+  const missingManifest = await inspectResearchArtifact(skillDir, 2);
+  expect(missingManifest).toMatchObject({ status: "invalid" });
+  expect(missingManifest.status === "invalid" && missingManifest.reason).toContain("snapshot manifest");
+});
+
+test("inspectResearchArtifact rejects candidate files that differ from their marker", async () => {
+  const root = await tempProject();
+  const transcriptSkillDir = join(root, "transcript-skill");
+  await mkdir(transcriptSkillDir);
+  await writeFile(join(transcriptSkillDir, "SKILL.md"), "# Changed\n");
+  await writeFile(
+    join(transcriptSkillDir, ".autoresearch-transcript.json"),
+    JSON.stringify({
+      request: { phase: "research iteration 1" },
+      response: {
+        summary: "Candidate",
+        changes: [{ path: "SKILL.md", contents: "# Expected\n" }]
+      }
+    })
+  );
+  const transcript = await inspectResearchArtifact(transcriptSkillDir, 1);
+  expect(transcript).toMatchObject({ status: "invalid" });
+  expect(transcript.status === "invalid" && transcript.reason).toContain(
+    "declared research contents do not match candidate file"
+  );
+
+  await writeFile(
+    join(transcriptSkillDir, ".autoresearch-transcript.json"),
+    JSON.stringify({
+      request: { phase: "research iteration 1" },
+      response: {
+        summary: "Candidate",
+        changes: [{ path: "../outside.md", contents: "outside" }]
+      }
+    })
+  );
+  const escaping = await inspectResearchArtifact(transcriptSkillDir, 1);
+  expect(escaping).toMatchObject({ status: "invalid" });
+  expect(escaping.status === "invalid" && escaping.reason).toContain("outside its directory");
+
+  const snapshotSkillDir = join(root, "snapshot-skill");
+  await mkdir(snapshotSkillDir);
+  await writeFile(join(snapshotSkillDir, "SKILL.md"), "# Expected\n");
+  const manifest = await createResearchSnapshotManifest(snapshotSkillDir);
+  await writeFile(join(snapshotSkillDir, ".autoresearch-iteration.json"), JSON.stringify({ iteration: 1, manifest }));
+  await writeFile(join(snapshotSkillDir, "SKILL.md"), "# Changed\n");
+  const snapshot = await inspectResearchArtifact(snapshotSkillDir, 1);
+  expect(snapshot).toMatchObject({ status: "invalid" });
+  expect(snapshot.status === "invalid" && snapshot.reason).toContain(
+    "snapshot manifest does not match candidate files"
+  );
 });
 
 test("inspectResearchArtifact requires an exact phase, a valid patch, and a SKILL.md", async () => {
@@ -119,7 +202,7 @@ test("inspectResearchArtifact requires an exact phase, a valid patch, and a SKIL
   );
   const missingSkill = await inspectResearchArtifact(skillDir, 1);
   expect(missingSkill).toMatchObject({ status: "incomplete" });
-  expect(missingSkill.status === "incomplete" && missingSkill.reason).toContain("no SKILL.md");
+  expect(missingSkill.status === "incomplete" && missingSkill.reason).toContain("missing candidate file");
 });
 
 test.each([

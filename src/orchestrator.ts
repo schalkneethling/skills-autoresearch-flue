@@ -1,5 +1,6 @@
 import { cp, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { aggregateScores, AggregateReport } from "./aggregate.js";
 import { importBaselineArtefacts } from "./baseline.js";
 import { createModelCallPreview, ModelRunCostSummary, ModelRunCostTracker, persistCostSummary } from "./cost.js";
@@ -263,17 +264,13 @@ async function resumeInitialBaseline(
 ): Promise<EvalScore[]> {
   const baselineDir = join(project.root, "workspace", "baseline");
   await assertNoUnexpectedScores(baselineDir, project.evals.evals.length);
-  const existing = await inspectConfiguredScores(project, baselineDir);
+  const existing = await inspectConfiguredScores(project, baselineDir, baselineDir);
   const remaining = existing.filter((score) => score === undefined).length;
   emit({
     type: "baseline-resumed",
     scores: existing.length - remaining,
     remaining
   });
-
-  if (remaining > 0 && !agent) {
-    throw new Error("No eval agent was provided to resume the incomplete baseline run");
-  }
 
   const outputRoot = baselineDir;
   const scores = await runWithConcurrency(
@@ -307,6 +304,9 @@ async function resumeInitialBaseline(
       if (producerArtifact.status === "invalid") {
         throw new Error(`Cannot resume baseline producer for eval "${evalCase.id}": ${producerArtifact.reason}`);
       }
+      if (!agent) {
+        throw new Error("No eval agent was provided to resume the incomplete baseline run");
+      }
       if (
         producerArtifact.status === "incomplete" ||
         (producerArtifact.status === "absent" && (await pathExists(evalOutputDir)))
@@ -315,8 +315,8 @@ async function resumeInitialBaseline(
       }
       const score =
         producerArtifact.status === "complete"
-          ? await judgeEval(request, agent as EvalAgent, producerArtifact.value.outputFiles)
-          : await runEval(request, agent as EvalAgent);
+          ? await judgeEval(request, agent, producerArtifact.value.outputFiles)
+          : await runEval(request, agent);
       await persistEvalScore(outputRoot, index, score);
       return score;
     }
@@ -335,13 +335,6 @@ async function runResearchIterations(
   emit: (event: RunEvent) => void,
   costTracker: ModelRunCostTracker
 ): Promise<{ iterations: IterationResult[]; bestIteration?: IterationResult }> {
-  if (!options.agent) {
-    throw new Error("No eval agent was provided to run research iterations");
-  }
-  if (!options.researcher) {
-    throw new Error("No skill researcher was provided to run research iterations");
-  }
-
   const agent = options.agent;
   const seedSkillDir = await resolveSeedSkillDir(project, options.seedSkillDir);
   const guidanceSkillDir = await resolveGuidanceSkillDir(project, options.guidanceSkillDir, seedSkillDir);
@@ -369,6 +362,9 @@ async function runResearchIterations(
       } else {
         await assertNoIterationEvaluationArtifacts(iterationDir, iteration);
         await assertNoFutureIterationArtifacts(project.root, iteration);
+        if (!options.researcher) {
+          throw new Error("No skill researcher was provided to resume the incomplete research run");
+        }
         if (researchArtifact.status === "incomplete") {
           await archiveIncompleteArtifact(project.root, candidateSkillDir, `iteration-${iteration}-research`);
         }
@@ -391,6 +387,9 @@ async function runResearchIterations(
         emit({ type: "iteration-generated", iteration, candidateSkillDir });
       }
     } else {
+      if (!options.researcher) {
+        throw new Error("No skill researcher was provided to run research iterations");
+      }
       if (iteration === 1) {
         previousSkillDir = await prepareInitialResearchSkillDir(project, seedSkillDir);
       }
@@ -417,7 +416,13 @@ async function runResearchIterations(
 
     const scores = options.resume
       ? await resumeIterationScores(project, iteration, iterationDir, candidateSkillDir, agent, emit, costTracker)
-      : await runFreshIterationScores(project, iterationDir, candidateSkillDir, agent, costTracker);
+      : await runFreshIterationScores(
+          project,
+          iterationDir,
+          candidateSkillDir,
+          requireEvalAgent(agent, "run research iterations"),
+          costTracker
+        );
 
     const aggregate = aggregateScores(project.config, scores);
     const summaryPath = join(iterationDir, "summary.json");
@@ -544,12 +549,13 @@ async function resumeIterationScores(
   iteration: number,
   iterationDir: string,
   candidateSkillDir: string,
-  agent: EvalAgent,
+  agent: EvalAgent | undefined,
   emit: (event: RunEvent) => void,
   costTracker: ModelRunCostTracker
 ): Promise<EvalScore[]> {
   await assertNoUnexpectedScores(iterationDir, project.evals.evals.length);
-  const existing = await inspectConfiguredScores(project, iterationDir);
+  const outputRoot = join(iterationDir, "outputs");
+  const existing = await inspectConfiguredScores(project, iterationDir, outputRoot);
 
   return runWithConcurrency(project.evals.evals, project.config.max_concurrency, async (evalCase, index) => {
     const reused = existing[index];
@@ -558,7 +564,6 @@ async function resumeIterationScores(
       return reused;
     }
 
-    const outputRoot = join(iterationDir, "outputs");
     const evalOutputDir = join(outputRoot, evalCase.id);
     const track = trackForEval(project.config, evalCase.eval_type);
     const judgeArtifact = await inspectJudgeArtifact(evalOutputDir, evalCase, track);
@@ -576,6 +581,9 @@ async function resumeIterationScores(
       throw new Error(
         `Cannot resume iteration ${iteration} producer for eval "${evalCase.id}": ${producerArtifact.reason}`
       );
+    }
+    if (!agent) {
+      throw new Error("No eval agent was provided to resume the incomplete research run");
     }
     if (
       producerArtifact.status === "incomplete" ||
@@ -607,7 +615,8 @@ async function resumeIterationScores(
 
 async function inspectConfiguredScores(
   project: ProjectInputs,
-  directory: string
+  directory: string,
+  outputRoot: string
 ): Promise<Array<EvalScore | undefined>> {
   return Promise.all(
     project.evals.evals.map(async (evalCase, index) => {
@@ -620,9 +629,33 @@ async function inspectConfiguredScores(
       if (artifact.status === "invalid") {
         throw new Error(`Cannot resume score ${index} for eval "${evalCase.id}": ${artifact.reason}`);
       }
-      return artifact.status === "complete" ? artifact.value : undefined;
+      if (artifact.status !== "complete") {
+        return undefined;
+      }
+
+      const judgeArtifact = await inspectJudgeArtifact(
+        join(outputRoot, evalCase.id),
+        evalCase,
+        trackForEval(project.config, evalCase.eval_type)
+      );
+      if (judgeArtifact.status === "invalid" || judgeArtifact.status === "incomplete") {
+        throw new Error(`Cannot reconcile score ${index} for eval "${evalCase.id}": ${judgeArtifact.reason}`);
+      }
+      if (judgeArtifact.status === "complete" && !isDeepStrictEqual(artifact.value, judgeArtifact.value.score)) {
+        throw new Error(
+          `Cannot resume score ${index} for eval "${evalCase.id}": persisted score does not match judge transcript`
+        );
+      }
+      return artifact.value;
     })
   );
+}
+
+function requireEvalAgent(agent: EvalAgent | undefined, action: string): EvalAgent {
+  if (!agent) {
+    throw new Error(`No eval agent was provided to ${action}`);
+  }
+  return agent;
 }
 
 async function assertNoUnexpectedScores(directory: string, expectedCount: number): Promise<void> {

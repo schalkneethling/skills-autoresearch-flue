@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -39,6 +40,11 @@ export interface ProducerArtifact {
 export interface JudgeArtifact {
   transcriptPath: string;
   score: EvalScore;
+}
+
+export interface ResearchSnapshotFile {
+  path: string;
+  sha256: string;
 }
 
 const RESEARCH_MARKERS = [
@@ -128,7 +134,7 @@ export async function inspectResearchArtifact(
 
   try {
     const marker = JSON.parse(contents.value) as unknown;
-    validateResearchMarker(marker, markerPath, iteration);
+    await validateResearchMarker(marker, markerPath, iteration, candidateSkillDir);
     if (!(await containsSkillFile(candidateSkillDir))) {
       return {
         status: "incomplete",
@@ -140,6 +146,12 @@ export async function inspectResearchArtifact(
       value: { candidateSkillDir, markerPath }
     };
   } catch (error) {
+    if (isMissing(error)) {
+      return {
+        status: "incomplete",
+        reason: `Research completion marker declares a missing candidate file: ${markerPath}`
+      };
+    }
     return invalid(markerPath, error);
   }
 }
@@ -264,23 +276,130 @@ function validateScoreIdentity(score: EvalScore, evalCase: EvalCase, track: Trac
   if (unknownDimensions.length > 0) {
     throw new Error(`${path} has unknown dimensions: ${unknownDimensions.map((dimension) => dimension.id).join(", ")}`);
   }
+
+  const counts = new Map<string, number>();
+  for (const dimension of score.dimensions) {
+    counts.set(dimension.id, (counts.get(dimension.id) ?? 0) + 1);
+  }
+  const duplicates = [...counts].filter(([, count]) => count > 1).map(([id]) => id);
+  if (duplicates.length > 0) {
+    throw new Error(`${path} has duplicate dimensions: ${duplicates.join(", ")}`);
+  }
+
+  const missing = evalCase.scoring_dimensions.filter((dimension) => !counts.has(dimension.id));
+  if (missing.length > 0) {
+    throw new Error(`${path} is missing dimensions: ${missing.map((dimension) => dimension.id).join(", ")}`);
+  }
+
+  const configuredById = new Map(evalCase.scoring_dimensions.map((dimension) => [dimension.id, dimension]));
+  for (const dimension of score.dimensions) {
+    const configured = configuredById.get(dimension.id);
+    if (configured && dimension.max_score !== configured.max_score) {
+      throw new Error(
+        `${path} dimension "${dimension.id}" has max_score ${dimension.max_score}, expected ${configured.max_score}`
+      );
+    }
+  }
 }
 
-function validateResearchMarker(marker: unknown, markerPath: string, iteration: number): void {
+async function validateResearchMarker(
+  marker: unknown,
+  markerPath: string,
+  iteration: number,
+  candidateSkillDir: string
+): Promise<void> {
   if (!marker || typeof marker !== "object" || Array.isArray(marker)) {
     throw new Error("expected a JSON object");
   }
 
   if (markerPath.endsWith(".autoresearch-iteration.json")) {
-    if ((marker as { iteration?: unknown }).iteration !== iteration) {
+    const snapshot = marker as { iteration?: unknown; manifest?: unknown };
+    if (snapshot.iteration !== iteration) {
       throw new Error(`records a different iteration; expected ${iteration}`);
+    }
+    const expectedManifest = parseSnapshotManifest(snapshot.manifest, markerPath, candidateSkillDir);
+    const actualManifest = await createResearchSnapshotManifest(candidateSkillDir);
+    if (!isDeepStrictEqual(actualManifest, expectedManifest)) {
+      throw new Error("snapshot manifest does not match candidate files");
     }
     return;
   }
 
   const transcript = marker as { request?: unknown; response?: unknown };
   validateTranscriptPhase(transcript.request, `research iteration ${iteration}`, markerPath);
-  parseWithSchema(SkillResearchPatchSchema, parseTranscriptResponse(transcript.response), markerPath);
+  const patch = parseWithSchema(SkillResearchPatchSchema, parseTranscriptResponse(transcript.response), markerPath);
+  const seen = new Set<string>();
+  for (const change of patch.changes) {
+    const destination = resolveContainedCandidatePath(candidateSkillDir, change.path, markerPath);
+    if (seen.has(destination)) {
+      throw new Error(`declares the research path more than once: ${change.path}`);
+    }
+    seen.add(destination);
+    const actual = await readFile(destination, "utf8");
+    if (actual !== change.contents) {
+      throw new Error(`declared research contents do not match candidate file: ${change.path}`);
+    }
+  }
+}
+
+export async function createResearchSnapshotManifest(directory: string): Promise<ResearchSnapshotFile[]> {
+  const files: ResearchSnapshotFile[] = [];
+
+  async function visit(current: string): Promise<void> {
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const absolute = join(current, entry.name);
+      const path = relative(directory, absolute);
+      if (path === entry.name && RESEARCH_MARKERS.includes(entry.name as (typeof RESEARCH_MARKERS)[number])) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await visit(absolute);
+      } else if (entry.isFile()) {
+        const contents = await readFile(absolute);
+        files.push({ path, sha256: createHash("sha256").update(contents).digest("hex") });
+      } else {
+        throw new Error(`Unsupported candidate entry in snapshot: ${path}`);
+      }
+    }
+  }
+
+  await visit(directory);
+  return files.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function parseSnapshotManifest(value: unknown, markerPath: string, candidateSkillDir: string): ResearchSnapshotFile[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`${markerPath} must contain a non-empty snapshot manifest`);
+  }
+  const seen = new Set<string>();
+  const manifest = value.map((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new Error(`${markerPath} has an invalid snapshot manifest entry`);
+    }
+    const { path, sha256 } = entry as { path?: unknown; sha256?: unknown };
+    if (typeof path !== "string" || path.length === 0 || typeof sha256 !== "string" || !/^[a-f0-9]{64}$/.test(sha256)) {
+      throw new Error(`${markerPath} has an invalid snapshot manifest entry`);
+    }
+    const destination = resolveContainedCandidatePath(candidateSkillDir, path, markerPath);
+    if (seen.has(destination)) {
+      throw new Error(`${markerPath} has a duplicate snapshot path: ${path}`);
+    }
+    seen.add(destination);
+    return { path, sha256 };
+  });
+  return manifest.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function resolveContainedCandidatePath(root: string, path: string, markerPath: string): string {
+  if (isAbsolute(path)) {
+    throw new Error(`${markerPath} declares an absolute candidate path: ${path}`);
+  }
+  const destination = resolve(root, path);
+  const rel = relative(resolve(root), destination);
+  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
+    throw new Error(`${markerPath} declares a candidate path outside its directory: ${path}`);
+  }
+  return destination;
 }
 
 function parseProducerTranscript(transcriptPath: string, contents: string, expectedEvalId: string): OutputFile[] {

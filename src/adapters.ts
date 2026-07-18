@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { copySkillSnapshot, SkillResearcher } from "./orchestrator.js";
+import { createResearchSnapshotManifest } from "./resume.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
 import { EvalScore, EvalScoreSchema, parseWithSchema } from "./schemas.js";
 
@@ -15,6 +16,7 @@ export class SnapshotResearcher implements SkillResearcher {
           iteration: request.iteration,
           previousSkillDir: request.previousSkillDir,
           previousNormalizedScore: request.previousAggregate.overall.normalizedScore,
+          manifest: await createResearchSnapshotManifest(request.candidateSkillDir),
         },
         null,
         2,
