@@ -21,7 +21,7 @@
     "env:check": "varlock load"
   },
   "dependencies": {
-    "@flue/runtime": "0.10.1",
+    "@flue/runtime": "0.11.1",
     "valibot": "^1.4.1"
   },
   "devDependencies": {
@@ -35,7 +35,7 @@
     "typescript-eslint": "^8.64.0",
     "varlock": "^1.5.1",
     "vitest": "^4.1.8",
-    "wrangler": "^4.111.0"
+    "wrangler": "^4.112.0"
   },
   "engines": {
     "node": ">=24"
