@@ -11,6 +11,7 @@ interface CliOptions {
   withBaseline: boolean;
   runResearch: boolean;
   forceResearch: boolean;
+  resume: boolean;
   seedSkillDir?: string;
   scoreDir?: string;
   modelClient?: "anthropic";
@@ -27,6 +28,7 @@ function usage(): string {
     "  --with-baseline       Import workspace/baseline instead of generating it.",
     "  --research            Run research iterations after baseline.",
     "  --force-research      Run research even when the baseline already reaches target_score.",
+    "  --resume              Continue from validated baseline and iteration artifacts.",
     "  --seed-skill <dir>    Seed skill directory for research iterations.",
     "  --score-dir <dir>     Directory of file-backed EvalScore JSON files.",
     "  --model-client <name> Use a model client. Supported: anthropic.",
@@ -44,6 +46,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       "with-baseline": { type: "boolean" },
       research: { type: "boolean" },
       "force-research": { type: "boolean" },
+      resume: { type: "boolean" },
       "seed-skill": { type: "string" },
       "score-dir": { type: "string" },
       "model-client": { type: "string" },
@@ -65,6 +68,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     withBaseline: parsed.values["with-baseline"] ?? false,
     runResearch: parsed.values.research ?? false,
     forceResearch: parsed.values["force-research"] ?? false,
+    resume: parsed.values.resume ?? false,
     seedSkillDir: parsed.values["seed-skill"],
     scoreDir: parsed.values["score-dir"],
     modelClient: parseModelClient(parsed.values["model-client"]),
@@ -75,10 +79,10 @@ export function parseCliArgs(argv: string[]): CliOptions {
   if (options.scoreDir && options.modelClient) {
     throw new Error("Use either --score-dir or --model-client, not both.");
   }
-  if (!options.withBaseline && !options.scoreDir && !options.modelClient) {
+  if (!options.resume && !options.withBaseline && !options.scoreDir && !options.modelClient) {
     throw new Error("Generating a baseline requires --score-dir or --model-client anthropic.");
   }
-  if (options.runResearch && !options.scoreDir && !options.modelClient) {
+  if (!options.resume && options.runResearch && !options.scoreDir && !options.modelClient) {
     throw new Error("Research iterations require --score-dir or --model-client anthropic.");
   }
 
@@ -118,6 +122,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     withBaseline: cli.withBaseline,
     runResearch: cli.runResearch,
     forceResearch: cli.forceResearch,
+    resume: cli.resume,
     seedSkillDir: cli.seedSkillDir,
     budgetUsd: cli.budgetUsd,
     modelBacked: Boolean(modelClient),
@@ -187,6 +192,11 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
       return { level: "log", message: `Generating baseline: ${event.evals} evals` };
     case "baseline-generated":
       return { level: "log", message: `Generated baseline: ${event.scores} scores` };
+    case "baseline-resumed":
+      return {
+        level: "log",
+        message: `Resumed baseline: reused ${event.scores} score(s), ${event.remaining} remaining`
+      };
     case "aggregated":
       return {
         level: "log",
@@ -203,6 +213,31 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
       return {
         level: "debug",
         message: `Iteration ${event.iteration} skill: ${event.candidateSkillDir}`
+      };
+    case "iteration-research-resumed":
+      return {
+        level: "log",
+        message: `Iteration ${event.iteration}: reused completed research`
+      };
+    case "eval-score-resumed":
+      return {
+        level: "log",
+        message: `Iteration ${event.iteration}: reused score for ${event.evalId}`
+      };
+    case "eval-producer-resumed":
+      return {
+        level: "log",
+        message: `Iteration ${event.iteration}: reused producer output for ${event.evalId}`
+      };
+    case "eval-judge-resumed":
+      return {
+        level: "log",
+        message: `Iteration ${event.iteration}: recovered judge score for ${event.evalId}`
+      };
+    case "iteration-summary-rebuilt":
+      return {
+        level: "log",
+        message: `Iteration ${event.iteration}: rebuilt summary from persisted scores`
       };
     case "iteration-scored":
       return {

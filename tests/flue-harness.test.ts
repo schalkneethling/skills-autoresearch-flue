@@ -1,4 +1,4 @@
-import type { FlueSession } from "@flue/runtime/client";
+import type { FlueSession } from "@flue/runtime";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { FlueEvalAgent, runFlueAutoresearch } from "../src/flue-harness.js";

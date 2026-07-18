@@ -389,6 +389,7 @@ The payload fields are:
 - `withBaseline`: tells the harness to load or validate the baseline artifacts for the project.
 - `runResearch`: controls whether the researcher should patch the skill. `false` makes this a smoke run that stops before model-backed research.
 - `forceResearch`: optional override for research runs. When omitted or `false`, `runResearch:true` stops before the researcher if the baseline aggregate score already meets `target_score`.
+- `resume`: optional recovery mode. When `true`, the harness validates and reuses completed baseline scores, candidate research, producer output, and iteration scores before running only the missing phases.
 - `sessionId`: run/session name passed in the payload and used when writing harness artifacts.
 
 This should return events ending with `research-loop-ready`.
@@ -462,10 +463,35 @@ Key questions:
 
 ## Repeat Runs
 
-Generated iteration artifacts are written with exclusive file creation. To rerun the same fixture from scratch, remove the generated iterations first:
+Use resume mode after a provider error, network failure, quota limit, or interrupted process:
 
 ```bash
-rm -rf path/to/my-autoresearch-project/workspace/iterations
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"resume":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research-resume"}'
 ```
+
+Resume walks the run in order and validates artifacts before trusting them:
+
+- A valid positional `scores-<n>.json` skips both producer and judge for that eval.
+- A completed candidate skill with a recognized research transcript skips the researcher.
+- A valid producer transcript whose declared output files still exist and match skips the producer and runs only the judge.
+- A valid judge transcript without its positional score file is used to rebuild that score without another model call.
+- When all iteration scores exist but `summary.json` is missing, the summary is rebuilt.
+- A malformed, mismatched, stale, or ambiguous artifact stops recovery with an error instead of being silently overwritten.
+
+Incomplete candidate research and producer output directories that are safe to retry are moved under `workspace/resume-backups/` before that phase runs again, preserving the interrupted artifacts for audit.
+
+`resume:true` without `withBaseline` recovers a baseline that the harness was generating when it failed. `resume:true` with `withBaseline:true` keeps the strict imported-baseline behavior, then recovers research iterations.
+
+Resume assumes that `config.json`, eval cases, input, reference material, models, and seed skill have not changed since the interrupted run. There is not yet a run manifest that fingerprints those inputs. Start a fresh run after changing them.
+
+The cost summary and actual call counts written by a resumed invocation describe that invocation, while the call preview remains the configured maximum. Consult earlier transcripts and provider records for costs from previous failed attempts.
+
+To intentionally rerun research from an imported baseline, remove generated iterations and any prior resume backups:
+
+```bash
+rm -rf path/to/my-autoresearch-project/workspace/iterations path/to/my-autoresearch-project/workspace/resume-backups
+```
+
+If the harness generated the baseline too, also remove `workspace/baseline` before a fresh run. Do not remove an imported baseline unless you intend to regenerate or replace it.
 
 Keep committed fixtures baseline-only unless you intentionally want to preserve a specific alpha run artifact.
