@@ -28,3 +28,8 @@ pnpm-debug.log*
 playwright-report/
 test-results/
 **/full-report.json
+
+# generated autoresearch artifacts
+**/workspace/.phase-workspaces/
+**/workspace/iterations/
+**/workspace/cost-summary.json

@@ -63,6 +63,8 @@ The current alpha is centered on `fixtures/projects/release-notes-alpha/`, a sin
 
 Near-term work should keep tightening reliability, auditability, and documentation around that loop before broadening the surface area.
 
+The next milestone is a dependable single-skill research loop: a user can install the harness, run or import a baseline, complete or resume a model-backed iteration, understand the evidence, and rerun safely without hand-editing Flue payloads or deleting artifacts manually.
+
 Cross-provider judging becomes active focus after the single-provider flow is stable enough to make comparisons meaningful.
 
 ## Open Questions
