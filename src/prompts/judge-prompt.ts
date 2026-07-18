@@ -14,7 +14,7 @@ export function buildJudgePrompt({
   workspaceDir,
   referenceFiles,
   rubricFiles,
-  workspaceOutputFiles,
+  workspaceOutputFiles
 }: JudgePromptInput): string {
   // Base judge behavior lives in the Flue subagent profile at .flue/profiles.ts.
   return [
@@ -45,17 +45,14 @@ export function buildJudgePrompt({
       eval_type: request.evalCase.eval_type,
       track_id: request.track.id,
       total_score: 0,
-      max_score: request.evalCase.scoring_dimensions.reduce(
-        (sum, dimension) => sum + dimension.max_score,
-        0,
-      ),
+      max_score: request.evalCase.scoring_dimensions.reduce((sum, dimension) => sum + dimension.max_score, 0),
       dimensions: request.evalCase.scoring_dimensions.map((dimension) => ({
         id: dimension.id,
         score: 0,
         max_score: dimension.max_score,
-        rationale: "Rationale grounded only in the producer output.",
+        rationale: "Rationale grounded only in the producer output."
       })),
-      summary: "Concise scoring summary.",
-    }),
+      summary: "Concise scoring summary."
+    })
   ].join("\n");
 }

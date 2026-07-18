@@ -37,7 +37,6 @@ export const MODEL_PRICING_RULES: readonly ModelPricingRule[] = [
 ];
 
 export function pricingForModel(model: ModelConfig): TokenPricing | undefined {
-  return MODEL_PRICING_RULES.find(
-    (rule) => rule.provider === model.provider && rule.modelPattern.test(model.name)
-  )?.pricing;
+  return MODEL_PRICING_RULES.find((rule) => rule.provider === model.provider && rule.modelPattern.test(model.name))
+    ?.pricing;
 }

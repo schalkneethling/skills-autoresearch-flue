@@ -2,7 +2,7 @@ import { ModelConfig, ProjectConfig } from "./schemas.js";
 
 export const DEFAULT_MODEL: ModelConfig = {
   provider: "anthropic",
-  name: "claude-sonnet-4-6",
+  name: "claude-sonnet-4-6"
 };
 
 export interface ModelOverride {
@@ -23,7 +23,7 @@ export function resolveModel(config: ProjectConfig, override?: ModelOverride): M
 
   const model: ModelConfig = {
     provider,
-    name,
+    name
   };
 
   return model;

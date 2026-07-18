@@ -40,6 +40,7 @@ Keep this file short. Use it as orientation before reading deeper docs.
 pnpm test
 pnpm run lint
 pnpm run format:check
+pnpm run knip
 pnpm run typecheck
 pnpm run build
 pnpm run flue:build

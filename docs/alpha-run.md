@@ -9,6 +9,17 @@ The current alpha harness is Flue-first:
 - `src/flue-harness.ts` adapts Flue `session.task(..., { agent, result })` calls into the autoresearch loop.
 - `fixtures/projects/release-notes-alpha/` is the committed alpha fixture.
 
+Flue role artifacts are Markdown files named for the registered role. Project-local roles may live in either supported directory; discovery combines both locations, removes duplicates, and sorts the role names:
+
+```text
+roles/
+  custom-producer.md
+.flue/roles/
+  eval-judge.md
+  skill-builder.md
+  task-producer.md
+```
+
 ## 1Password Setup
 
 Create a 1Password item with:

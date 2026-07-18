@@ -5,7 +5,7 @@ export function extractScoreJson(response: string): unknown {
     return JSON.parse(response.trim());
   } catch (error) {
     throw new Error(`Judge response was not valid JSON: ${(error as Error).message}`, {
-      cause: error,
+      cause: error
     });
   }
 }
@@ -19,17 +19,13 @@ export function parseEvalScore(response: string, evalCase: EvalCase, track: Trac
     throw new Error(`Judge score eval_id "${score.eval_id}" does not match "${evalCase.id}"`);
   }
   if (score.eval_type !== evalCase.eval_type) {
-    throw new Error(
-      `Judge score eval_type "${score.eval_type}" does not match "${evalCase.eval_type}"`,
-    );
+    throw new Error(`Judge score eval_type "${score.eval_type}" does not match "${evalCase.eval_type}"`);
   }
   if (score.track_id !== track.id) {
     throw new Error(`Judge score track_id "${score.track_id}" does not match "${track.id}"`);
   }
   if (unknown.length > 0) {
-    throw new Error(
-      `Judge score included unknown dimensions: ${unknown.map((dimension) => dimension.id).join(", ")}`,
-    );
+    throw new Error(`Judge score included unknown dimensions: ${unknown.map((dimension) => dimension.id).join(", ")}`);
   }
 
   return score;
