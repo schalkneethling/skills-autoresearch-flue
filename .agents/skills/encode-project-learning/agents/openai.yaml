@@ -1,0 +1,4 @@
+interface:
+  display_name: "Encode Project Learning"
+  short_description: "Turn discoveries into durable safeguards"
+  default_prompt: "Use $encode-project-learning to assess what this work taught us and encode only well-supported durable lessons."
