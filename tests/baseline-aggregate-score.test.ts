@@ -59,6 +59,50 @@ test("imports the real frontend-security baseline fixture", async () => {
   expect(imported.evalArtefacts["eval-1"].outputDir).toContain(join("eval-1", "output"));
 });
 
+test("normalizes legacy baseline score totals and summaries", async () => {
+  const baseline = join(await tempProject(), "workspace", "baseline");
+  await mkdir(baseline, { recursive: true });
+  await writeFile(
+    join(baseline, "scores-0.json"),
+    JSON.stringify({
+      eval_id: 1,
+      eval_name: "Named legacy eval",
+      eval_type: "legacy",
+      composite_score: 2.5,
+      scores: { quality: { score: 1, justification: "Imported" } }
+    })
+  );
+  await writeFile(
+    join(baseline, "scores-1.json"),
+    JSON.stringify({
+      eval_id: "custom-eval",
+      eval_type: "legacy",
+      scores: { quality: { score: 2, justification: "Imported" } }
+    })
+  );
+
+  const imported = await importBaselineArtefacts(baseline, []);
+
+  expect(imported.scores).toMatchObject([
+    {
+      eval_id: "eval-1",
+      eval_type: "legacy",
+      track_id: "legacy",
+      total_score: 2.5,
+      max_score: 3,
+      summary: "Named legacy eval"
+    },
+    {
+      eval_id: "custom-eval",
+      eval_type: "legacy",
+      track_id: "legacy",
+      total_score: 2,
+      max_score: 3,
+      summary: "Imported custom-eval"
+    }
+  ]);
+});
+
 test("aggregates arbitrary configured tracks", () => {
   const report = aggregateScores(securityConfig, [
     score("xss-001", "detect-and-fix", "audit", 2, 2),
