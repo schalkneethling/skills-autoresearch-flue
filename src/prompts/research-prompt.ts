@@ -68,9 +68,30 @@ export function buildResearchPrompt({
           appliedTo: "SKILL.md"
         }
       ],
-      changes: [{ path: "SKILL.md", contents: "Complete replacement file contents." }]
+      resource_decisions: [
+        {
+          path: "SKILL.md",
+          placement: "skill",
+          reason: "Core procedural guidance needed whenever the skill runs."
+        },
+        {
+          path: "references/domain-rules.md",
+          placement: "reference",
+          reason: "Stable domain detail that should be loaded only when needed."
+        }
+      ],
+      changes: [
+        { path: "SKILL.md", contents: "Complete replacement file contents." },
+        { path: "references/domain-rules.md", contents: "Complete reference file contents." }
+      ]
     }),
     "Each change path must be relative to the skill directory.",
+    "Classify every changed file in resource_decisions, using the same path exactly once.",
+    "Use placement skill for SKILL.md core workflow instructions, reference for stable domain facts or detailed guidance under references/, script for fragile or repeated deterministic logic under scripts/, and asset for reusable output templates or media under assets/.",
+    "Keep SKILL.md concise. Link to each bundled resource from SKILL.md and say when to read, run, or reuse it so the skill progressively discloses detail instead of loading everything up front.",
+    "Do not duplicate the same material in SKILL.md and a bundled resource.",
+    "For text assets, return their exact contents. Do not invent binary file contents.",
+    "Changed files under scripts/ receive focused built-in syntax validation after the patch is applied. Prefer a supported, self-contained script format; validation results or an explicit skipped note will be recorded in RESEARCH.md.",
     "Use guidance entries to update the guidance ledger whenever you inspect, use, defer, ignore, or need more seed/reference guidance.",
     "Prefer the smallest effective change over recreating or expanding the whole reference skill.",
     "Do not copy seed/reference files wholesale unless the scores show the current candidate is missing that entire file's behavior.",

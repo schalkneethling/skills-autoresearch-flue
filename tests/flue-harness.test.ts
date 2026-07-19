@@ -97,7 +97,14 @@ test("runFlueAutoresearch executes the dry run through detached Flue tasks", asy
     score(evalCase.id, evalCase.eval_type, "summarise", 0.4),
     {
       summary: "Improve skill",
-      changes: [{ path: "SKILL.md", contents: "# Improved 1\n" }]
+      resource_decisions: [
+        { path: "SKILL.md", placement: "skill", reason: "Improve the core workflow." },
+        { path: "scripts/check.js", placement: "script", reason: "Reuse deterministic checking logic." }
+      ],
+      changes: [
+        { path: "SKILL.md", contents: "# Improved 1\n" },
+        { path: "scripts/check.js", contents: "export const check = () => true;\n" }
+      ]
     },
     {
       output_files: [{ path: "RESULT.md", contents: "Iteration\n" }]
@@ -105,6 +112,7 @@ test("runFlueAutoresearch executes the dry run through detached Flue tasks", asy
     score(evalCase.id, evalCase.eval_type, "summarise", 0.5),
     {
       summary: "Improve skill again",
+      resource_decisions: [{ path: "SKILL.md", placement: "skill", reason: "Refine the core workflow." }],
       changes: [{ path: "SKILL.md", contents: "# Improved 2\n" }]
     },
     {
@@ -135,5 +143,8 @@ test("runFlueAutoresearch executes the dry run through detached Flue tasks", asy
   expect(session.tasks.every((task) => task.result)).toBe(true);
   await expect(readFile(join(root, "workspace", "iterations", "2", "skill", "SKILL.md"), "utf8")).resolves.toBe(
     "# Improved 2\n"
+  );
+  await expect(readFile(join(root, "workspace", "iterations", "1", "skill", "RESEARCH.md"), "utf8")).resolves.toContain(
+    "`scripts/check.js` — passed"
   );
 });

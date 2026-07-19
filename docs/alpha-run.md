@@ -126,6 +126,9 @@ After a successful `alpha:research` run, inspect:
 ```text
 fixtures/projects/release-notes-alpha/workspace/iterations/1/
   skill/SKILL.md
+  skill/references/...       # when the researcher adds stable detail
+  skill/scripts/...          # when deterministic logic is useful
+  skill/assets/...           # when reusable output material is useful
   skill/RESEARCH.md
   skill/.autoresearch-flue-transcript.json
   outputs/notes-001/RESULT.md
@@ -142,6 +145,7 @@ Useful checks:
 - Judge transcript should show `anthropic/claude-sonnet-4-6`.
 - Producer output should contain only the concrete eval result.
 - Judge score should be grounded in the producer output, not the skill instructions.
+- `RESEARCH.md` should explain each changed file's resource placement and report focused validation for changed scripts, or say why validation was skipped.
 - Transcripts should not contain secret markers such as `ANTHROPIC_API_KEY`, `api_key`, or provider key prefixes.
 
 ## Latest Alpha Result

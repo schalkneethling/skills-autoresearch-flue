@@ -46,10 +46,23 @@ test("dry run executes baseline, applies a candidate skill patch, and scores one
     JSON.stringify(score(evalCase.id, evalCase.eval_type, "summarise", 0.4)),
     JSON.stringify({
       summary: "Add concrete output guidance.",
+      resource_decisions: [
+        { path: "SKILL.md", placement: "skill", reason: "Keep the core procedure always available." },
+        {
+          path: "references/risk-guidance.md",
+          placement: "reference",
+          reason: "Load detailed risk guidance only when a changelog needs it."
+        }
+      ],
       changes: [
         {
           path: "SKILL.md",
-          contents: "# Release Summary\n\nSummarise changes with concrete user-facing impact and risk notes.\n"
+          contents:
+            "# Release Summary\n\nSummarise changes with concrete user-facing impact. Read references/risk-guidance.md when risk or migration impact is present.\n"
+        },
+        {
+          path: "references/risk-guidance.md",
+          contents: "Describe compatibility impact, migration steps, and verification guidance.\n"
         }
       ]
     }),
@@ -85,6 +98,12 @@ test("dry run executes baseline, applies a candidate skill patch, and scores one
   );
   await expect(readFile(join(root, "workspace", "iterations", "1", "skill", "SKILL.md"), "utf8")).resolves.toContain(
     "concrete user-facing impact"
+  );
+  await expect(
+    readFile(join(root, "workspace", "iterations", "1", "skill", "references", "risk-guidance.md"), "utf8")
+  ).resolves.toContain("migration steps");
+  await expect(readFile(join(root, "workspace", "iterations", "1", "skill", "RESEARCH.md"), "utf8")).resolves.toContain(
+    "`references/risk-guidance.md` — reference"
   );
   await expect(
     readFile(join(root, "workspace", "iterations", "1", "outputs", evalCase.id, "RESULT.md"), "utf8")
@@ -123,6 +142,7 @@ test("dry run previews, tracks, persists, and stops after the observed budget is
     {
       text: JSON.stringify({
         summary: "Add concrete output guidance.",
+        resource_decisions: [{ path: "SKILL.md", placement: "skill", reason: "Improve the core instructions." }],
         changes: [
           {
             path: "SKILL.md",

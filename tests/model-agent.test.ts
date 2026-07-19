@@ -12,7 +12,9 @@ import {
   ModelRequest,
   parseModelProduceResponse,
   readGuidanceLedger,
-  parseSkillResearchPatch
+  parseSkillResearchPatch,
+  validateChangedScripts,
+  validateSkillResearchPatch
 } from "../src/model-agent.js";
 import { createEvalSandbox } from "../src/sandbox.js";
 import { trackForEval } from "../src/project.js";
@@ -222,9 +224,23 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
   await writeFile(join(previousSkillDir, ".autoresearch-transcript.json"), "{}\n");
   const patch = {
     summary: "Improve the examples.",
+    resource_decisions: [
+      { path: "SKILL.md", placement: "skill", reason: "Keep the core workflow concise." },
+      {
+        path: "references/basic.md",
+        placement: "reference",
+        reason: "Keep detailed examples available on demand."
+      },
+      { path: "scripts/format.js", placement: "script", reason: "Reuse deterministic formatting logic." },
+      { path: "scripts/manual.tool", placement: "script", reason: "Retain a project-specific helper." },
+      { path: "assets/template.md", placement: "asset", reason: "Reuse the output template." }
+    ],
     changes: [
       { path: "SKILL.md", contents: "# Updated\n" },
-      { path: "examples/basic.md", contents: "Use concise release notes.\n" }
+      { path: "references/basic.md", contents: "Use concise release notes.\n" },
+      { path: "scripts/format.js", contents: "export const format = (value) => String(value).trim();\n" },
+      { path: "scripts/manual.tool", contents: "project-specific helper\n" },
+      { path: "assets/template.md", contents: "# Release\n\n{{summary}}\n" }
     ]
   };
   const client = new MemoryModelClient(JSON.stringify(patch));
@@ -245,6 +261,10 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
 
   expect(modelRequest.prompt).toContain("Current skill files");
   expect(modelRequest.prompt).toContain("# Previous");
+  expect(modelRequest.prompt).toContain("Classify every changed file in resource_decisions");
+  expect(modelRequest.prompt).toContain("stable domain facts or detailed guidance under references/");
+  expect(modelRequest.prompt).toContain("fragile or repeated deterministic logic under scripts/");
+  expect(modelRequest.prompt).toContain("reusable output templates or media under assets/");
 
   await researcher.improve({
     project,
@@ -260,10 +280,21 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
   });
 
   await expect(readFile(join(candidateSkillDir, "SKILL.md"), "utf8")).resolves.toBe("# Updated\n");
-  await expect(readFile(join(candidateSkillDir, "examples", "basic.md"), "utf8")).resolves.toBe(
+  await expect(readFile(join(candidateSkillDir, "references", "basic.md"), "utf8")).resolves.toBe(
     "Use concise release notes.\n"
   );
+  await expect(readFile(join(candidateSkillDir, "scripts", "format.js"), "utf8")).resolves.toContain("trim()");
+  await expect(readFile(join(candidateSkillDir, "assets", "template.md"), "utf8")).resolves.toContain("{{summary}}");
   await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toContain("Improve the examples.");
+  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toContain(
+    "`references/basic.md` — reference"
+  );
+  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toContain(
+    "`scripts/format.js` — passed"
+  );
+  await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.toContain(
+    "`scripts/manual.tool` — skipped"
+  );
   await expect(readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8")).resolves.toContain(
     "SKILL.md"
   );
@@ -369,6 +400,7 @@ test("ModelSkillResearcher appends guidance decisions to the ledger", async () =
           appliedTo: "SKILL.md"
         }
       ],
+      resource_decisions: [{ path: "SKILL.md", placement: "skill", reason: "Apply the core guidance." }],
       changes: [{ path: "SKILL.md", contents: "# Updated\n" }]
     })
   );
@@ -439,6 +471,67 @@ test("parseSkillResearchPatch rejects non-JSON responses and unsafe paths fail d
     })
   ).rejects.toThrow(/escapes target directory/);
   await expect(stat(candidateSkillDir)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+test("validateSkillResearchPatch requires complete, path-consistent resource decisions when reported", () => {
+  const root = "/tmp/candidate-skill";
+  const patch = parseSkillResearchPatch(
+    JSON.stringify({
+      summary: "Split stable detail from the core instructions.",
+      resource_decisions: [
+        { path: "references/rules.md", placement: "script", reason: "Incorrect category for this path." }
+      ],
+      changes: [
+        { path: "SKILL.md", contents: "# Skill\n" },
+        { path: "references/rules.md", contents: "# Rules\n" }
+      ]
+    })
+  );
+
+  expect(() => validateSkillResearchPatch(root, patch)).toThrow(/uses placement "script", expected "reference"/);
+
+  const missing = parseSkillResearchPatch(
+    JSON.stringify({
+      summary: "Report only one of two placement decisions.",
+      resource_decisions: [{ path: "SKILL.md", placement: "skill", reason: "Core workflow." }],
+      changes: [
+        { path: "SKILL.md", contents: "# Skill\n" },
+        { path: "assets/template.md", contents: "Template\n" }
+      ]
+    })
+  );
+  expect(() => validateSkillResearchPatch(root, missing)).toThrow(
+    /missing resource decisions for: assets\/template.md/
+  );
+
+  const omitted = parseSkillResearchPatch(
+    JSON.stringify({
+      summary: "Omit all placement decisions.",
+      changes: [{ path: "SKILL.md", contents: "# Skill\n" }]
+    })
+  );
+  expect(() => validateSkillResearchPatch(root, omitted)).toThrow(/missing resource decisions for: SKILL.md/);
+});
+
+test("validateChangedScripts records failed syntax checks without executing generated code", async () => {
+  const root = await tempProject();
+  await mkdir(join(root, "scripts"));
+  await writeFile(join(root, "scripts", "broken.js"), "const = ;\n");
+  const patch = parseSkillResearchPatch(
+    JSON.stringify({
+      summary: "Add deterministic logic.",
+      resource_decisions: [{ path: "scripts/broken.js", placement: "script", reason: "Reuse deterministic logic." }],
+      changes: [{ path: "scripts/broken.js", contents: "const = ;\n" }]
+    })
+  );
+
+  await expect(validateChangedScripts(root, patch)).resolves.toMatchObject([
+    {
+      path: "scripts/broken.js",
+      status: "failed",
+      note: expect.stringContaining("syntax validation failed")
+    }
+  ]);
 });
 
 test("AnthropicMessagesClient posts messages request and extracts text response", async () => {
