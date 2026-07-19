@@ -1,5 +1,6 @@
+import { execFile, type ExecFileException } from "node:child_process";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { ModelCallRole, ModelUsage } from "./cost.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
@@ -16,11 +17,22 @@ import {
   ModelProduceResponse,
   ModelProduceResponseSchema,
   OutputFile,
+  ResourceDecision,
+  ResourcePlacement,
   SkillResearchPatch,
   SkillResearchPatchSchema,
   Track,
   parseWithSchema
 } from "./schemas.js";
+
+export interface ScriptValidationResult {
+  path: string;
+  status: "passed" | "failed" | "skipped";
+  validator?: string;
+  note: string;
+}
+
+type ScriptValidator = "javascript" | "typescript" | "shell" | "python";
 
 export interface ModelRequest {
   system: string;
@@ -176,8 +188,9 @@ export class ModelSkillResearcher implements SkillResearcher {
     await mkdir(request.candidateSkillDir, { recursive: true });
     await removeGeneratedResearchFiles(request.candidateSkillDir);
     await applySkillResearchPatch(request.candidateSkillDir, patch);
+    const scriptValidations = await validateChangedScripts(request.candidateSkillDir, patch);
     await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
-    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), {
+    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch, scriptValidations), {
       flag: "wx"
     });
     await persistTranscript(join(request.candidateSkillDir, ".autoresearch-transcript.json"), modelRequest, response);
@@ -433,6 +446,39 @@ export function validateSkillResearchPatch(skillDir: string, patch: SkillResearc
   for (const change of patch.changes) {
     resolveSkillPath(skillDir, change.path);
   }
+
+  const decisionsByPath = new Map<string, ResourceDecision>();
+  for (const decision of patch.resource_decisions ?? []) {
+    resolveSkillPath(skillDir, decision.path);
+    if (decisionsByPath.has(decision.path)) {
+      throw new Error(`Research patch has duplicate resource decision for: ${decision.path}`);
+    }
+    decisionsByPath.set(decision.path, decision);
+    const expected = inferResourcePlacement(decision.path);
+    if (decision.placement !== expected) {
+      throw new Error(
+        `Resource decision for ${decision.path} uses placement "${decision.placement}", expected "${expected}"`
+      );
+    }
+  }
+
+  const changedPaths = new Set(patch.changes.map((change) => change.path));
+  const missing = [...changedPaths].filter((path) => !decisionsByPath.has(path));
+  const extra = [...decisionsByPath.keys()].filter((path) => !changedPaths.has(path));
+  if (missing.length > 0) {
+    throw new Error(`Research patch is missing resource decisions for: ${missing.join(", ")}`);
+  }
+  if (extra.length > 0) {
+    throw new Error(`Resource decisions do not have matching changes: ${extra.join(", ")}`);
+  }
+}
+
+function inferResourcePlacement(path: string): ResourcePlacement {
+  const normalized = path.replaceAll("\\", "/");
+  if (normalized.startsWith("references/")) return "reference";
+  if (normalized.startsWith("scripts/")) return "script";
+  if (normalized.startsWith("assets/")) return "asset";
+  return "skill";
 }
 
 function parseJson(response: string, label: string): unknown {
@@ -475,7 +521,19 @@ function validateEvalScore(score: EvalScore, evalCase: EvalCase, track: Track): 
   }
 }
 
-export function formatResearchSummary(patch: SkillResearchPatch): string {
+export function formatResearchSummary(
+  patch: SkillResearchPatch,
+  scriptValidations: ScriptValidationResult[] = []
+): string {
+  const explicitDecisions = new Map((patch.resource_decisions ?? []).map((decision) => [decision.path, decision]));
+  const decisions = patch.changes.map(
+    (change): ResourceDecision =>
+      explicitDecisions.get(change.path) ?? {
+        path: change.path,
+        placement: inferResourcePlacement(change.path),
+        reason: "Placement inferred from the changed file path; the researcher did not report a decision."
+      }
+  );
   return [
     `# Research Summary`,
     "",
@@ -483,8 +541,115 @@ export function formatResearchSummary(patch: SkillResearchPatch): string {
     "",
     "## Changed Files",
     "",
-    ...patch.changes.map((change) => `- ${change.path}`)
+    ...patch.changes.map((change) => `- ${change.path}`),
+    "",
+    "## Resource Placement",
+    "",
+    ...decisions.map((decision) => `- \`${decision.path}\` — ${decision.placement}: ${decision.reason}`),
+    "",
+    "## Script Validation",
+    "",
+    ...(scriptValidations.length > 0
+      ? scriptValidations.map((result) => {
+          const validator = result.validator ? ` (\`${result.validator}\`)` : "";
+          return `- \`${result.path}\` — ${result.status}${validator}: ${result.note}`;
+        })
+      : ["No scripts were generated or changed in this iteration."])
   ].join("\n");
+}
+
+export async function validateChangedScripts(
+  skillDir: string,
+  patch: SkillResearchPatch
+): Promise<ScriptValidationResult[]> {
+  return Promise.all(
+    patch.changes
+      .filter((change) => inferResourcePlacement(change.path) === "script")
+      .map((change) => {
+        const path = resolveSkillPath(skillDir, change.path);
+        const extension = extname(path).toLowerCase();
+        if ([".js", ".mjs", ".cjs"].includes(extension)) {
+          return runScriptValidation(change.path, path, "javascript", "node --check");
+        }
+        if ([".ts", ".mts", ".cts"].includes(extension)) {
+          return runScriptValidation(change.path, path, "typescript", "node --experimental-strip-types --check");
+        }
+        if ([".sh", ".bash"].includes(extension)) {
+          return runScriptValidation(change.path, path, "shell", "/bin/bash -n");
+        }
+        if (extension === ".py") {
+          return runScriptValidation(change.path, path, "python", "python3 ast.parse");
+        }
+        return Promise.resolve({
+          path: change.path,
+          status: "skipped" as const,
+          note: `No built-in validator is available for ${extension || "extensionless"} scripts.`
+        });
+      })
+  );
+}
+
+async function runScriptValidation(
+  path: string,
+  absolutePath: string,
+  validator: ScriptValidator,
+  validatorLabel: string
+): Promise<ScriptValidationResult> {
+  const result = await executeScriptValidator(validator, absolutePath);
+  if (!result.error) {
+    return { path, status: "passed", validator: validatorLabel, note: "Focused syntax validation passed." };
+  }
+  if (result.error.code === "ENOENT") {
+    return {
+      path,
+      status: "skipped",
+      validator: validatorLabel,
+      note: `Validator executable was unavailable for ${validatorLabel}.`
+    };
+  }
+  const stderr = result.stderr.trim();
+  return {
+    path,
+    status: "failed",
+    validator: validatorLabel,
+    note: stderr
+      ? `Focused syntax validation failed: ${stderr}`
+      : `Focused syntax validation failed: ${result.error.message}`
+  };
+}
+
+interface ValidatorExecutionResult {
+  error: ExecFileException | null;
+  stderr: string;
+}
+
+function executeScriptValidator(validator: ScriptValidator, absolutePath: string): Promise<ValidatorExecutionResult> {
+  return new Promise((resolveExecution) => {
+    const options = { timeout: 10_000, maxBuffer: 1_000_000, shell: false, encoding: "utf8" } as const;
+    const complete = (error: ExecFileException | null, _stdout: string, stderr: string) => {
+      resolveExecution({ error, stderr });
+    };
+
+    switch (validator) {
+      case "javascript":
+        execFile("node", ["--check", absolutePath], options, complete);
+        break;
+      case "typescript":
+        execFile("node", ["--experimental-strip-types", "--check", absolutePath], options, complete);
+        break;
+      case "shell":
+        execFile("/bin/bash", ["-n", absolutePath], options, complete);
+        break;
+      case "python":
+        execFile(
+          "python3",
+          ["-c", "import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text())", absolutePath],
+          options,
+          complete
+        );
+        break;
+    }
+  });
 }
 
 async function persistTranscript(path: string, request: ModelRequest, response: string): Promise<void> {

@@ -107,6 +107,8 @@ When converting an existing project:
    - Generate a baseline as the first `skills-autoresearch` harness run.
    - Create a small baseline by hand so the smoke run can validate loading and aggregation before spending model calls.
 
+Preserve any bundled `references/`, `scripts/`, and `assets/` already present in the seed skill. Candidate iterations may add or update these resources when eval evidence justifies them. Inspect `RESEARCH.md` to confirm the researcher kept core workflow guidance in `SKILL.md`, moved stable detail or reusable material into the appropriate resource directory, and recorded validation for changed scripts.
+
 ## Eval Gate
 
 ## Write `config.json`

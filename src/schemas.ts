@@ -102,6 +102,14 @@ export const SkillFileChangeSchema = v.object({
   contents: v.string()
 });
 
+export const ResourcePlacementSchema = v.picklist(["skill", "reference", "script", "asset"]);
+
+export const ResourceDecisionSchema = v.object({
+  path: v.pipe(v.string(), v.minLength(1)),
+  placement: ResourcePlacementSchema,
+  reason: v.pipe(v.string(), v.minLength(1))
+});
+
 export const GuidanceLedgerEntrySchema = v.object({
   iteration: v.pipe(v.number(), v.integer(), v.minValue(1)),
   source: v.pipe(v.string(), v.minLength(1)),
@@ -118,6 +126,7 @@ export const GuidanceLedgerSchema = v.object({
 export const SkillResearchPatchSchema = v.object({
   summary: v.pipe(v.string(), v.minLength(1)),
   guidance: v.optional(v.array(v.omit(GuidanceLedgerEntrySchema, ["iteration"])), []),
+  resource_decisions: v.optional(v.array(ResourceDecisionSchema), []),
   changes: v.pipe(v.array(SkillFileChangeSchema), v.minLength(1))
 });
 
@@ -134,6 +143,8 @@ export type OutputFile = v.InferOutput<typeof OutputFileSchema>;
 export type ModelProduceResponse = v.InferOutput<typeof ModelProduceResponseSchema>;
 export type SkillMetadata = v.InferOutput<typeof SkillMetadataSchema>;
 export type SkillFileChange = v.InferOutput<typeof SkillFileChangeSchema>;
+export type ResourcePlacement = v.InferOutput<typeof ResourcePlacementSchema>;
+export type ResourceDecision = v.InferOutput<typeof ResourceDecisionSchema>;
 export type GuidanceLedgerEntry = v.InferOutput<typeof GuidanceLedgerEntrySchema>;
 export type GuidanceLedger = v.InferOutput<typeof GuidanceLedgerSchema>;
 export type SkillResearchPatch = v.InferOutput<typeof SkillResearchPatchSchema>;

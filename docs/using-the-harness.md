@@ -309,6 +309,21 @@ The researcher sees:
 - previous aggregate, score, and baseline summaries
 - the previous skill files
 
+## Candidate Skill Resources
+
+The researcher does not have to put every improvement in `SKILL.md`. Each changed file is classified and recorded in the candidate's `RESEARCH.md`:
+
+- `SKILL.md` keeps the core workflow and tells the producer when to use bundled resources.
+- `references/` holds stable domain facts, schemas, policies, and detailed guidance that should be loaded only when needed.
+- `scripts/` holds fragile or repeated deterministic logic that is safer to reuse than regenerate.
+- `assets/` holds reusable text output templates and boilerplate that should be copied or adapted rather than treated as instructions. The current researcher response format does not generate binary media.
+
+This placement makes the candidate ready for skill-native progressive disclosure when it is adopted by an agent that can load or execute bundled resources on demand. Avoid duplicating the same material in `SKILL.md` and a bundled resource, and make every resource discoverable from `SKILL.md` with a short instruction explaining when to use it.
+
+The current alpha eval path still serializes all text candidate-skill files into the producer prompt so direct model clients and Flue sessions see the same deterministic context. Resource placement therefore improves candidate organization and portability today, but it does not yet reduce producer prompt size or execute candidate scripts. Script execution and lazy resource loading are separate future runtime capabilities.
+
+Changed JavaScript, TypeScript, shell, and Python files under `scripts/` receive a focused syntax check after the researcher patch is applied. `RESEARCH.md` records the validator and whether validation passed or failed. Validator executables are fixed by the harness, and candidate paths are passed as literal arguments without a shell. For another script type, or when a validator executable is unavailable, it records an explicit skipped result. These checks validate syntax, not full behavior; producer evals remain responsible for demonstrating that the candidate works.
+
 For Flue-backed runs, each phase executes from a small generated workspace containing only the files for that phase. These workspaces are written under `workspace/.phase-workspaces/` or the eval output directory's `.phase-workspaces/` folder and are also recorded in transcripts as `workspaceDir`. The judge workspace contains only `evals/rubric.md`, reference files, and producer output files; it does not mount the candidate skill or unrelated harness fixtures.
 
 The judge should not score skill instructions directly.

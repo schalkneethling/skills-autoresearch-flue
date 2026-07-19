@@ -9,7 +9,8 @@ import {
   formatResearchSummary,
   parseModelJudgeResponse,
   applySkillResearchPatch,
-  validateSkillResearchPatch
+  validateSkillResearchPatch,
+  validateChangedScripts
 } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, SkillResearcher } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
@@ -103,8 +104,9 @@ export class FlueSkillResearcher implements SkillResearcher {
     await mkdir(request.candidateSkillDir, { recursive: true });
     await removeGeneratedResearchFiles(request.candidateSkillDir);
     await applySkillResearchPatch(request.candidateSkillDir, patch);
+    const scriptValidations = await validateChangedScripts(request.candidateSkillDir, patch);
     await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
-    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch), {
+    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch, scriptValidations), {
       flag: "wx"
     });
     await writeTranscript(request.candidateSkillDir, ".autoresearch-flue-transcript.json", {
