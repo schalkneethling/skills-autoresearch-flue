@@ -534,6 +534,31 @@ test("validateChangedScripts records failed syntax checks without executing gene
   ]);
 });
 
+test("validateChangedScripts passes shell metacharacters as literal path arguments", async () => {
+  const root = await tempProject();
+  const scriptPath = "scripts/check; echo not-a-command.js";
+  await mkdir(join(root, "scripts"));
+  await writeFile(join(root, scriptPath), "const valid = true;\n");
+  const patch = parseSkillResearchPatch(
+    JSON.stringify({
+      summary: "Add a script whose path contains shell metacharacters.",
+      resource_decisions: [{ path: scriptPath, placement: "script", reason: "Exercise literal arguments." }],
+      changes: [{ path: scriptPath, contents: "const valid = true;\n" }]
+    })
+  );
+
+  const results = await validateChangedScripts(root, patch);
+
+  expect(results).toMatchObject([
+    {
+      path: scriptPath,
+      status: "passed",
+      validator: "node --check"
+    }
+  ]);
+  expect(JSON.stringify(results)).not.toContain(root);
+});
+
 test("AnthropicMessagesClient posts messages request and extracts text response", async () => {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const fetchStub: typeof fetch = async (url, init) => {

@@ -1,7 +1,6 @@
-import { execFile } from "node:child_process";
+import { execFile, type ExecFileException } from "node:child_process";
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
-import { promisify } from "node:util";
 import { ModelCallRole, ModelUsage } from "./cost.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
@@ -26,14 +25,14 @@ import {
   parseWithSchema
 } from "./schemas.js";
 
-const execFileAsync = promisify(execFile);
-
 export interface ScriptValidationResult {
   path: string;
   status: "passed" | "failed" | "skipped";
-  command?: string;
+  validator?: string;
   note: string;
 }
+
+type ScriptValidator = "javascript" | "typescript" | "shell" | "python";
 
 export interface ModelRequest {
   system: string;
@@ -552,8 +551,8 @@ export function formatResearchSummary(
     "",
     ...(scriptValidations.length > 0
       ? scriptValidations.map((result) => {
-          const command = result.command ? ` (\`${result.command}\`)` : "";
-          return `- \`${result.path}\` — ${result.status}${command}: ${result.note}`;
+          const validator = result.validator ? ` (\`${result.validator}\`)` : "";
+          return `- \`${result.path}\` — ${result.status}${validator}: ${result.note}`;
         })
       : ["No scripts were generated or changed in this iteration."])
   ].join("\n");
@@ -570,31 +569,16 @@ export async function validateChangedScripts(
         const path = resolveSkillPath(skillDir, change.path);
         const extension = extname(path).toLowerCase();
         if ([".js", ".mjs", ".cjs"].includes(extension)) {
-          return runScriptValidation(
-            change.path,
-            process.execPath,
-            ["--check", path],
-            `${process.execPath} --check ${change.path}`
-          );
+          return runScriptValidation(change.path, path, "javascript", "node --check");
         }
         if ([".ts", ".mts", ".cts"].includes(extension)) {
-          return runScriptValidation(
-            change.path,
-            process.execPath,
-            ["--experimental-strip-types", "--check", path],
-            `${process.execPath} --experimental-strip-types --check ${change.path}`
-          );
+          return runScriptValidation(change.path, path, "typescript", "node --experimental-strip-types --check");
         }
         if ([".sh", ".bash"].includes(extension)) {
-          return runScriptValidation(change.path, "/bin/bash", ["-n", path], `/bin/bash -n ${change.path}`);
+          return runScriptValidation(change.path, path, "shell", "/bin/bash -n");
         }
         if (extension === ".py") {
-          return runScriptValidation(
-            change.path,
-            "python3",
-            ["-c", "import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text())", path],
-            `python3 -c <ast.parse> ${change.path}`
-          );
+          return runScriptValidation(change.path, path, "python", "python3 ast.parse");
         }
         return Promise.resolve({
           path: change.path,
@@ -607,28 +591,65 @@ export async function validateChangedScripts(
 
 async function runScriptValidation(
   path: string,
-  executable: string,
-  args: string[],
-  command: string
+  absolutePath: string,
+  validator: ScriptValidator,
+  validatorLabel: string
 ): Promise<ScriptValidationResult> {
-  try {
-    await execFileAsync(executable, args, { timeout: 10_000, maxBuffer: 1_000_000 });
-    return { path, status: "passed", command, note: "Focused syntax validation passed." };
-  } catch (error) {
-    const candidate = error as NodeJS.ErrnoException & { stderr?: string };
-    if (candidate.code === "ENOENT") {
-      return { path, status: "skipped", command, note: `Validator executable was unavailable: ${executable}.` };
-    }
-    const stderr = candidate.stderr?.trim();
+  const result = await executeScriptValidator(validator, absolutePath);
+  if (!result.error) {
+    return { path, status: "passed", validator: validatorLabel, note: "Focused syntax validation passed." };
+  }
+  if (result.error.code === "ENOENT") {
     return {
       path,
-      status: "failed",
-      command,
-      note: stderr
-        ? `Focused syntax validation failed: ${stderr}`
-        : `Focused syntax validation failed: ${candidate.message}`
+      status: "skipped",
+      validator: validatorLabel,
+      note: `Validator executable was unavailable for ${validatorLabel}.`
     };
   }
+  const stderr = result.stderr.trim();
+  return {
+    path,
+    status: "failed",
+    validator: validatorLabel,
+    note: stderr
+      ? `Focused syntax validation failed: ${stderr}`
+      : `Focused syntax validation failed: ${result.error.message}`
+  };
+}
+
+interface ValidatorExecutionResult {
+  error: ExecFileException | null;
+  stderr: string;
+}
+
+function executeScriptValidator(validator: ScriptValidator, absolutePath: string): Promise<ValidatorExecutionResult> {
+  return new Promise((resolveExecution) => {
+    const options = { timeout: 10_000, maxBuffer: 1_000_000, shell: false, encoding: "utf8" } as const;
+    const complete = (error: ExecFileException | null, _stdout: string, stderr: string) => {
+      resolveExecution({ error, stderr });
+    };
+
+    switch (validator) {
+      case "javascript":
+        execFile("node", ["--check", absolutePath], options, complete);
+        break;
+      case "typescript":
+        execFile("node", ["--experimental-strip-types", "--check", absolutePath], options, complete);
+        break;
+      case "shell":
+        execFile("/bin/bash", ["-n", absolutePath], options, complete);
+        break;
+      case "python":
+        execFile(
+          "python3",
+          ["-c", "import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text())", absolutePath],
+          options,
+          complete
+        );
+        break;
+    }
+  });
 }
 
 async function persistTranscript(path: string, request: ModelRequest, response: string): Promise<void> {
