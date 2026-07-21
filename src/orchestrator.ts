@@ -19,6 +19,7 @@ import { EvalScore } from "./schemas.js";
 
 export type RunEvent =
   | { type: "project-loaded"; root: string }
+  | { type: "cleanup-completed"; removed: string[] }
   | { type: "cost-preview"; summary: ModelRunCostSummary }
   | { type: "baseline-imported"; scores: number; missing: string[] }
   | { type: "baseline-started"; evals: number; countsTowardIterations: false }
@@ -105,6 +106,7 @@ export interface OrchestrateOptions {
   runResearch?: boolean;
   forceResearch?: boolean;
   resume?: boolean;
+  withCleanup?: boolean;
   seedSkillDir?: string;
   guidanceSkillDir?: string;
   budgetUsd?: number;
@@ -113,6 +115,9 @@ export interface OrchestrateOptions {
 }
 
 export async function orchestrateBaseline(options: OrchestrateOptions): Promise<OrchestratorResult> {
+  if (options.resume && options.withCleanup) {
+    throw new Error("Use either resume or withCleanup, not both.");
+  }
   const events: RunEvent[] = [];
   const emit = createEventSink(events, options.onEvent);
   const project = await loadProject(options.projectRoot);
@@ -127,6 +132,10 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
     options.budgetUsd ?? project.config.budget_usd
   );
   emit({ type: "cost-preview", summary: costTracker.summary() });
+
+  if (options.withCleanup) {
+    emit({ type: "cleanup-completed", removed: await cleanupGeneratedResearchArtifacts(project.root) });
+  }
 
   const expectedEvalIds = project.evals.evals.map((evalCase) => evalCase.id);
   const baselineScores = options.withBaseline
@@ -183,6 +192,22 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
     iterations: research.iterations,
     bestIteration: research.bestIteration
   });
+}
+
+const GENERATED_RESEARCH_ARTIFACTS = ["iterations", "resume-backups", "guidance-ledger.json"] as const;
+
+async function cleanupGeneratedResearchArtifacts(projectRoot: string): Promise<string[]> {
+  const removed: string[] = [];
+  for (const artifact of GENERATED_RESEARCH_ARTIFACTS) {
+    const relativePath = `workspace/${artifact}`;
+    try {
+      await rm(join(projectRoot, "workspace", artifact), { recursive: true, force: true });
+    } catch (error) {
+      throw new Error(`Failed to clean generated research artifact ${relativePath}.`, { cause: error });
+    }
+    removed.push(relativePath);
+  }
+  return removed;
 }
 
 async function importRequiredBaseline(

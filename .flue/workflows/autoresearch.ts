@@ -10,6 +10,7 @@ interface AutoresearchPayload {
   runResearch?: boolean;
   forceResearch?: boolean;
   resume?: boolean;
+  withCleanup?: boolean;
   seedSkillDir?: string;
   guidanceSkillDir?: string;
   budgetUsd?: number;
@@ -33,6 +34,7 @@ export async function run({ init, payload, env }: FlueContext<AutoresearchPayloa
     runResearch: payload.runResearch,
     forceResearch: payload.forceResearch,
     resume: payload.resume,
+    withCleanup: payload.withCleanup,
     seedSkillDir: payload.seedSkillDir,
     guidanceSkillDir: payload.guidanceSkillDir,
     budgetUsd: payload.budgetUsd

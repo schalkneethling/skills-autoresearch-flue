@@ -12,6 +12,7 @@ interface CliOptions {
   runResearch: boolean;
   forceResearch: boolean;
   resume: boolean;
+  withCleanup: boolean;
   seedSkillDir?: string;
   scoreDir?: string;
   modelClient?: "anthropic";
@@ -29,6 +30,7 @@ function usage(): string {
     "  --research            Run research iterations after baseline.",
     "  --force-research      Run research even when the baseline already reaches target_score.",
     "  --resume              Continue from validated baseline and iteration artifacts.",
+    "  --with-cleanup        Remove generated research artifacts before starting a fresh run.",
     "  --seed-skill <dir>    Seed skill directory for research iterations.",
     "  --score-dir <dir>     Directory of file-backed EvalScore JSON files.",
     "  --model-client <name> Use a model client. Supported: anthropic.",
@@ -47,6 +49,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       research: { type: "boolean" },
       "force-research": { type: "boolean" },
       resume: { type: "boolean" },
+      "with-cleanup": { type: "boolean" },
       "seed-skill": { type: "string" },
       "score-dir": { type: "string" },
       "model-client": { type: "string" },
@@ -69,6 +72,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
     runResearch: parsed.values.research ?? false,
     forceResearch: parsed.values["force-research"] ?? false,
     resume: parsed.values.resume ?? false,
+    withCleanup: parsed.values["with-cleanup"] ?? false,
     seedSkillDir: parsed.values["seed-skill"],
     scoreDir: parsed.values["score-dir"],
     modelClient: parseModelClient(parsed.values["model-client"]),
@@ -78,6 +82,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
 
   if (options.scoreDir && options.modelClient) {
     throw new Error("Use either --score-dir or --model-client, not both.");
+  }
+  if (options.resume && options.withCleanup) {
+    throw new Error("Use either --resume or --with-cleanup, not both.");
   }
   if (!options.resume && !options.withBaseline && !options.scoreDir && !options.modelClient) {
     throw new Error("Generating a baseline requires --score-dir or --model-client anthropic.");
@@ -123,6 +130,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     runResearch: cli.runResearch,
     forceResearch: cli.forceResearch,
     resume: cli.resume,
+    withCleanup: cli.withCleanup,
     seedSkillDir: cli.seedSkillDir,
     budgetUsd: cli.budgetUsd,
     modelBacked: Boolean(modelClient),
@@ -175,6 +183,8 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
   switch (event.type) {
     case "project-loaded":
       return { level: "debug", message: `Loaded project: ${event.root}` };
+    case "cleanup-completed":
+      return { level: "log", message: `Prepared clean research workspace: ${event.removed.join(", ")}` };
     case "cost-preview":
       return {
         level: event.summary.planned.totalCalls > 20 ? "warn" : "log",

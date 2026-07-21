@@ -354,15 +354,17 @@ The run writes `workspace/cost-summary.json`. Planned and actual call counts bot
 
 Cost preview and budget support are documented and implemented in part, but [issue #19](https://github.com/schalkneethling/skills-autoresearch-flue/issues/19) remains open. The issue should be reconciled with current behavior: call-count preview exists, while Flue token usage and reliable dollar enforcement remain incomplete.
 
-## Step 7: rerunning is deliberately awkward today
+## Step 7: rerunning from a clean slate
 
-Iteration files are written conservatively to preserve evidence. Running the same research fixture again can collide with existing artifacts. The current workaround is to remove generated iterations before starting over:
+Iteration files are written conservatively to preserve evidence. To explicitly start over, add `"withCleanup":true` to the Flue payload. Cleanup removes generated iterations, resume backups, and the guidance ledger while preserving the baseline and project inputs.
 
 ```bash
-rm -rf fixtures/projects/release-notes-alpha/workspace/iterations
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"fixtures/projects/release-notes-alpha","withBaseline":true,"runResearch":true,"withCleanup":true,"seedSkillDir":"fixtures/projects/release-notes-alpha/seed-skill","sessionId":"alpha-research-clean"}'
 ```
 
-That is risky tutorial ergonomics and easy to forget. A supported cleanup flag is tracked in [issue #10](https://github.com/schalkneethling/skills-autoresearch-flue/issues/10).
+Cleanup is all-or-nothing from the run's perspective: if any generated artifact cannot be removed, the run stops with the artifact path in the error instead of continuing into a partially stale workspace. It cannot be combined with resume.
+
+Adding this one option also exposed a broader maintenance problem: run options, artifact paths, provider-independent persistence steps, and command examples are repeated across the CLI, Flue workflow, orchestrator, adapters, and documentation. That makes each small feature a coordinated multi-file change with real drift risk. [Issue #96](https://github.com/schalkneethling/skills-autoresearch-flue/issues/96) scopes a compatibility-preserving consolidation around shared run contracts and a canonical generated-artifact lifecycle rather than attempting a repository-wide rewrite.
 
 More importantly, if a provider or network failure happens halfway through an expensive run, the harness cannot yet resume at the missing phase. Phase-aware recovery is the project's only current `p0` feature issue: [issue #55](https://github.com/schalkneethling/skills-autoresearch-flue/issues/55).
 

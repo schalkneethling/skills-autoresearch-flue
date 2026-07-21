@@ -59,10 +59,10 @@ Compare:
 
 ## Cleanup
 
-Generated iteration artifacts are written with exclusive file creation. Remove generated iterations before rerunning the same project from scratch:
+Generated iteration artifacts are written with exclusive file creation. Use cleanup mode to rerun the same project from a clean research slate:
 
 ```bash
-rm -rf path/to/my-autoresearch-project/workspace/iterations
+pnpm exec skills-autoresearch --project path/to/my-autoresearch-project --with-baseline --with-cleanup --research --score-dir path/to/scores
 ```
 
-Only commit generated iterations when the fixture or documentation intentionally needs a recorded run.
+Cleanup preserves the baseline and removes generated iterations, resume backups, and the guidance ledger. Only commit generated iterations when the fixture or documentation intentionally needs a recorded run.
