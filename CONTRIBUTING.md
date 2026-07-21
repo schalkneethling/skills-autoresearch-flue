@@ -220,13 +220,13 @@ Run these before pushing.
 
 The harness writes many files under `workspace/`.
 
-For repeatable fixture runs, clean generated iterations before committing:
+For repeatable fixture runs, start the run with cleanup enabled:
 
 ```bash
-rm -rf fixtures/projects/release-notes-alpha/workspace/iterations
+pnpm exec skills-autoresearch --project fixtures/projects/release-notes-alpha --with-baseline --research --with-cleanup --score-dir path/to/scores
 ```
 
-Score files and summaries use exclusive writes in several paths, so rerunning against an existing iteration directory can fail intentionally instead of silently overwriting evidence.
+`--with-cleanup` removes generated iterations, resume backups, and the guidance ledger before the run while preserving the baseline and project inputs. Score files and summaries otherwise keep their conservative exclusive-write behavior.
 
 ## Contribution Guidelines
 

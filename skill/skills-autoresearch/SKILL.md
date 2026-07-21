@@ -379,10 +379,10 @@ Check that:
 
 ## Reruns
 
-Iteration artifacts are created with exclusive writes. To rerun from scratch, remove generated iterations in the autoresearch project:
+Iteration artifacts are created with exclusive writes. To rerun from a clean research slate, use `--with-cleanup` with the standalone CLI or `"withCleanup":true` in the Flue payload.
 
 ```bash
-rm -rf path/to/project-root/workspace/iterations
+pnpm exec skills-autoresearch --project path/to/project-root --with-baseline --research --with-cleanup --score-dir path/to/scores
 ```
 
-Do not remove baseline artifacts unless the user is intentionally replacing the baseline.
+Cleanup removes generated iterations, resume backups, and the guidance ledger. It preserves baseline artifacts and cannot be combined with resume.

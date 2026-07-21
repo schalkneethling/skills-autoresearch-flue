@@ -406,6 +406,7 @@ The payload fields are:
 - `forceResearch`: optional override for research runs. When omitted or `false`, `runResearch:true` stops before the researcher if the baseline aggregate score already meets `target_score`.
 - `resume`: optional recovery mode. When `true`, the harness validates and reuses completed baseline scores, candidate research, producer output, and iteration scores before running only the missing phases.
 - `sessionId`: run/session name passed in the payload and used when writing harness artifacts.
+- `withCleanup`: remove generated research state before a fresh run. This cannot be combined with `resume`.
 
 This should return events ending with `research-loop-ready`.
 
@@ -501,12 +502,14 @@ Resume assumes that `config.json`, eval cases, input, reference material, models
 
 The cost summary and actual call counts written by a resumed invocation describe that invocation, while the call preview remains the configured maximum. Consult earlier transcripts and provider records for costs from previous failed attempts.
 
-To intentionally rerun research from an imported baseline, remove generated iterations and any prior resume backups:
+To intentionally rerun research from an imported baseline, pass `"withCleanup":true`:
 
 ```bash
-rm -rf path/to/my-autoresearch-project/workspace/iterations path/to/my-autoresearch-project/workspace/resume-backups
+varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"withCleanup":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research-clean"}'
 ```
 
-If the harness generated the baseline too, also remove `workspace/baseline` before a fresh run. Do not remove an imported baseline unless you intend to regenerate or replace it.
+Cleanup removes `workspace/iterations`, `workspace/resume-backups`, and `workspace/guidance-ledger.json` as a true clean slate for research. It deliberately preserves `workspace/baseline`, configuration, evals, inputs, references, and skills. The conservative exclusive-create behavior remains the default when `withCleanup` is omitted. Do not combine cleanup with resume: cleanup discards the artifacts that resume needs.
+
+The standalone CLI uses the equivalent `--with-cleanup` flag. If the harness generated the baseline and you also intend to replace it, remove `workspace/baseline` separately before the run.
 
 Keep committed fixtures baseline-only unless you intentionally want to preserve a specific alpha run artifact.
