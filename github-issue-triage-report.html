@@ -186,7 +186,7 @@
   <body>
     <main>
       <h1>GitHub Issue Triage Report</h1>
-      <p class="meta">Generated: 2026-06-14T21:27:47Z</p>
+      <p class="meta">Generated: 2026-07-21T09:44:36+02:00</p>
       <p>
         Input repositories:
         <a href="https://github.com/schalkneethling/skills-autoresearch-flue"
@@ -197,44 +197,46 @@
       <h2>Summary</h2>
       <div class="summary-grid" aria-label="Repository triage summary">
         <div class="metric"><strong>1</strong>Repository triaged</div>
-        <div class="metric"><strong>18</strong>Open issues</div>
-        <div class="metric"><strong>1</strong>p0</div>
-        <div class="metric"><strong>5</strong>p1</div>
+        <div class="metric"><strong>17</strong>Open issues</div>
+        <div class="metric"><strong>0</strong>p0</div>
+        <div class="metric"><strong>4</strong>p1</div>
         <div class="metric"><strong>9</strong>p2</div>
-        <div class="metric"><strong>3</strong>p3</div>
+        <div class="metric"><strong>4</strong>p3</div>
       </div>
 
       <details open>
         <summary>
-          schalkneethling/skills-autoresearch-flue - 18 open issues - p0: 1, p1: 5, p2: 9, p3: 3 - next: #55 Resume
-          failed runs from latest completed phase
+          schalkneethling/skills-autoresearch-flue - 17 open issues - p0: 0, p1: 4, p2: 9, p3: 4 - next: #87 Add full
+          clean-install verification workflow to CI
         </summary>
         <div class="details-body">
           <h2>Project Goal Summary</h2>
           <p>
             The project aims to build a small, auditable Flue-based autoresearch harness for deciding when skill context
             is useful, comparing no-skill and skill-guided performance, improving the smallest useful skill, and
-            preserving enough artifacts to reconstruct each run. Near-term work should tighten reliability,
-            auditability, cost visibility, documentation, schema-validated outputs, and recovery around the single-skill
-            release-notes alpha loop before broadening the surface area.
+            preserving enough artifacts to reconstruct each run. The current roadmap is a dependable single-skill loop:
+            users can install the harness, run or import a baseline, complete or resume an iteration, understand the
+            evidence, and rerun safely without hand-editing Flue payloads or deleting artifacts manually. Reliability,
+            auditability, documentation, and operator usability therefore outrank broader post-alpha capabilities.
           </p>
 
           <h3>Label Update Status</h3>
           <p class="status-ok">Applied on GitHub.</p>
           <p>
-            Created missing canonical labels <code>p0</code>, <code>p1</code>, <code>p2</code>, and <code>p3</code>.
-            Each open issue now has exactly one canonical priority label. Existing non-priority labels, such as
-            <code>enhancement</code>, were preserved.
+            All canonical labels already existed. Each open issue has exactly one of <code>p0</code>, <code>p1</code>,
+            <code>p2</code>, or <code>p3</code>. Issue #64 changed from <code>p1</code> to <code>p3</code> because PR
+            #88 already implemented it; its <code>enhancement</code> label was preserved. The remaining 16 issue
+            priorities were confirmed unchanged.
           </p>
 
           <h3>Next Issue Nomination</h3>
           <p>
-            <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/55"
-              >#55 Resume failed runs from latest completed phase</a
+            <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/87"
+              >#87 Add full clean-install verification workflow to CI</a
             >
-            should be worked on next. It directly addresses the project goal of recoverable, auditable model-backed runs
-            and prevents expensive completed work from being lost after quota, provider, network, or interruption
-            failures.
+            should be worked on next. It is a clear, bounded reliability improvement that verifies the pinned install,
+            complete quality gate, packaged Flue build, and model-free alpha smoke path before changes merge. It
+            protects every later roadmap item and closes the current gap where CI runs only Knip.
           </p>
 
           <table>
@@ -250,51 +252,30 @@
             </thead>
             <tbody>
               <tr>
-                <td><span class="badge p0">p0</span></td>
-                <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/55"
-                    >#55 Resume failed runs from latest completed phase</a
-                  >
-                </td>
-                <td>
-                  Recovery from interrupted or failed runs is a core goal and success criterion. This issue covers
-                  baseline reuse, research reuse, producer-output reuse, missing judge scoring, and summary rebuilds.
-                </td>
-                <td>Critical reliability and cost protection for real model-backed alpha runs.</td>
-                <td><span class="label">p0</span></td>
-                <td>Best next issue because it is goal-critical and has concrete acceptance criteria.</td>
-              </tr>
-              <tr>
                 <td><span class="badge p1">p1</span></td>
                 <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/19"
-                    >#19 Add cost preview and budget guardrails for autoresearch runs</a
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/87"
+                    >#87 Add full clean-install verification workflow to CI</a
                   >
                 </td>
+                <td>The roadmap prioritizes a dependable install and end-to-end single-skill loop before expansion.</td>
+                <td>High reliability and unblock value across all future work.</td>
+                <td><span class="label">enhancement</span><span class="label">p1</span></td>
                 <td>
-                  The goal explicitly requires making costs and planned model calls visible before spending model-backed
-                  effort.
-                </td>
-                <td>High user trust and adoption impact; protects users from expensive runs.</td>
-                <td><span class="label">p1</span></td>
-                <td>
-                  Some follow-up issues split out deeper pricing details, but the base guardrail remains high priority.
+                  <strong>Next issue.</strong> Clear scope, low coordination risk, and protects every later change.
                 </td>
               </tr>
               <tr>
                 <td><span class="badge p1">p1</span></td>
                 <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/17"
-                    >#17 Make run logging quiet by default with verbose mode</a
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/10"
+                    >#10 Add rerun flag to clean or overwrite generated iterations</a
                   >
                 </td>
-                <td>
-                  Auditability is central, but normal terminal output must remain readable enough to understand progress
-                  and stop reasons.
-                </td>
-                <td>High usability and debugging impact for repeated alpha runs.</td>
+                <td>Directly satisfies the roadmap requirement to rerun safely without deleting evidence manually.</td>
+                <td>High alpha workflow and data-safety impact.</td>
                 <td><span class="label">p1</span></td>
-                <td>Pairs naturally with richer reporting, but can land independently.</td>
+                <td>Keep cleanup opt-in and limited to generated iteration artifacts.</td>
               </tr>
               <tr>
                 <td><span class="badge p1">p1</span></td>
@@ -307,75 +288,35 @@
                   The harness is for maintainers running their own eval projects; current long payload commands add
                   avoidable onboarding friction.
                 </td>
-                <td>High adoption impact and reduces operator error.</td>
+                <td>High adoption impact and lower operator-error risk.</td>
                 <td><span class="label">p1</span></td>
-                <td>Good candidate after the recovery and logging fundamentals stabilize.</td>
+                <td>Strong follow-on after CI proves the current command path.</td>
               </tr>
               <tr>
                 <td><span class="badge p1">p1</span></td>
                 <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/10"
-                    >#10 Add rerun flag to clean or overwrite generated iterations</a
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/17"
+                    >#17 Make run logging quiet by default with verbose mode</a
                   >
                 </td>
                 <td>
-                  Exclusive artifact writes preserve auditability, but supported cleanup is needed for practical fixture
-                  iteration.
+                  Supports the roadmap requirement that users understand run progress, evidence, and stop reasons.
                 </td>
-                <td>High alpha workflow impact; removes manual risky cleanup steps.</td>
+                <td>High usability and auditability impact for model-backed runs.</td>
                 <td><span class="label">p1</span></td>
-                <td>Scope should remain limited to generated iteration artifacts.</td>
-              </tr>
-              <tr>
-                <td><span class="badge p1">p1</span></td>
-                <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/64"
-                    >#64 Teach researcher to recommend skill resources and validate generated scripts</a
-                  >
-                </td>
-                <td>
-                  The north star is the smallest useful skill. Resource placement supports concise skills and
-                  progressive disclosure rather than dumping everything into SKILL.md.
-                </td>
-                <td>High quality impact for candidate skill usefulness and portability.</td>
-                <td><span class="label">enhancement</span><span class="label">p1</span></td>
-                <td>Important once the end-to-end loop is reliable enough to evaluate richer candidate artifacts.</td>
+                <td>Broad acceptance criteria; can follow the more bounded CI and rerun work.</td>
               </tr>
               <tr>
                 <td><span class="badge p2">p2</span></td>
                 <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/76"
-                    >#76 Add soft warning threshold before hard model budget stop</a
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/18"
+                    >#18 Build a richer feedback UI for autoresearch runs</a
                   >
                 </td>
-                <td>Extends cost visibility after the hard budget cap exists.</td>
-                <td>Medium impact refinement to cost guardrails.</td>
-                <td><span class="label">enhancement</span><span class="label">p2</span></td>
-                <td>Depends conceptually on the base budget guardrail work.</td>
-              </tr>
-              <tr>
-                <td><span class="badge p2">p2</span></td>
-                <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/75"
-                    >#75 Support configurable cost currency and model pricing</a
-                  >
-                </td>
-                <td>Improves auditability of cost summaries and prepares for non-default provider pricing.</td>
-                <td>Medium impact; useful after basic budget tracking is in place.</td>
-                <td><span class="label">enhancement</span><span class="label">p2</span></td>
-                <td>Cross-provider work is planned but not yet the active focus.</td>
-              </tr>
-              <tr>
-                <td><span class="badge p2">p2</span></td>
-                <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/65"
-                    >#65 Document skill-creator inspiration and attribution</a
-                  >
-                </td>
-                <td>Keeps docs and provenance clear as skill-creation ideas influence the harness.</td>
-                <td>Medium documentation and trust impact.</td>
-                <td><span class="label">enhancement</span><span class="label">p2</span></td>
-                <td>Important, but not blocking core harness behavior.</td>
+                <td>Strongly supports understandable evidence, but is broader than the immediate reliability gates.</td>
+                <td>Medium-to-high UX and auditability impact.</td>
+                <td><span class="label">p2</span></td>
+                <td>A static report slice may be a useful first increment.</td>
               </tr>
               <tr>
                 <td><span class="badge p2">p2</span></td>
@@ -384,13 +325,36 @@
                     >#63 Add candidate skill quality review pass</a
                   >
                 </td>
-                <td>
-                  Complements producer-output judging by assessing whether candidate skill guidance is concise,
-                  portable, and not overfit.
-                </td>
-                <td>Medium-to-high quality impact, but optional relative to the core producer/judge loop.</td>
+                <td>Improves confidence that candidate skills remain concise, portable, and not overfit.</td>
+                <td>Medium-to-high quality impact beyond producer-output scoring.</td>
                 <td><span class="label">enhancement</span><span class="label">p2</span></td>
-                <td>Could rise after resource-placement support lands.</td>
+                <td>Useful after the basic single-skill run loop is dependable.</td>
+              </tr>
+              <tr>
+                <td><span class="badge p2">p2</span></td>
+                <td>
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/9"
+                    >#9 Support human-friendly eval authoring</a
+                  >
+                </td>
+                <td>
+                  Supports small, inspectable fixtures and easier review, but is a post-alpha usability improvement.
+                </td>
+                <td>Medium authoring and contributor impact.</td>
+                <td><span class="label">p2</span></td>
+                <td>Existing JSON projects must remain compatible.</td>
+              </tr>
+              <tr>
+                <td><span class="badge p2">p2</span></td>
+                <td>
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/60"
+                    >#60 Evaluate skill trigger metadata and frontmatter compatibility</a
+                  >
+                </td>
+                <td>Supports portable, evidence-based skill metadata without assuming cross-agent compatibility.</td>
+                <td>Medium research and documentation impact.</td>
+                <td><span class="label">enhancement</span><span class="label">p2</span></td>
+                <td>Useful compatibility spike; #61 should follow its findings.</td>
               </tr>
               <tr>
                 <td><span class="badge p2">p2</span></td>
@@ -402,21 +366,33 @@
                 <td>Helps determine whether generated skills are discoverable for the right user requests.</td>
                 <td>Medium quality and portability impact.</td>
                 <td><span class="label">enhancement</span><span class="label">p2</span></td>
-                <td>Likely follows the compatibility spike in #60.</td>
+                <td>Depends conceptually on the compatibility evidence from #60.</td>
               </tr>
               <tr>
                 <td><span class="badge p2">p2</span></td>
                 <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/60"
-                    >#60 Evaluate skill trigger metadata and frontmatter compatibility</a
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/75"
+                    >#75 Support configurable cost currency and model pricing</a
                   >
                 </td>
                 <td>
-                  Supports portable skill metadata decisions across agent surfaces without relying on assumptions.
+                  Improves cost-summary auditability and prepares for account-specific or future provider pricing.
                 </td>
-                <td>Medium research and docs impact.</td>
+                <td>Medium cost-control and portability impact.</td>
                 <td><span class="label">enhancement</span><span class="label">p2</span></td>
-                <td>Mostly a spike; evidence gathered here can guide later implementation.</td>
+                <td>Basic budget controls already exist; cross-provider work is not yet active focus.</td>
+              </tr>
+              <tr>
+                <td><span class="badge p2">p2</span></td>
+                <td>
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/76"
+                    >#76 Add soft warning threshold before hard model budget stop</a
+                  >
+                </td>
+                <td>Refines existing cost visibility with an early warning before the hard stop.</td>
+                <td>Medium operator-awareness impact.</td>
+                <td><span class="label">enhancement</span><span class="label">p2</span></td>
+                <td>Useful refinement, not a prerequisite for the current milestone.</td>
               </tr>
               <tr>
                 <td><span class="badge p2">p2</span></td>
@@ -425,39 +401,36 @@
                     >#23 Explore programmatic Flue compaction at phase boundaries</a
                   >
                 </td>
-                <td>
-                  Addresses long-run context growth, which can break model-backed runs and threaten audit continuity.
-                </td>
-                <td>Medium reliability impact; not the whole context-control solution.</td>
+                <td>Could reduce long-run context pressure while preserving the phase model.</td>
+                <td>Medium reliability research impact.</td>
                 <td><span class="label">p2</span></td>
-                <td>Lower than resume because it depends on Flue API reality and scoped-session decisions.</td>
+                <td>A spike whose value depends on current Flue APIs; context isolation remains primary.</td>
               </tr>
               <tr>
                 <td><span class="badge p2">p2</span></td>
                 <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/18"
-                    >#18 Build a richer feedback UI for autoresearch runs</a
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/89"
+                    >#89 Add an opt-in exe.dev sandbox backend for Flue runs</a
                   >
                 </td>
-                <td>Strongly supports artifact inspection and understandable run outcomes.</td>
-                <td>Medium user experience and auditability impact, but broad.</td>
-                <td><span class="label">p2</span></td>
-                <td>A static report slice may be a useful first step before a live UI.</td>
+                <td>
+                  Aligns with Flue-first isolation and safer execution, but is not needed for the current local alpha.
+                </td>
+                <td>Medium future reliability and execution impact.</td>
+                <td><span class="label">enhancement</span><span class="label">p2</span></td>
+                <td>Large optional integration; keep local sandboxing as the default.</td>
               </tr>
               <tr>
-                <td><span class="badge p2">p2</span></td>
+                <td><span class="badge p3">p3</span></td>
                 <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/9"
-                    >#9 Support human-friendly eval authoring</a
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/64"
+                    >#64 Teach researcher to recommend skill resources and validate generated scripts</a
                   >
                 </td>
-                <td>
-                  Small, inspectable fixtures are a project constraint; Markdown authoring would make eval review
-                  easier.
-                </td>
-                <td>Medium usability and contribution impact.</td>
-                <td><span class="label">p2</span></td>
-                <td>Useful after the alpha fixture flow is stable.</td>
+                <td>The goal alignment was strong, but merged PR #88 already satisfies the acceptance criteria.</td>
+                <td>No remaining implementation impact; tracker cleanup only.</td>
+                <td><span class="label">enhancement</span><span class="label">p3</span></td>
+                <td>Priority changed from p1. Close as completed when issue-state cleanup is authorized.</td>
               </tr>
               <tr>
                 <td><span class="badge p3">p3</span></td>
@@ -466,28 +439,10 @@
                     >#62 Add optional masked comparison for subjective evals</a
                   >
                 </td>
-                <td>
-                  Could improve subjective review quality, but it is optional and not required for the current
-                  single-provider alpha loop.
-                </td>
-                <td>Lower immediate impact than core scoring, recovery, and logging work.</td>
+                <td>Optional subjective-review quality work outside the dependable-loop milestone.</td>
+                <td>Low immediate impact compared with core scoring and operation.</td>
                 <td><span class="label">enhancement</span><span class="label">p3</span></td>
                 <td>Revisit when subjective eval coverage grows.</td>
-              </tr>
-              <tr>
-                <td><span class="badge p3">p3</span></td>
-                <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/13"
-                    >#13 Use skills-autoresearch as the future global CLI name</a
-                  >
-                </td>
-                <td>
-                  Useful naming polish for a future public CLI, but less urgent than simplifying the actual run
-                  workflow.
-                </td>
-                <td>Low immediate alpha impact.</td>
-                <td><span class="label">p3</span></td>
-                <td>Can be folded into broader CLI work later.</td>
               </tr>
               <tr>
                 <td><span class="badge p3">p3</span></td>
@@ -500,6 +455,18 @@
                 <td>Low immediate impact for the active alpha focus.</td>
                 <td><span class="label">p3</span></td>
                 <td>Could rise after the single-skill run loop is stable.</td>
+              </tr>
+              <tr>
+                <td><span class="badge p3">p3</span></td>
+                <td>
+                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/13"
+                    >#13 Use skills-autoresearch as the future global CLI name</a
+                  >
+                </td>
+                <td>Future naming polish is weaker than simplifying the actual command path in #12.</td>
+                <td>Low immediate alpha impact.</td>
+                <td><span class="label">p3</span></td>
+                <td>Can be folded into broader CLI packaging later.</td>
               </tr>
             </tbody>
           </table>

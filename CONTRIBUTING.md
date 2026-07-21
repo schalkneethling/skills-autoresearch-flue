@@ -159,23 +159,22 @@ Install dependencies:
 pnpm install
 ```
 
-Run the full local verification suite:
+CI installs from the committed lockfile and runs the complete model-free verification path. To reproduce that path from
+a clean checkout, install with:
 
 ```bash
-pnpm run lint
-pnpm run format:check
-pnpm run knip
-pnpm run typecheck
-pnpm test
-pnpm run build
-pnpm run flue:build
+pnpm install --frozen-lockfile
 ```
 
-Run the no-model Flue smoke test:
+Then run the same ordered verification command as CI:
 
 ```bash
-pnpm run alpha:smoke
+pnpm run check
 ```
+
+The `check` script is the single source of truth for the verification order. Its final `alpha:smoke` command imports the
+committed baseline without calling a model or requiring provider credentials, so the full path is safe to run in public
+CI.
 
 Run the model-backed alpha flow:
 
