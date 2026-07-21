@@ -14,6 +14,7 @@
     "format:check": "prettier --check .",
     "knip": "knip",
     "typecheck": "tsc --noEmit",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run knip && pnpm run typecheck && pnpm test && pnpm run build && pnpm run flue:build && pnpm run alpha:smoke",
     "build": "tsc -p tsconfig.json",
     "flue:run": "flue run autoresearch --target node --root .",
     "flue:build": "flue build --target node --root . --output .flue-dist",
