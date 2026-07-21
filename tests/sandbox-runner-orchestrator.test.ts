@@ -569,6 +569,20 @@ test("orchestrator cleanup removes generated research state and preserves the ba
   });
 });
 
+test("orchestrator cleanup reports no removals when generated research state is absent", async () => {
+  const root = await tempProject();
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  const agent: EvalAgent = {
+    async run(request) {
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.2);
+    }
+  };
+
+  const result = await orchestrateBaseline({ projectRoot: root, agent, withCleanup: true });
+
+  expect(result.events).toContainEqual({ type: "cleanup-completed", removed: [] });
+});
+
 test("orchestrator rejects cleanup with resume", async () => {
   await expect(orchestrateBaseline({ projectRoot: "/unused", resume: true, withCleanup: true })).rejects.toThrow(
     /either resume or withCleanup/
@@ -581,7 +595,7 @@ test("orchestrator stops with the artifact path when cleanup fails", async () =>
   await writeFile(join(root, "workspace"), "not a directory\n");
 
   await expect(orchestrateBaseline({ projectRoot: root, withCleanup: true })).rejects.toThrow(
-    /Failed to clean generated research artifact workspace\/iterations/
+    /Failed to inspect generated research artifact workspace\/iterations/
   );
 });
 

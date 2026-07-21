@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { aggregateScores, AggregateReport } from "./aggregate.js";
@@ -200,8 +200,17 @@ async function cleanupGeneratedResearchArtifacts(projectRoot: string): Promise<s
   const removed: string[] = [];
   for (const artifact of GENERATED_RESEARCH_ARTIFACTS) {
     const relativePath = `workspace/${artifact}`;
+    const artifactPath = join(projectRoot, "workspace", artifact);
     try {
-      await rm(join(projectRoot, "workspace", artifact), { recursive: true, force: true });
+      await lstat(artifactPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        continue;
+      }
+      throw new Error(`Failed to inspect generated research artifact ${relativePath}.`, { cause: error });
+    }
+    try {
+      await rm(artifactPath, { recursive: true, force: true });
     } catch (error) {
       throw new Error(`Failed to clean generated research artifact ${relativePath}.`, { cause: error });
     }
