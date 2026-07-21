@@ -186,7 +186,7 @@
   <body>
     <main>
       <h1>GitHub Issue Triage Report</h1>
-      <p class="meta">Generated: 2026-07-21T09:44:36+02:00</p>
+      <p class="meta">Generated: 2026-07-21T15:27:08+02:00</p>
       <p>
         Input repositories:
         <a href="https://github.com/schalkneethling/skills-autoresearch-flue"
@@ -197,17 +197,17 @@
       <h2>Summary</h2>
       <div class="summary-grid" aria-label="Repository triage summary">
         <div class="metric"><strong>1</strong>Repository triaged</div>
-        <div class="metric"><strong>17</strong>Open issues</div>
+        <div class="metric"><strong>16</strong>Open issues</div>
         <div class="metric"><strong>0</strong>p0</div>
         <div class="metric"><strong>4</strong>p1</div>
         <div class="metric"><strong>9</strong>p2</div>
-        <div class="metric"><strong>4</strong>p3</div>
+        <div class="metric"><strong>3</strong>p3</div>
       </div>
 
       <details open>
         <summary>
-          schalkneethling/skills-autoresearch-flue - 17 open issues - p0: 0, p1: 4, p2: 9, p3: 4 - next: #87 Add full
-          clean-install verification workflow to CI
+          schalkneethling/skills-autoresearch-flue - 16 open issues - p0: 0, p1: 4, p2: 9, p3: 3 - next: #10 Add rerun
+          flag to clean or overwrite generated iterations
         </summary>
         <div class="details-body">
           <h2>Project Goal Summary</h2>
@@ -221,22 +221,21 @@
           </p>
 
           <h3>Label Update Status</h3>
-          <p class="status-ok">Applied on GitHub.</p>
+          <p class="status-ok">Verified on GitHub.</p>
           <p>
-            All canonical labels already existed. Each open issue has exactly one of <code>p0</code>, <code>p1</code>,
-            <code>p2</code>, or <code>p3</code>. Issue #64 changed from <code>p1</code> to <code>p3</code> because PR
-            #88 already implemented it; its <code>enhancement</code> label was preserved. The remaining 16 issue
-            priorities were confirmed unchanged.
+            All canonical labels exist, and each of the 16 open issues has exactly one of <code>p0</code>,
+            <code>p1</code>, <code>p2</code>, or <code>p3</code>. Issue #64 is no longer included because it was closed
+            as completed after merged PR #88. No priority-label changes were needed for the remaining open issues.
           </p>
 
           <h3>Next Issue Nomination</h3>
           <p>
-            <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/87"
-              >#87 Add full clean-install verification workflow to CI</a
+            <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/10"
+              >#10 Add rerun flag to clean or overwrite generated iterations</a
             >
-            should be worked on next. It is a clear, bounded reliability improvement that verifies the pinned install,
-            complete quality gate, packaged Flue build, and model-free alpha smoke path before changes merge. It
-            protects every later roadmap item and closes the current gap where CI runs only Knip.
+            should be worked on next. It directly advances the roadmap requirement to rerun safely without deleting
+            evidence manually, has concrete acceptance criteria, and is the clearest remaining actionable P1 now that
+            the full CI verification path is implemented by PR #95.
           </p>
 
           <table>
@@ -262,7 +261,8 @@
                 <td>High reliability and unblock value across all future work.</td>
                 <td><span class="label">enhancement</span><span class="label">p1</span></td>
                 <td>
-                  <strong>Next issue.</strong> Clear scope, low coordination risk, and protects every later change.
+                  <strong>Implementation complete in PR #95.</strong> The issue remains open pending merge and closure,
+                  so it remains in live metrics but is excluded from the next-work nomination.
                 </td>
               </tr>
               <tr>
@@ -275,7 +275,7 @@
                 <td>Directly satisfies the roadmap requirement to rerun safely without deleting evidence manually.</td>
                 <td>High alpha workflow and data-safety impact.</td>
                 <td><span class="label">p1</span></td>
-                <td>Keep cleanup opt-in and limited to generated iteration artifacts.</td>
+                <td><strong>Next issue.</strong> Keep cleanup opt-in and limited to generated iteration artifacts.</td>
               </tr>
               <tr>
                 <td><span class="badge p1">p1</span></td>
@@ -419,18 +419,6 @@
                 <td>Medium future reliability and execution impact.</td>
                 <td><span class="label">enhancement</span><span class="label">p2</span></td>
                 <td>Large optional integration; keep local sandboxing as the default.</td>
-              </tr>
-              <tr>
-                <td><span class="badge p3">p3</span></td>
-                <td>
-                  <a href="https://github.com/schalkneethling/skills-autoresearch-flue/issues/64"
-                    >#64 Teach researcher to recommend skill resources and validate generated scripts</a
-                  >
-                </td>
-                <td>The goal alignment was strong, but merged PR #88 already satisfies the acceptance criteria.</td>
-                <td>No remaining implementation impact; tracker cleanup only.</td>
-                <td><span class="label">enhancement</span><span class="label">p3</span></td>
-                <td>Priority changed from p1. Close as completed when issue-state cleanup is authorized.</td>
               </tr>
               <tr>
                 <td><span class="badge p3">p3</span></td>
