@@ -3,6 +3,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { AggregateReport } from "./aggregate.js";
+import { JUDGE_TRANSCRIPTS, PRODUCER_TRANSCRIPTS, RESEARCH_TRANSCRIPTS } from "./project-layout.js";
 import {
   EvalCase,
   EvalScore,
@@ -47,14 +48,7 @@ export interface ResearchSnapshotFile {
   sha256: string;
 }
 
-const RESEARCH_MARKERS = [
-  ".autoresearch-flue-transcript.json",
-  ".autoresearch-transcript.json",
-  ".autoresearch-iteration.json"
-] as const;
-
-const PRODUCER_TRANSCRIPTS = ["producer-flue-transcript.json", "producer-transcript.json"] as const;
-const JUDGE_TRANSCRIPTS = ["judge-flue-transcript.json", "judge-transcript.json"] as const;
+const RESEARCH_MARKERS = RESEARCH_TRANSCRIPTS;
 
 export async function inspectScoreArtifact(options: ScoreArtifactOptions): Promise<ArtifactInspection<EvalScore>> {
   const path = join(options.directory, `scores-${options.index}.json`);

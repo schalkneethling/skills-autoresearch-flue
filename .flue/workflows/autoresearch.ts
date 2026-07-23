@@ -4,6 +4,7 @@ import { local } from "@flue/runtime/node";
 import { runFlueAutoresearch, type FlueWorkflowResult } from "../../src/flue-harness.js";
 import { formatEvent } from "../../src/cli.js";
 import { autoresearchProfiles } from "../profiles.js";
+import { normalizeRunOptions } from "../../src/run-options.js";
 
 interface AutoresearchPayload {
   projectRoot?: string;
@@ -31,9 +32,8 @@ export async function run({ init, payload, env, log }: FlueContext<AutoresearchP
   }));
   const harness = await init(autoresearch);
   const session = await harness.session(payload.sessionId ?? "autoresearch");
-  const result = await runFlueAutoresearch({
-    session,
-    projectRoot: payload.projectRoot ?? process.cwd(),
+  const runOptions = normalizeRunOptions({
+    projectRoot: payload.projectRoot,
     withBaseline: payload.withBaseline,
     runResearch: payload.runResearch,
     forceResearch: payload.forceResearch,
@@ -41,7 +41,11 @@ export async function run({ init, payload, env, log }: FlueContext<AutoresearchP
     withCleanup: payload.withCleanup,
     seedSkillDir: payload.seedSkillDir,
     guidanceSkillDir: payload.guidanceSkillDir,
-    budgetUsd: payload.budgetUsd,
+    budgetUsd: payload.budgetUsd
+  });
+  const result = await runFlueAutoresearch({
+    session,
+    ...runOptions,
     onEvent(event) {
       const formatted = formatEvent(event);
       if (formatted.level === "debug" && !payload.verbose) {

@@ -3,6 +3,8 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { ModelCallRole, ModelUsage } from "./cost.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
+import { persistResearchArtifact, persistTranscript, withArtifactStage } from "./artifact-lifecycle.js";
+import { projectLayout } from "./project-layout.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
 import { buildJudgePrompt } from "./prompts/judge-prompt.js";
 import { buildProducePrompt } from "./prompts/produce-prompt.js";
@@ -179,21 +181,14 @@ export class ModelSkillResearcher implements SkillResearcher {
     const modelRequest = await buildResearchModelRequest(request);
     const response = await completeTrackedModelRequest(this.#client, modelRequest, "researcher", request.costTracker);
     const patch = parseSkillResearchPatch(response);
-    validateSkillResearchPatch(request.candidateSkillDir, patch);
-    await cp(request.previousSkillDir, request.candidateSkillDir, {
-      recursive: true,
-      errorOnExist: true,
-      force: false
-    });
-    await mkdir(request.candidateSkillDir, { recursive: true });
-    await removeGeneratedResearchFiles(request.candidateSkillDir);
-    await applySkillResearchPatch(request.candidateSkillDir, patch);
-    const scriptValidations = await validateChangedScripts(request.candidateSkillDir, patch);
-    await appendGuidanceLedger(request.guidanceLedgerPath, request.iteration, patch);
-    await writeFile(join(request.candidateSkillDir, "RESEARCH.md"), formatResearchSummary(patch, scriptValidations), {
-      flag: "wx"
-    });
-    await persistTranscript(join(request.candidateSkillDir, ".autoresearch-transcript.json"), modelRequest, response);
+    await persistResearchArtifact(
+      request,
+      modelRequest,
+      patch,
+      response,
+      ".autoresearch-transcript.json",
+      researchArtifactOperations
+    );
   }
 }
 
@@ -269,34 +264,36 @@ async function createPhaseWorkspace(
   mountTargets: string[]
 ): Promise<string> {
   const workspaceDir = join(request.sandbox.outputDir, ".phase-workspaces", phase);
-  await rm(workspaceDir, { recursive: true, force: true });
-  await mkdir(workspaceDir, { recursive: true });
+  return withArtifactStage(`prepare ${phase} phase workspace ${workspaceDir}`, async () => {
+    await rm(workspaceDir, { recursive: true, force: true });
+    await mkdir(workspaceDir, { recursive: true });
 
-  for (const target of mountTargets) {
-    const mount = request.sandbox.mounts.find((candidate) => candidate.target === target);
-    if (!mount || !(await exists(mount.source))) {
-      continue;
-    }
-    await cp(mount.source, join(workspaceDir, target.slice(1)), {
-      recursive: true,
-      force: false,
-      errorOnExist: true
-    });
-  }
-
-  const evalsMount = request.sandbox.mounts.find((candidate) => candidate.target === "/evals");
-  if (phase === "judge" && evalsMount && (await exists(evalsMount.source))) {
-    await mkdir(join(workspaceDir, "evals"), { recursive: true });
-    const rubricPath = join(evalsMount.source, "rubric.md");
-    if (await exists(rubricPath)) {
-      await cp(rubricPath, join(workspaceDir, "evals", "rubric.md"), {
+    for (const target of mountTargets) {
+      const mount = request.sandbox.mounts.find((candidate) => candidate.target === target);
+      if (!mount || !(await exists(mount.source))) {
+        continue;
+      }
+      await cp(mount.source, join(workspaceDir, target.slice(1)), {
+        recursive: true,
         force: false,
         errorOnExist: true
       });
     }
-  }
 
-  return workspaceDir;
+    const evalsMount = request.sandbox.mounts.find((candidate) => candidate.target === "/evals");
+    if (phase === "judge" && evalsMount && (await exists(evalsMount.source))) {
+      await mkdir(join(workspaceDir, "evals"), { recursive: true });
+      const rubricPath = join(evalsMount.source, "rubric.md");
+      if (await exists(rubricPath)) {
+        await cp(rubricPath, join(workspaceDir, "evals", "rubric.md"), {
+          force: false,
+          errorOnExist: true
+        });
+      }
+    }
+
+    return workspaceDir;
+  });
 }
 
 export function parseModelProduceResponse(response: string): ModelProduceResponse {
@@ -351,50 +348,52 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
 }
 
 async function createResearchWorkspace(request: SkillResearchRequest): Promise<string> {
-  const workspaceDir = join(request.project.root, "workspace", ".phase-workspaces", `research-${request.iteration}`);
-  await rm(workspaceDir, { recursive: true, force: true });
-  await mkdir(join(workspaceDir, "scores"), { recursive: true });
-  await cp(join(request.project.root, "config.json"), join(workspaceDir, "config.json"), {
-    force: false,
-    errorOnExist: true
-  });
-  await cp(join(request.project.root, "evals"), join(workspaceDir, "evals"), {
-    recursive: true,
-    force: false,
-    errorOnExist: true
-  });
-  if (await exists(request.project.referenceDir)) {
-    await cp(request.project.referenceDir, join(workspaceDir, "reference"), {
+  const workspaceDir = projectLayout(request.project.root).researchWorkspaceDir(request.iteration);
+  return withArtifactStage(`prepare research workspace ${workspaceDir}`, async () => {
+    await rm(workspaceDir, { recursive: true, force: true });
+    await mkdir(join(workspaceDir, "scores"), { recursive: true });
+    await cp(join(request.project.root, "config.json"), join(workspaceDir, "config.json"), {
+      force: false,
+      errorOnExist: true
+    });
+    await cp(join(request.project.root, "evals"), join(workspaceDir, "evals"), {
       recursive: true,
       force: false,
       errorOnExist: true
     });
-  }
-  if (request.guidanceSkillDir) {
-    await cp(request.guidanceSkillDir, join(workspaceDir, "seed-reference"), {
+    if (await exists(request.project.referenceDir)) {
+      await cp(request.project.referenceDir, join(workspaceDir, "reference"), {
+        recursive: true,
+        force: false,
+        errorOnExist: true
+      });
+    }
+    if (request.guidanceSkillDir) {
+      await cp(request.guidanceSkillDir, join(workspaceDir, "seed-reference"), {
+        recursive: true,
+        force: false,
+        errorOnExist: true
+      });
+    }
+    await cp(request.previousSkillDir, join(workspaceDir, "skill"), {
       recursive: true,
       force: false,
       errorOnExist: true
     });
-  }
-  await cp(request.previousSkillDir, join(workspaceDir, "skill"), {
-    recursive: true,
-    force: false,
-    errorOnExist: true
+    await writeFile(
+      join(workspaceDir, "scores", "previous-aggregate.json"),
+      `${JSON.stringify(request.previousAggregate, null, 2)}\n`
+    );
+    await writeFile(
+      join(workspaceDir, "scores", "previous-scores.json"),
+      `${JSON.stringify(request.previousScores, null, 2)}\n`
+    );
+    await writeFile(
+      join(workspaceDir, "scores", "baseline-scores.json"),
+      `${JSON.stringify(request.baselineScores, null, 2)}\n`
+    );
+    return workspaceDir;
   });
-  await writeFile(
-    join(workspaceDir, "scores", "previous-aggregate.json"),
-    `${JSON.stringify(request.previousAggregate, null, 2)}\n`
-  );
-  await writeFile(
-    join(workspaceDir, "scores", "previous-scores.json"),
-    `${JSON.stringify(request.previousScores, null, 2)}\n`
-  );
-  await writeFile(
-    join(workspaceDir, "scores", "baseline-scores.json"),
-    `${JSON.stringify(request.baselineScores, null, 2)}\n`
-  );
-  return workspaceDir;
 }
 
 function roleModel(request: EvalAgentRequest, role: "producer" | "judge"): ModelConfig {
@@ -652,18 +651,13 @@ function executeScriptValidator(validator: ScriptValidator, absolutePath: string
   });
 }
 
-async function persistTranscript(path: string, request: ModelRequest, response: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify({ request, response }, null, 2)}\n`, { flag: "wx" });
-}
-
-async function removeGeneratedResearchFiles(skillDir: string): Promise<void> {
-  await Promise.all(
-    ["RESEARCH.md", ".autoresearch-transcript.json", ".autoresearch-flue-transcript.json"].map((fileName) =>
-      rm(join(skillDir, fileName), { force: true })
-    )
-  );
-}
+const researchArtifactOperations = {
+  validatePatch: validateSkillResearchPatch,
+  applyPatch: applySkillResearchPatch,
+  validateScripts: validateChangedScripts,
+  appendLedger: appendGuidanceLedger,
+  formatSummary: formatResearchSummary
+};
 
 async function readFilesFromMount(root: string | undefined): Promise<Array<{ path: string; contents: string }>> {
   if (!root || !(await exists(root))) {

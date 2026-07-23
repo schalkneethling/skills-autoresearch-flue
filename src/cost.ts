@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { pricingForModel } from "./pricing.js";
 import { ProjectInputs } from "./project.js";
+import { projectLayout } from "./project-layout.js";
 import { ModelConfig } from "./schemas.js";
 
 export type ModelCallRole =
@@ -187,9 +187,9 @@ export class ModelRunCostTracker {
 }
 
 export async function persistCostSummary(projectRoot: string, summary: ModelRunCostSummary): Promise<void> {
-  const workspaceDir = join(projectRoot, "workspace");
+  const { workspaceDir, costSummaryPath } = projectLayout(projectRoot);
   await mkdir(workspaceDir, { recursive: true });
-  await writeFile(join(workspaceDir, "cost-summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
+  await writeFile(costSummaryPath, `${JSON.stringify(summary, null, 2)}\n`);
 }
 
 export function formatCallCounts(counts: ModelCallCounts): string {

@@ -6,6 +6,8 @@ import { importBaselineArtefacts } from "./baseline.js";
 import { createModelCallPreview, ModelRunCostSummary, ModelRunCostTracker, persistCostSummary } from "./cost.js";
 import { loadAvailableFlueRoles, validateConfiguredFlueRoles } from "./flue-roles.js";
 import { loadProject, ProjectInputs, trackForEval } from "./project.js";
+import { GENERATED_RESEARCH_ARTIFACTS, projectLayout } from "./project-layout.js";
+import { normalizeRunOptions, RunOptions } from "./run-options.js";
 import {
   findUnexpectedScoreFiles,
   inspectProducerArtifact,
@@ -115,49 +117,38 @@ export interface SkillResearcher {
   improve(request: SkillResearchRequest): Promise<void>;
 }
 
-export interface OrchestrateOptions {
-  projectRoot: string;
+export interface OrchestrateOptions extends Partial<RunOptions> {
   agent?: EvalAgent;
   researcher?: SkillResearcher;
-  withBaseline?: boolean;
-  runResearch?: boolean;
-  forceResearch?: boolean;
-  resume?: boolean;
-  withCleanup?: boolean;
-  seedSkillDir?: string;
-  guidanceSkillDir?: string;
-  budgetUsd?: number;
   modelBacked?: boolean;
   onEvent?: (event: RunEvent) => void;
 }
 
 export async function orchestrateBaseline(options: OrchestrateOptions): Promise<OrchestratorResult> {
-  if (options.resume && options.withCleanup) {
-    throw new Error("Use either resume or withCleanup, not both.");
-  }
+  const runOptions = normalizeRunOptions(options);
   const events: RunEvent[] = [];
   const emit = createEventSink(events, options.onEvent);
-  const project = await loadProject(options.projectRoot);
+  const project = await loadProject(runOptions.projectRoot);
   emit({ type: "project-loaded", root: project.root });
   validateConfiguredFlueRoles(project.config, await loadAvailableFlueRoles());
   const costTracker = new ModelRunCostTracker(
     createModelCallPreview(project, {
-      withBaseline: options.withBaseline,
-      runResearch: options.runResearch,
+      withBaseline: runOptions.withBaseline,
+      runResearch: runOptions.runResearch,
       modelBacked: options.modelBacked
     }),
-    options.budgetUsd ?? project.config.budget_usd
+    runOptions.budgetUsd ?? project.config.budget_usd
   );
   emit({ type: "cost-preview", summary: costTracker.summary() });
 
-  if (options.withCleanup) {
+  if (runOptions.withCleanup) {
     emit({ type: "cleanup-completed", removed: await cleanupGeneratedResearchArtifacts(project.root) });
   }
 
   const expectedEvalIds = project.evals.evals.map((evalCase) => evalCase.id);
-  const baselineScores = options.withBaseline
+  const baselineScores = runOptions.withBaseline
     ? await importRequiredBaseline(project, expectedEvalIds, emit)
-    : options.resume
+    : runOptions.resume
       ? await resumeInitialBaseline(project, options.agent, emit, costTracker)
       : await generateInitialBaseline(project, options.agent, emit, costTracker);
 
@@ -165,8 +156,8 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
   emit({ type: "aggregated", aggregate });
 
   if (
-    options.runResearch &&
-    !options.forceResearch &&
+    runOptions.runResearch &&
+    !runOptions.forceResearch &&
     aggregate.overall.normalizedScore >= project.config.target_score
   ) {
     emit({
@@ -189,7 +180,7 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
     maxIterations: project.config.max_iterations
   });
 
-  if (!options.runResearch) {
+  if (!runOptions.runResearch) {
     return finishRun(project, emit, events, costTracker, {
       project,
       baselineScores,
@@ -199,7 +190,14 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
     });
   }
 
-  const research = await runResearchIterations(project, baselineScores, aggregate, options, emit, costTracker);
+  const research = await runResearchIterations(
+    project,
+    baselineScores,
+    aggregate,
+    { ...options, ...runOptions },
+    emit,
+    costTracker
+  );
 
   return finishRun(project, emit, events, costTracker, {
     project,
@@ -211,13 +209,12 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
   });
 }
 
-const GENERATED_RESEARCH_ARTIFACTS = ["iterations", "resume-backups", "guidance-ledger.json"] as const;
-
 async function cleanupGeneratedResearchArtifacts(projectRoot: string): Promise<string[]> {
+  const layout = projectLayout(projectRoot);
   const removed: string[] = [];
   for (const artifact of GENERATED_RESEARCH_ARTIFACTS) {
     const relativePath = `workspace/${artifact}`;
-    const artifactPath = join(projectRoot, "workspace", artifact);
+    const artifactPath = join(layout.workspaceDir, artifact);
     try {
       await lstat(artifactPath);
     } catch (error) {
@@ -283,7 +280,7 @@ async function generateInitialBaseline(
     countsTowardIterations: false
   });
 
-  const outputRoot = join(project.root, "workspace", "baseline");
+  const outputRoot = projectLayout(project.root).baselineDir;
   const baselineScores = await runWithConcurrency(
     project.evals.evals,
     project.config.max_concurrency,
@@ -328,7 +325,7 @@ async function resumeInitialBaseline(
   emit: (event: RunEvent) => void,
   costTracker: ModelRunCostTracker
 ): Promise<EvalScore[]> {
-  const baselineDir = join(project.root, "workspace", "baseline");
+  const baselineDir = projectLayout(project.root).baselineDir;
   await assertNoUnexpectedScores(baselineDir, project.evals.evals.length);
   const existing = await inspectConfiguredScores(project, baselineDir, baselineDir);
   const remaining = existing.filter((score) => score === undefined).length;
@@ -404,7 +401,8 @@ async function runResearchIterations(
   const agent = options.agent;
   const seedSkillDir = await resolveSeedSkillDir(project, options.seedSkillDir);
   const guidanceSkillDir = await resolveGuidanceSkillDir(project, options.guidanceSkillDir, seedSkillDir);
-  const guidanceLedgerPath = guidanceSkillDir ? join(project.root, "workspace", "guidance-ledger.json") : undefined;
+  const layout = projectLayout(project.root);
+  const guidanceLedgerPath = guidanceSkillDir ? layout.guidanceLedgerPath : undefined;
   const iterations: IterationResult[] = [];
   let previousSkillDir = resolveInitialResearchSkillDir(project, seedSkillDir);
   let previousScores = baselineScores;
@@ -413,8 +411,8 @@ async function runResearchIterations(
   let reachedTarget = false;
 
   for (let iteration = 1; iteration <= project.config.max_iterations; iteration++) {
-    const iterationDir = join(project.root, "workspace", "iterations", String(iteration));
-    const candidateSkillDir = join(iterationDir, "skill");
+    const iterationDir = layout.iterationDir(iteration);
+    const candidateSkillDir = layout.iterationSkillDir(iteration);
     await mkdir(iterationDir, { recursive: true });
     emit({ type: "iteration-started", iteration, previousSkillDir, candidateSkillDir });
 
@@ -493,7 +491,7 @@ async function runResearchIterations(
         );
 
     const aggregate = aggregateScores(project.config, scores);
-    const summaryPath = join(iterationDir, "summary.json");
+    const summaryPath = layout.iterationSummaryPath(iteration);
     if (options.resume) {
       const summary = await inspectSummaryArtifact(summaryPath, aggregate);
       if (summary.status === "invalid") {
@@ -776,7 +774,7 @@ async function assertNoIterationEvaluationArtifacts(iterationDir: string, iterat
 }
 
 async function assertNoFutureIterationArtifacts(projectRoot: string, currentIteration: number): Promise<void> {
-  const iterationsDir = join(projectRoot, "workspace", "iterations");
+  const iterationsDir = projectLayout(projectRoot).iterationsDir;
   let entries: string[];
   try {
     entries = await readdir(iterationsDir);
@@ -800,7 +798,7 @@ async function archiveIncompleteArtifact(projectRoot: string, source: string, la
   if (!(await pathExists(source))) {
     return;
   }
-  const backupRoot = join(projectRoot, "workspace", "resume-backups");
+  const backupRoot = projectLayout(projectRoot).resumeBackupsDir;
   await mkdir(backupRoot, { recursive: true });
   let destination = join(backupRoot, label);
   let suffix = 2;
