@@ -28,7 +28,10 @@ test("run options normalize both adapter payload shapes into one contract", () =
     withCleanup: false
   });
   expect(flue).toEqual({ ...cli, budgetUsd: 0.25 });
-  expect(() => normalizeRunOptions({ resume: true, withCleanup: true })).toThrow(/either --resume or --with-cleanup/);
+  expect(normalizeRunOptions({ resume: true, withCleanup: true })).toMatchObject({
+    resume: true,
+    withCleanup: true
+  });
 });
 
 test("project layout identifies only generated research state for cleanup", () => {

@@ -583,10 +583,22 @@ test("orchestrator cleanup reports no removals when generated research state is 
   expect(result.events).toContainEqual({ type: "cleanup-completed", removed: [] });
 });
 
-test("orchestrator rejects cleanup with resume", async () => {
-  await expect(orchestrateBaseline({ projectRoot: "/unused", resume: true, withCleanup: true })).rejects.toThrow(
-    /either resume or withCleanup/
-  );
+test("orchestrator cleans generated research state before resuming", async () => {
+  const root = await tempProject();
+  const workspace = join(root, "workspace");
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  await mkdir(join(workspace, "iterations", "1"), { recursive: true });
+  await writeFile(join(workspace, "iterations", "1", "stale.txt"), "stale\n");
+
+  const agent: EvalAgent = {
+    async run(request) {
+      return score(request.evalCase.id, request.evalCase.eval_type, request.track.id, 0.2);
+    }
+  };
+  const result = await orchestrateBaseline({ projectRoot: root, agent, resume: true, withCleanup: true });
+
+  await expect(stat(join(workspace, "iterations"))).rejects.toMatchObject({ code: "ENOENT" });
+  expect(result.events).toContainEqual({ type: "cleanup-completed", removed: ["workspace/iterations"] });
 });
 
 test("orchestrator stops with the artifact path when cleanup fails", async () => {

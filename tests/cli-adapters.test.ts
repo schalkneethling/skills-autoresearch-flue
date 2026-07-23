@@ -51,7 +51,7 @@ test("parseCliArgs validates currently required adapters", () => {
     verbose: true,
     writeRunLog: false
   });
-  expect(() => parseCliArgs(["--resume", "--with-cleanup"])).toThrow(/either --resume or --with-cleanup/);
+  expect(parseCliArgs(["--resume", "--with-cleanup"])).toMatchObject({ resume: true, withCleanup: true });
   expect(() => parseCliArgs([])).toThrow(/--score-dir or --model-client/);
   expect(() => parseCliArgs(["--with-baseline", "--research"])).toThrow(
     /Research iterations require --score-dir or --model-client/
@@ -87,6 +87,47 @@ test("JSON mode emits only JSON and includes the run-log path conditionally", as
     expect(JSON.parse(String(log.mock.calls[0][0]))).not.toHaveProperty("runLogPath");
   } finally {
     log.mockRestore();
+  }
+});
+
+test("main forwards guidance-skill to the researcher", async () => {
+  const root = await tempProject();
+  const scoreDir = join(root, "scores");
+  const seedSkillDir = join(root, "seed-skill");
+  const guidanceSkillDir = join(root, "guidance-skill");
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  await mkdir(scoreDir, { recursive: true });
+  await mkdir(seedSkillDir, { recursive: true });
+  await mkdir(guidanceSkillDir, { recursive: true });
+  await writeFile(join(seedSkillDir, "SKILL.md"), "# Seed\n");
+  await writeFile(join(guidanceSkillDir, "SKILL.md"), "# Guidance\n");
+  await writeFile(
+    join(scoreDir, "notes-001-0.json"),
+    JSON.stringify(score("notes-001", "summarise-changelog", "summarise", 0))
+  );
+  await writeFile(
+    join(scoreDir, "notes-001-1.json"),
+    JSON.stringify(score("notes-001", "summarise-changelog", "summarise"))
+  );
+  const improve = vi.spyOn(SnapshotResearcher.prototype, "improve");
+
+  try {
+    await main([
+      "--project",
+      root,
+      "--score-dir",
+      scoreDir,
+      "--research",
+      "--force-research",
+      "--seed-skill",
+      seedSkillDir,
+      "--guidance-skill",
+      guidanceSkillDir,
+      "--no-run-log"
+    ]);
+    expect(improve).toHaveBeenCalledWith(expect.objectContaining({ guidanceSkillDir }));
+  } finally {
+    improve.mockRestore();
   }
 });
 

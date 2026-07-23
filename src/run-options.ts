@@ -24,9 +24,6 @@ export function normalizeRunOptions(input: RunOptionInput, defaultProjectRoot = 
     guidanceSkillDir: input.guidanceSkillDir,
     budgetUsd: input.budgetUsd
   };
-  if (options.resume && options.withCleanup) {
-    throw new Error("Use either --resume or --with-cleanup (either resume or withCleanup), not both.");
-  }
   if (options.budgetUsd !== undefined && (!Number.isFinite(options.budgetUsd) || options.budgetUsd < 0)) {
     throw new Error("budgetUsd must be a non-negative number.");
   }
