@@ -6,15 +6,9 @@ import { createLogger, Logger, LogLevel } from "./logger.js";
 import { AnthropicMessagesClient, ModelEvalAgent, ModelSkillResearcher } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, RunEvent } from "./orchestrator.js";
 import { createRunLog } from "./run-log.js";
+import { normalizeRunOptions, RunOptions } from "./run-options.js";
 
-interface CliOptions {
-  projectRoot: string;
-  withBaseline: boolean;
-  runResearch: boolean;
-  forceResearch: boolean;
-  resume: boolean;
-  withCleanup: boolean;
-  seedSkillDir?: string;
+export interface CliOptions extends RunOptions {
   scoreDir?: string;
   modelClient?: "anthropic";
   budgetUsd?: number;
@@ -74,16 +68,18 @@ export function parseCliArgs(argv: string[]): CliOptions {
   }
 
   const options: CliOptions = {
-    projectRoot: parsed.values.project ?? process.cwd(),
-    withBaseline: parsed.values["with-baseline"] ?? false,
-    runResearch: parsed.values.research ?? false,
-    forceResearch: parsed.values["force-research"] ?? false,
-    resume: parsed.values.resume ?? false,
-    withCleanup: parsed.values["with-cleanup"] ?? false,
-    seedSkillDir: parsed.values["seed-skill"],
+    ...normalizeRunOptions({
+      projectRoot: parsed.values.project,
+      withBaseline: parsed.values["with-baseline"],
+      runResearch: parsed.values.research,
+      forceResearch: parsed.values["force-research"],
+      resume: parsed.values.resume,
+      withCleanup: parsed.values["with-cleanup"],
+      seedSkillDir: parsed.values["seed-skill"],
+      budgetUsd: parseBudgetUsd(parsed.values["budget-usd"])
+    }),
     scoreDir: parsed.values["score-dir"],
     modelClient: parseModelClient(parsed.values["model-client"]),
-    budgetUsd: parseBudgetUsd(parsed.values["budget-usd"]),
     json: parsed.values.json ?? false,
     verbose: parsed.values.verbose ?? false,
     writeRunLog: !(parsed.values["no-run-log"] ?? false)

@@ -32,6 +32,9 @@ fixtures/
                               Committed alpha project fixture.
 src/
   orchestrator.ts             Baseline and research iteration loop.
+  run-options.ts              Canonical normalized run options used by CLI and Flue adapters.
+  project-layout.ts           Canonical generated-artifact paths and filenames.
+  artifact-lifecycle.ts       Provider-independent transcript and research-artifact persistence.
   flue-harness.ts             Flue session adapters for producer/judge/researcher.
   model-agent.ts              Prompt builders, schemas, artifact application helpers.
   runner.ts                   Eval runner and concurrency helper.
@@ -109,6 +112,16 @@ When changing a schema:
 - Update prompt examples in `src/model-agent.ts`.
 - Update docs if user-facing config changes.
 - Add or update tests that parse and validate the new shape.
+
+## Runtime Sources Of Truth
+
+Keep public adapter spelling at the edge: the CLI translates kebab-case flags and
+the Flue workflow translates camelCase payload fields. Both must call
+`normalizeRunOptions()` rather than reimplement defaults or cross-option checks.
+
+Generated workspace locations and artifact filenames belong in
+`src/project-layout.ts`. Cleanup, resume, and persistence must consume that
+manifest so a new generated artifact is declared once and remains auditable.
 
 ## Fixtures
 
