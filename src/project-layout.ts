@@ -13,7 +13,7 @@ export const RESEARCH_TRANSCRIPTS = [
 ] as const;
 export const PRODUCER_TRANSCRIPTS = ["producer-flue-transcript.json", "producer-transcript.json"] as const;
 export const JUDGE_TRANSCRIPTS = ["judge-flue-transcript.json", "judge-transcript.json"] as const;
-export const GENERATED_SKILL_FILES = ["RESEARCH.md", ...RESEARCH_TRANSCRIPTS.slice(0, 2)] as const;
+export const GENERATED_SKILL_FILES = ["RESEARCH.md", ...RESEARCH_TRANSCRIPTS] as const;
 
 export interface ProjectLayout {
   root: string;

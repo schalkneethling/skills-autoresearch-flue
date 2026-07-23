@@ -651,7 +651,7 @@ function executeScriptValidator(validator: ScriptValidator, absolutePath: string
   });
 }
 
-const researchArtifactOperations = {
+export const researchArtifactOperations = {
   validatePatch: validateSkillResearchPatch,
   applyPatch: applySkillResearchPatch,
   validateScripts: validateChangedScripts,

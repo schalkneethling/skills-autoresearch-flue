@@ -3,15 +3,11 @@ import { join } from "node:path";
 import { ModelCallRole, ModelRunCostSummary } from "./cost.js";
 import {
   applyOutputFiles,
-  appendGuidanceLedger,
   buildJudgeModelRequest,
   buildProduceModelRequest,
   buildResearchModelRequest,
-  formatResearchSummary,
   parseModelJudgeResponse,
-  applySkillResearchPatch,
-  validateSkillResearchPatch,
-  validateChangedScripts
+  researchArtifactOperations
 } from "./model-agent.js";
 import { persistResearchArtifact, persistTranscript } from "./artifact-lifecycle.js";
 import { orchestrateBaseline, OrchestrateOptions, SkillResearcher } from "./orchestrator.js";
@@ -98,13 +94,14 @@ export class FlueSkillResearcher implements SkillResearcher {
       cwd: modelRequest.workspaceDir
     });
     recordFlueCall(request.costTracker, "researcher", modelRequest);
-    await persistResearchArtifact(request, modelRequest, patch, patch, ".autoresearch-flue-transcript.json", {
-      validatePatch: validateSkillResearchPatch,
-      applyPatch: applySkillResearchPatch,
-      validateScripts: validateChangedScripts,
-      appendLedger: appendGuidanceLedger,
-      formatSummary: formatResearchSummary
-    });
+    await persistResearchArtifact(
+      request,
+      modelRequest,
+      patch,
+      patch,
+      ".autoresearch-flue-transcript.json",
+      researchArtifactOperations
+    );
   }
 }
 

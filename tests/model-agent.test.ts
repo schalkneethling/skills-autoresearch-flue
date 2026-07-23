@@ -222,6 +222,8 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
   await writeFile(join(previousSkillDir, "SKILL.md"), "# Previous\n");
   await writeFile(join(previousSkillDir, "RESEARCH.md"), "# Old research\n");
   await writeFile(join(previousSkillDir, ".autoresearch-transcript.json"), "{}\n");
+  await writeFile(join(previousSkillDir, ".autoresearch-flue-transcript.json"), "{}\n");
+  await writeFile(join(previousSkillDir, ".autoresearch-iteration.json"), "{}\n");
   const patch = {
     summary: "Improve the examples.",
     resource_decisions: [
@@ -298,6 +300,10 @@ test("ModelSkillResearcher snapshots the skill, applies patch changes, and recor
   await expect(readFile(join(candidateSkillDir, ".autoresearch-transcript.json"), "utf8")).resolves.toContain(
     "SKILL.md"
   );
+  await expect(stat(join(candidateSkillDir, ".autoresearch-flue-transcript.json"))).rejects.toMatchObject({
+    code: "ENOENT"
+  });
+  await expect(stat(join(candidateSkillDir, ".autoresearch-iteration.json"))).rejects.toMatchObject({ code: "ENOENT" });
   await expect(readFile(join(candidateSkillDir, "RESEARCH.md"), "utf8")).resolves.not.toContain("Old research");
 });
 

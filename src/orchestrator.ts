@@ -1,5 +1,5 @@
 import { cp, lstat, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { aggregateScores, AggregateReport } from "./aggregate.js";
 import { importBaselineArtefacts } from "./baseline.js";
@@ -213,8 +213,8 @@ async function cleanupGeneratedResearchArtifacts(projectRoot: string): Promise<s
   const layout = projectLayout(projectRoot);
   const removed: string[] = [];
   for (const artifact of GENERATED_RESEARCH_ARTIFACTS) {
-    const relativePath = `workspace/${artifact}`;
     const artifactPath = join(layout.workspaceDir, artifact);
+    const relativePath = relative(projectRoot, artifactPath);
     try {
       await lstat(artifactPath);
     } catch (error) {
