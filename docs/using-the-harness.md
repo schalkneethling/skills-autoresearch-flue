@@ -412,13 +412,13 @@ This should return events ending with `research-loop-ready`.
 
 The supported `flue:run` wrapper keeps terminal output concise by default. It shows run identity, phase and eval progress, tool starts/completions, scores, stop conditions, errors, and artifact paths, while suppressing streamed reasoning, full prompts, model completions, and generated file contents.
 
-Every invocation also creates an append-only NDJSON log under:
+By default, each invocation creates an append-only NDJSON log under:
 
 ```text
 <projectRoot>/workspace/run-logs/<timestamp>-<sessionId>-<id>.ndjson
 ```
 
-The log path is printed when the run starts and returned as `runLogPath`. The log captures the complete child-process stdout and stderr stream through success or failure. Phase-specific structured transcripts remain the canonical model audit artifacts.
+When run-log writing is enabled, the log path is printed when the run starts and returned as `runLogPath`. The log captures the complete child-process stdout and stderr stream through success or failure. Phase-specific structured transcripts remain the canonical model audit artifacts.
 
 Run with full terminal detail when debugging:
 
@@ -432,7 +432,13 @@ Disable the full local log only when you explicitly do not want that audit trail
 pnpm run flue:run -- --no-run-log --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-unlogged-smoke"}'
 ```
 
-Run logs can contain prompts, model output, tool arguments, errors, and generated content. Treat them as sensitive audit artifacts and do not commit them. Direct `pnpm exec flue run autoresearch ...` remains available as an advanced debugging path and retains Flue's unfiltered event stream.
+Run logs can contain prompts, model output, tool arguments, errors, and generated content. Treat them as sensitive audit artifacts and do not commit them. This repository ignores `**/workspace/run-logs/`, but that rule does not protect a separate external `projectRoot` repository. Add the following rule to the external project's `.gitignore`:
+
+```gitignore
+workspace/run-logs/
+```
+
+Direct `pnpm exec flue run autoresearch ...` remains available as an advanced debugging path and retains Flue's unfiltered event stream.
 
 The standalone `skills-autoresearch` CLI supports the same `--verbose` and `--no-run-log` flags.
 

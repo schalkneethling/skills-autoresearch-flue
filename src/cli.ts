@@ -134,7 +134,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const logger = createLogger(console, { verbose: cli.verbose });
   const runLog = cli.writeRunLog ? createRunLog(cli.projectRoot, "standalone-cli") : undefined;
   if (runLog) {
-    logger.write("log", `Run log: ${runLog.path}`);
+    if (!cli.json) {
+      logger.write("log", `Run log: ${runLog.path}`);
+    }
     runLog.append("run-start", { argv, projectRoot: cli.projectRoot });
   }
 
@@ -172,7 +174,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     const result = await orchestrateBaseline(options);
     runLog?.append("run-result", result);
     if (cli.json) {
-      logger.write("log", JSON.stringify({ ...result, runLogPath: runLog?.path }, null, 2));
+      logger.write("log", JSON.stringify({ ...result, ...(runLog ? { runLogPath: runLog.path } : {}) }, null, 2));
       return;
     }
 

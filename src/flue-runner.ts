@@ -11,6 +11,8 @@ type RunnerOptions = {
   payload: Record<string, unknown>;
 };
 
+const QUIET_STDOUT_MAX_CHARS = 1_048_576;
+
 export async function runFlueCommand(argv = process.argv.slice(2)): Promise<number> {
   const options = parseRunnerArgs(argv);
   const projectRoot = resolve(String(options.payload.projectRoot ?? process.cwd()));
@@ -18,6 +20,7 @@ export async function runFlueCommand(argv = process.argv.slice(2)): Promise<numb
   const runLog = options.writeRunLog ? createRunLog(projectRoot, sessionId) : undefined;
   const payload = {
     ...options.payload,
+    projectRoot,
     verbose: options.verbose,
     writeRunLog: options.writeRunLog,
     ...(runLog ? { runLogPath: runLog.path } : {})
@@ -73,6 +76,7 @@ function spawnFlue(args: string[], verbose: boolean, runLog: RunLog | undefined)
   return new Promise((resolveExit) => {
     const child = spawn("pnpm", args, { stdio: ["inherit", "pipe", "pipe"] });
     let quietStdout = "";
+    let quietStdoutTruncated = false;
     let quietStderrBuffer = "";
 
     child.stdout.on("data", (chunk: Buffer) => {
@@ -82,7 +86,9 @@ function spawnFlue(args: string[], verbose: boolean, runLog: RunLog | undefined)
         process.stdout.write(text);
         return;
       }
-      quietStdout += text;
+      const buffered = appendQuietStdout(quietStdout, text);
+      quietStdout = buffered.output;
+      quietStdoutTruncated ||= buffered.truncated;
     });
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString();
@@ -107,7 +113,7 @@ function spawnFlue(args: string[], verbose: boolean, runLog: RunLog | undefined)
     });
     child.on("close", (code) => {
       if (!verbose) {
-        const summary = formatQuietResult(quietStdout);
+        const summary = formatQuietResult(quietStdout, quietStdoutTruncated);
         if (summary) {
           process.stdout.write(`${summary}\n`);
         }
@@ -120,10 +126,23 @@ function spawnFlue(args: string[], verbose: boolean, runLog: RunLog | undefined)
   });
 }
 
-export function formatQuietResult(output: string): string | undefined {
+export function appendQuietStdout(current: string, chunk: string): { output: string; truncated: boolean } {
+  if (chunk.length >= QUIET_STDOUT_MAX_CHARS) {
+    return { output: chunk.slice(-QUIET_STDOUT_MAX_CHARS), truncated: true };
+  }
+  const combined = current + chunk;
+  if (combined.length <= QUIET_STDOUT_MAX_CHARS) {
+    return { output: combined, truncated: false };
+  }
+  return { output: combined.slice(-QUIET_STDOUT_MAX_CHARS), truncated: true };
+}
+
+export function formatQuietResult(output: string, truncated = false): string | undefined {
   const jsonStart = output.indexOf("{");
   if (jsonStart === -1) {
-    return undefined;
+    return truncated
+      ? "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
+      : undefined;
   }
   try {
     const result = JSON.parse(output.slice(jsonStart)) as Partial<FlueWorkflowResult>;
@@ -135,7 +154,9 @@ export function formatQuietResult(output: string): string | undefined {
       (result.bestSkillDir ? `; best skill ${result.bestSkillDir}` : "")
     );
   } catch {
-    return undefined;
+    return truncated
+      ? "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
+      : undefined;
   }
 }
 

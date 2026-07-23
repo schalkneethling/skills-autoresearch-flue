@@ -1,4 +1,10 @@
-import { buildFlueArgs, formatQuietResult, parseRunnerArgs, shouldPrintQuietLine } from "../src/flue-runner.js";
+import {
+  appendQuietStdout,
+  buildFlueArgs,
+  formatQuietResult,
+  parseRunnerArgs,
+  shouldPrintQuietLine
+} from "../src/flue-runner.js";
 
 test("Flue runner parses verbose and run-log opt-out flags without forwarding them", () => {
   expect(
@@ -39,5 +45,26 @@ test("quiet Flue output replaces the full result with a compact summary", () => 
     )
   ).toBe(
     "Run complete: score 0.900; iterations 2; model calls 8; best skill /tmp/project/workspace/iterations/2/skill"
+  );
+});
+
+test("quiet Flue output keeps a fixed-size tail that can still contain the final result", () => {
+  const resultJson = JSON.stringify({
+    completedIterations: 1,
+    normalizedScore: 0.8,
+    cost: { actual: { totalCalls: 5 } }
+  });
+  const buffered = appendQuietStdout("x".repeat(1_048_570), resultJson);
+
+  expect(buffered.truncated).toBe(true);
+  expect(buffered.output.length).toBeLessThanOrEqual(1_048_576);
+  expect(formatQuietResult(buffered.output, buffered.truncated)).toBe(
+    "Run complete: score 0.800; iterations 1; model calls 5"
+  );
+});
+
+test("quiet Flue output explains when a truncated result cannot be parsed", () => {
+  expect(formatQuietResult("result tail without JSON", true)).toBe(
+    "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
   );
 });
