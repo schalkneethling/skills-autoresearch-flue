@@ -49,7 +49,7 @@ The `seed-skill/` directory can exist even though the baseline will not mount it
 From the root of this harness checkout, run:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"my-baseline"}'
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"my-baseline"}'
 ```
 
 Omit `withBaseline` so the harness generates a fresh model-backed baseline. Use `runResearch:false` so the run stops after baseline generation and aggregation.
@@ -98,7 +98,7 @@ If `overall.normalizedScore < target_score`, the model likely needs either:
 After generating the baseline, you can run with `withBaseline:true` and `runResearch:true` to confirm the harness will stop before research when the baseline already passes:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research-check"}'
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research-check"}'
 ```
 
 When the baseline passes, the run emits:

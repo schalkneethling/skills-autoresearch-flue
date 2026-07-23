@@ -50,6 +50,8 @@ pnpm run alpha:research
 
 `alpha:research` runs the model-backed Flue harness through `varlock run`.
 
+Flue-backed commands are quiet by default and write a complete append-only process log under the target project's `workspace/run-logs/`. Pass `-- --verbose` to expose full Flue output in the terminal, or `-- --no-run-log` to explicitly opt out of the local log.
+
 ## Using The Harness
 
 If you want to point the harness at your own skill, start with [docs/using-the-harness.md](docs/using-the-harness.md). It explains the required project layout, config fields, eval cases, baseline artifacts, run commands, and how to inspect results.

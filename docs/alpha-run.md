@@ -66,6 +66,8 @@ This requires `ANTHROPIC_API_KEY` to resolve through Varlock.
 pnpm run alpha:research
 ```
 
+Normal runs print compact phase/eval progress and write the complete Flue process stream under `fixtures/projects/release-notes-alpha/workspace/run-logs/`. Add `-- --verbose` to `alpha:smoke` or `alpha:research` to expose the full stream in the terminal, or `-- --no-run-log` to explicitly disable the local audit log.
+
 This runs the Flue workflow with:
 
 ```json
@@ -87,7 +89,7 @@ During research, an iteration that reaches the aggregate target but lowers any e
 If a model-backed run stops after writing some artifacts, rerun with the same run-defining payload and add `"resume": true`. The `sessionId` may be changed to distinguish the resumed invocation, as in this example:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"fixtures/projects/release-notes-alpha","withBaseline":true,"runResearch":true,"resume":true,"seedSkillDir":"fixtures/projects/release-notes-alpha/seed-skill","sessionId":"alpha-research-resume"}'
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"fixtures/projects/release-notes-alpha","withBaseline":true,"runResearch":true,"resume":true,"seedSkillDir":"fixtures/projects/release-notes-alpha/seed-skill","sessionId":"alpha-research-resume"}'
 ```
 
 Resume validates and reuses completed scores, candidate research, producer output, and judge transcripts, then runs only missing phases. It rebuilds a missing iteration summary after all scores are present. Incomplete research or producer artifacts that are safe to retry are moved to `workspace/resume-backups/`; invalid or inconsistent artifacts stop the run with an actionable error rather than being overwritten.

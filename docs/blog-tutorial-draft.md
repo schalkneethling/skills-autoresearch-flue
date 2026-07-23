@@ -359,7 +359,7 @@ Cost preview and budget support are documented and implemented in part, but [iss
 Iteration files are written conservatively to preserve evidence. To explicitly start over, add `"withCleanup":true` to the Flue payload. Cleanup removes generated iterations, resume backups, and the guidance ledger while preserving the baseline and project inputs.
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"fixtures/projects/release-notes-alpha","withBaseline":true,"runResearch":true,"withCleanup":true,"seedSkillDir":"fixtures/projects/release-notes-alpha/seed-skill","sessionId":"alpha-research-clean"}'
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"fixtures/projects/release-notes-alpha","withBaseline":true,"runResearch":true,"withCleanup":true,"seedSkillDir":"fixtures/projects/release-notes-alpha/seed-skill","sessionId":"alpha-research-clean"}'
 ```
 
 Cleanup is all-or-nothing from the run's perspective: if any generated artifact cannot be removed, the run stops with the artifact path in the error instead of continuing into a partially stale workspace. It cannot be combined with resume.
@@ -386,7 +386,7 @@ The alpha can already:
 | Finding from this walkthrough                                                                  | Status                                                                             |
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Clean install could not run Flue because CLI/runtime and Wrangler versions were incompatible   | [#84](https://github.com/schalkneethling/skills-autoresearch-flue/issues/84)       |
-| Normal terminal output exposes long model reasoning and generated content                      | [#17](https://github.com/schalkneethling/skills-autoresearch-flue/issues/17)       |
+| Normal terminal output exposes long model reasoning and generated content                      | Addressed by the quiet wrapper in #17; full output moves to `workspace/run-logs/`  |
 | Common runs require long, plumbing-heavy Flue payloads outside the convenience fixture scripts | [#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12)       |
 | Reruns require manual cleanup                                                                  | [#10](https://github.com/schalkneethling/skills-autoresearch-flue/issues/10)       |
 | Failed runs cannot resume from the latest trustworthy phase                                    | [#55](https://github.com/schalkneethling/skills-autoresearch-flue/issues/55)       |
@@ -401,7 +401,7 @@ Two tracker housekeeping items are also worth noting. [Issue #65](https://github
 The issue tracker points to a coherent progression:
 
 - Reliability first: resume failed runs ([#55](https://github.com/schalkneethling/skills-autoresearch-flue/issues/55)) and support safe reruns ([#10](https://github.com/schalkneethling/skills-autoresearch-flue/issues/10)).
-- Make the tool pleasant to operate: shorter commands ([#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12)), quiet output ([#17](https://github.com/schalkneethling/skills-autoresearch-flue/issues/17)), and a richer run report ([#18](https://github.com/schalkneethling/skills-autoresearch-flue/issues/18)).
+- Make the tool pleasant to operate: build on the quiet output and durable run log from [#17](https://github.com/schalkneethling/skills-autoresearch-flue/issues/17), then add shorter config-driven commands ([#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12)) and a richer run report ([#18](https://github.com/schalkneethling/skills-autoresearch-flue/issues/18)).
 - Improve the quality of researched skills: place durable material in references, scripts, or assets ([#64](https://github.com/schalkneethling/skills-autoresearch-flue/issues/64)); review the candidate skill itself ([#63](https://github.com/schalkneethling/skills-autoresearch-flue/issues/63)); and evaluate trigger phrasing ([#61](https://github.com/schalkneethling/skills-autoresearch-flue/issues/61)).
 - Broaden only after the loop is dependable: multi-skill runs ([#8](https://github.com/schalkneethling/skills-autoresearch-flue/issues/8)) and cross-provider judging.
 
@@ -467,7 +467,7 @@ Likely blockers to land or explicitly resolve before publication:
 
 Strong candidates for the same publication milestone:
 
-- [#17](https://github.com/schalkneethling/skills-autoresearch-flue/issues/17): default terminal output should be readable and should not dump long reasoning or generated content.
+- Verify [#17](https://github.com/schalkneethling/skills-autoresearch-flue/issues/17) against a real model-backed run: default terminal output should remain compact, `--verbose` should expose the full stream, and the append-only run log should contain the suppressed detail through success or failure.
 - [#19](https://github.com/schalkneethling/skills-autoresearch-flue/issues/19): reconcile the issue with the implemented call preview and clearly describe the remaining token-usage and dollar-budget limitations.
 - Add or update documentation for secret injection without 1Password, making the maintainer's `dev` vault convention clearly optional.
 - Fix or intentionally baseline the existing repository-wide `format:check` failures.

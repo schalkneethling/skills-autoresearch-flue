@@ -13,9 +13,16 @@ export interface Logger {
   write(level: LogLevel, message: string): void;
 }
 
-export function createLogger(sink: LogSink = console): Logger {
+export type LoggerOptions = {
+  verbose?: boolean;
+};
+
+export function createLogger(sink: LogSink = console, options: LoggerOptions = {}): Logger {
   return {
     write(level, message) {
+      if (level === "debug" && !options.verbose) {
+        return;
+      }
       sink[level](message);
     }
   };

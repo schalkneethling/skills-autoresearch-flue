@@ -219,7 +219,7 @@ test("orchestrator generates initial baseline by default without counting it as 
     type: "baseline-started",
     countsTowardIterations: false
   });
-  expect(generated.events[3]).toMatchObject({ type: "baseline-generated", scores: 1 });
+  expect(generated.events).toContainEqual({ type: "baseline-generated", scores: 1 });
   expect(generated.completedIterations).toBe(0);
   expect(generated.events.at(-1)).toMatchObject({
     type: "research-loop-ready",

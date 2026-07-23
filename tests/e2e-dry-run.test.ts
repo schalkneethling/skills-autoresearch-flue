@@ -83,6 +83,22 @@ test("dry run executes baseline, applies a candidate skill patch, and scores one
   expect(result.completedIterations).toBe(1);
   expect(result.aggregate.overall.normalizedScore).toBe(0.9);
   expect(result.events.at(-1)).toMatchObject({ type: "target-score-reached", iteration: 1 });
+  expect(result.events).toContainEqual({
+    type: "eval-started",
+    phase: "baseline",
+    evalId: evalCase.id,
+    index: 1,
+    total: 1
+  });
+  expect(result.events).toContainEqual({
+    type: "eval-completed",
+    phase: "iteration",
+    iteration: 1,
+    evalId: evalCase.id,
+    index: 1,
+    total: 1,
+    outputDir: join(root, "workspace", "iterations", "1", "outputs", evalCase.id)
+  });
   expect(client.requests.map((request) => request.system)).toEqual(
     [
       ["baseline producer", "task-producer"],

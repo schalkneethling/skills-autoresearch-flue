@@ -34,6 +34,10 @@ test("parseCliArgs validates currently required adapters", () => {
   expect(parseCliArgs(["--resume"])).toMatchObject({ resume: true });
   expect(parseCliArgs(["--resume", "--research"])).toMatchObject({ resume: true, runResearch: true });
   expect(parseCliArgs(["--with-baseline", "--with-cleanup"])).toMatchObject({ withCleanup: true });
+  expect(parseCliArgs(["--with-baseline", "--verbose", "--no-run-log"])).toMatchObject({
+    verbose: true,
+    writeRunLog: false
+  });
   expect(() => parseCliArgs(["--resume", "--with-cleanup"])).toThrow(/either --resume or --with-cleanup/);
   expect(() => parseCliArgs([])).toThrow(/--score-dir or --model-client/);
   expect(() => parseCliArgs(["--with-baseline", "--research"])).toThrow(
