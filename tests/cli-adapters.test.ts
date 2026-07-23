@@ -24,6 +24,11 @@ test("parseCliArgs validates currently required adapters", () => {
     runResearch: true,
     seedSkillDir: "/tmp/skill"
   });
+  expect(parseCliArgs(["--score-dir", "/tmp/scores", "--research", "--guidance-skill", "/tmp/guidance"])).toMatchObject(
+    {
+      guidanceSkillDir: "/tmp/guidance"
+    }
+  );
   expect(parseCliArgs(["--model-client", "anthropic", "--research"])).toMatchObject({
     modelClient: "anthropic",
     runResearch: true

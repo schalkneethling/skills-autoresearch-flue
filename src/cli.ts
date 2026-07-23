@@ -29,6 +29,7 @@ function usage(): string {
     "  --resume              Continue from validated baseline and iteration artifacts.",
     "  --with-cleanup        Remove generated research artifacts before starting a fresh run.",
     "  --seed-skill <dir>    Seed skill directory for research iterations.",
+    "  --guidance-skill <dir> Reference skill directory for research iterations.",
     "  --score-dir <dir>     Directory of file-backed EvalScore JSON files.",
     "  --model-client <name> Use a model client. Supported: anthropic.",
     "  --budget-usd <amount> Stop before additional model calls once observed cost reaches this cap.",
@@ -50,6 +51,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       resume: { type: "boolean" },
       "with-cleanup": { type: "boolean" },
       "seed-skill": { type: "string" },
+      "guidance-skill": { type: "string" },
       "score-dir": { type: "string" },
       "model-client": { type: "string" },
       "budget-usd": { type: "string" },
@@ -76,6 +78,7 @@ export function parseCliArgs(argv: string[]): CliOptions {
       resume: parsed.values.resume,
       withCleanup: parsed.values["with-cleanup"],
       seedSkillDir: parsed.values["seed-skill"],
+      guidanceSkillDir: parsed.values["guidance-skill"],
       budgetUsd: parseBudgetUsd(parsed.values["budget-usd"])
     }),
     scoreDir: parsed.values["score-dir"],
@@ -87,9 +90,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
 
   if (options.scoreDir && options.modelClient) {
     throw new Error("Use either --score-dir or --model-client, not both.");
-  }
-  if (options.resume && options.withCleanup) {
-    throw new Error("Use either --resume or --with-cleanup, not both.");
   }
   if (!options.resume && !options.withBaseline && !options.scoreDir && !options.modelClient) {
     throw new Error("Generating a baseline requires --score-dir or --model-client anthropic.");
@@ -146,6 +146,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
       resume: cli.resume,
       withCleanup: cli.withCleanup,
       seedSkillDir: cli.seedSkillDir,
+      guidanceSkillDir: cli.guidanceSkillDir,
       budgetUsd: cli.budgetUsd,
       modelBacked: Boolean(modelClient),
       onEvent: (event) => {
