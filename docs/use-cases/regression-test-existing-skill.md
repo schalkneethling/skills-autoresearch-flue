@@ -30,7 +30,7 @@ workspace/baseline/
 The baseline can be imported without model calls:
 
 ```bash
-pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"regression-smoke"}'
+pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"regression-smoke"}'
 ```
 
 This validates the project and imported score artifacts.
@@ -40,7 +40,7 @@ This validates the project and imported score artifacts.
 To evaluate an updated seed skill through the normal research loop:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"regression-research"}'
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"regression-research"}'
 ```
 
 If the imported baseline already reaches `target_score`, the harness stops before research unless you set `forceResearch:true`.

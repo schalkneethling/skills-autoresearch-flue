@@ -26,6 +26,23 @@ export type RunEvent =
   | { type: "baseline-generated"; scores: number }
   | { type: "baseline-resumed"; scores: number; remaining: number }
   | {
+      type: "eval-started";
+      phase: "baseline" | "iteration";
+      iteration?: number;
+      evalId: string;
+      index: number;
+      total: number;
+    }
+  | {
+      type: "eval-completed";
+      phase: "baseline" | "iteration";
+      iteration?: number;
+      evalId: string;
+      index: number;
+      total: number;
+      outputDir: string;
+    }
+  | {
       type: "iteration-started";
       iteration: number;
       previousSkillDir: string;
@@ -271,6 +288,13 @@ async function generateInitialBaseline(
     project.evals.evals,
     project.config.max_concurrency,
     async (evalCase, index) => {
+      emit({
+        type: "eval-started",
+        phase: "baseline",
+        evalId: evalCase.id,
+        index: index + 1,
+        total: project.evals.evals.length
+      });
       const score = await runEval(
         {
           config: project.config,
@@ -283,6 +307,14 @@ async function generateInitialBaseline(
         agent
       );
       await persistEvalScore(outputRoot, index, score);
+      emit({
+        type: "eval-completed",
+        phase: "baseline",
+        evalId: evalCase.id,
+        index: index + 1,
+        total: project.evals.evals.length,
+        outputDir: join(outputRoot, evalCase.id)
+      });
       return score;
     }
   );
@@ -452,9 +484,11 @@ async function runResearchIterations(
       ? await resumeIterationScores(project, iteration, iterationDir, candidateSkillDir, agent, emit, costTracker)
       : await runFreshIterationScores(
           project,
+          iteration,
           iterationDir,
           candidateSkillDir,
           requireEvalAgent(agent, "run research iterations"),
+          emit,
           costTracker
         );
 
@@ -555,12 +589,22 @@ async function improveSkill(
 
 async function runFreshIterationScores(
   project: ProjectInputs,
+  iteration: number,
   iterationDir: string,
   candidateSkillDir: string,
   agent: EvalAgent,
+  emit: (event: RunEvent) => void,
   costTracker: ModelRunCostTracker
 ): Promise<EvalScore[]> {
   return runWithConcurrency(project.evals.evals, project.config.max_concurrency, async (evalCase, index) => {
+    emit({
+      type: "eval-started",
+      phase: "iteration",
+      iteration,
+      evalId: evalCase.id,
+      index: index + 1,
+      total: project.evals.evals.length
+    });
     const score = await runEval(
       {
         config: project.config,
@@ -574,6 +618,15 @@ async function runFreshIterationScores(
       agent
     );
     await persistEvalScore(iterationDir, index, score);
+    emit({
+      type: "eval-completed",
+      phase: "iteration",
+      iteration,
+      evalId: evalCase.id,
+      index: index + 1,
+      total: project.evals.evals.length,
+      outputDir: join(iterationDir, "outputs", evalCase.id)
+    });
     return score;
   });
 }

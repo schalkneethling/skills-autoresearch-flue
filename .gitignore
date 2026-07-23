@@ -33,3 +33,4 @@ test-results/
 **/workspace/.phase-workspaces/
 **/workspace/iterations/
 **/workspace/cost-summary.json
+**/workspace/run-logs/

@@ -5,6 +5,7 @@ import { formatCallCounts } from "./cost.js";
 import { createLogger, Logger, LogLevel } from "./logger.js";
 import { AnthropicMessagesClient, ModelEvalAgent, ModelSkillResearcher } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, RunEvent } from "./orchestrator.js";
+import { createRunLog } from "./run-log.js";
 
 interface CliOptions {
   projectRoot: string;
@@ -18,6 +19,8 @@ interface CliOptions {
   modelClient?: "anthropic";
   budgetUsd?: number;
   json: boolean;
+  verbose: boolean;
+  writeRunLog: boolean;
 }
 
 function usage(): string {
@@ -35,6 +38,8 @@ function usage(): string {
     "  --score-dir <dir>     Directory of file-backed EvalScore JSON files.",
     "  --model-client <name> Use a model client. Supported: anthropic.",
     "  --budget-usd <amount> Stop before additional model calls once observed cost reaches this cap.",
+    "  --verbose             Print debug-level run events.",
+    "  --no-run-log          Do not write the complete local run log.",
     "  --json                Print the full orchestrator result as JSON.",
     "  -h, --help            Show this help."
   ].join("\n");
@@ -54,6 +59,8 @@ export function parseCliArgs(argv: string[]): CliOptions {
       "score-dir": { type: "string" },
       "model-client": { type: "string" },
       "budget-usd": { type: "string" },
+      verbose: { type: "boolean" },
+      "no-run-log": { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" }
     },
@@ -77,7 +84,9 @@ export function parseCliArgs(argv: string[]): CliOptions {
     scoreDir: parsed.values["score-dir"],
     modelClient: parseModelClient(parsed.values["model-client"]),
     budgetUsd: parseBudgetUsd(parsed.values["budget-usd"]),
-    json: parsed.values.json ?? false
+    json: parsed.values.json ?? false,
+    verbose: parsed.values.verbose ?? false,
+    writeRunLog: !(parsed.values["no-run-log"] ?? false)
   };
 
   if (options.scoreDir && options.modelClient) {
@@ -121,54 +130,71 @@ function parseModelClient(value: string | boolean | undefined): "anthropic" | un
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
-  const logger = createLogger();
   const cli = parseCliArgs(argv);
-  const modelClient = cli.modelClient === "anthropic" ? new AnthropicMessagesClient() : undefined;
-  const options: OrchestrateOptions = {
-    projectRoot: cli.projectRoot,
-    withBaseline: cli.withBaseline,
-    runResearch: cli.runResearch,
-    forceResearch: cli.forceResearch,
-    resume: cli.resume,
-    withCleanup: cli.withCleanup,
-    seedSkillDir: cli.seedSkillDir,
-    budgetUsd: cli.budgetUsd,
-    modelBacked: Boolean(modelClient),
-    onEvent: cli.json
-      ? undefined
-      : (event) => {
+  const logger = createLogger(console, { verbose: cli.verbose });
+  const runLog = cli.writeRunLog ? createRunLog(cli.projectRoot, "standalone-cli") : undefined;
+  if (runLog) {
+    if (!cli.json) {
+      logger.write("log", `Run log: ${runLog.path}`);
+    }
+    runLog.append("run-start", { argv, projectRoot: cli.projectRoot });
+  }
+
+  try {
+    const modelClient = cli.modelClient === "anthropic" ? new AnthropicMessagesClient() : undefined;
+    const options: OrchestrateOptions = {
+      projectRoot: cli.projectRoot,
+      withBaseline: cli.withBaseline,
+      runResearch: cli.runResearch,
+      forceResearch: cli.forceResearch,
+      resume: cli.resume,
+      withCleanup: cli.withCleanup,
+      seedSkillDir: cli.seedSkillDir,
+      budgetUsd: cli.budgetUsd,
+      modelBacked: Boolean(modelClient),
+      onEvent: (event) => {
+        runLog?.append("run-event", event);
+        if (!cli.json) {
           const formatted = formatEvent(event);
           logger.write(formatted.level, formatted.message);
-        },
-    agent: modelClient
-      ? new ModelEvalAgent(modelClient)
-      : cli.scoreDir
-        ? new FileScoreAgent({ scoreDir: cli.scoreDir })
-        : undefined,
-    researcher: modelClient
-      ? new ModelSkillResearcher(modelClient)
-      : cli.runResearch
-        ? new SnapshotResearcher()
-        : undefined
-  };
+        }
+      },
+      agent: modelClient
+        ? new ModelEvalAgent(modelClient)
+        : cli.scoreDir
+          ? new FileScoreAgent({ scoreDir: cli.scoreDir })
+          : undefined,
+      researcher: modelClient
+        ? new ModelSkillResearcher(modelClient)
+        : cli.runResearch
+          ? new SnapshotResearcher()
+          : undefined
+    };
 
-  const result = await orchestrateBaseline(options);
-  if (cli.json) {
-    logger.write("log", JSON.stringify(result, null, 2));
-    return;
-  }
+    const result = await orchestrateBaseline(options);
+    runLog?.append("run-result", result);
+    if (cli.json) {
+      logger.write("log", JSON.stringify({ ...result, ...(runLog ? { runLogPath: runLog.path } : {}) }, null, 2));
+      return;
+    }
 
-  logger.write(
-    "log",
-    `Final score: ${result.aggregate.overall.normalizedScore.toFixed(3)} ` +
-      `(${result.aggregate.overall.score}/${result.aggregate.overall.maxScore})`
-  );
-  logger.write("log", `Model calls: ${formatCallCounts(result.cost.actual.calls)}`);
-  if (result.cost.actual.costUsd !== undefined) {
-    logger.write("log", `Observed model cost: $${result.cost.actual.costUsd.toFixed(4)}`);
-  }
-  if (result.bestIteration) {
-    logger.write("log", `Best skill: ${result.bestIteration.skillDir}`);
+    logger.write(
+      "log",
+      `Final score: ${result.aggregate.overall.normalizedScore.toFixed(3)} ` +
+        `(${result.aggregate.overall.score}/${result.aggregate.overall.maxScore})`
+    );
+    logger.write("log", `Model calls: ${formatCallCounts(result.cost.actual.calls)}`);
+    if (result.cost.actual.costUsd !== undefined) {
+      logger.write("log", `Observed model cost: $${result.cost.actual.costUsd.toFixed(4)}`);
+    }
+    if (result.bestIteration) {
+      logger.write("log", `Best skill: ${result.bestIteration.skillDir}`);
+    }
+  } catch (error) {
+    runLog?.append("run-error", { message: (error as Error).message, stack: (error as Error).stack });
+    throw error;
+  } finally {
+    runLog?.close();
   }
 }
 
@@ -207,6 +233,17 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
         level: "log",
         message: `Resumed baseline: reused ${event.scores} score(s), ${event.remaining} remaining`
       };
+    case "eval-started": {
+      const phase = event.phase === "baseline" ? "Baseline" : `Iteration ${event.iteration}`;
+      return { level: "log", message: `${phase}: eval ${event.index}/${event.total} started (${event.evalId})` };
+    }
+    case "eval-completed": {
+      const phase = event.phase === "baseline" ? "Baseline" : `Iteration ${event.iteration}`;
+      return {
+        level: "log",
+        message: `${phase}: eval ${event.index}/${event.total} complete (${event.evalId}) → ${event.outputDir}`
+      };
+    }
     case "aggregated":
       return {
         level: "log",

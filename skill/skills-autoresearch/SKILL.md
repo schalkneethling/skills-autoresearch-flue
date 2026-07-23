@@ -292,7 +292,7 @@ pnpm run build
 Run a baseline smoke without model calls:
 
 ```bash
-pnpm exec flue run autoresearch --target node --root . --id my-smoke --payload '{"projectRoot":"path/to/project-root","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
+pnpm run flue:run -- --payload '{"projectRoot":"path/to/project-root","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
 ```
 
 Expected smoke events should end with `research-loop-ready`.
@@ -306,7 +306,7 @@ pnpm run env:check
 Then run without `withBaseline`:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --id my-baseline --payload '{"projectRoot":"path/to/project-root","runResearch":false,"sessionId":"my-baseline"}'
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/project-root","runResearch":false,"sessionId":"my-baseline"}'
 ```
 
 Expected generated-baseline events include `baseline-started` and `baseline-generated`.
@@ -314,8 +314,10 @@ Expected generated-baseline events include `baseline-started` and `baseline-gene
 For model-backed research after a baseline exists, run:
 
 ```bash
-varlock run -- pnpm exec flue run autoresearch --target node --root . --id my-research --payload '{"projectRoot":"path/to/project-root","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/project-root/seed-skill","sessionId":"my-research"}'
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/project-root","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/project-root/seed-skill","sessionId":"my-research"}'
 ```
+
+The wrapper keeps terminal output compact and writes the complete process stream under `workspace/run-logs/`. Add `--verbose` before `--payload` for full terminal detail, or `--no-run-log` only when the user explicitly opts out of the audit log. Never commit run logs; they may contain prompts, model output, tool arguments, and generated content.
 
 For a multi-skill project, point `seedSkillDir` at the specific skill directory for this run, for example `path/to/project-root/skills/security-audit`.
 

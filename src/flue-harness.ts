@@ -1,5 +1,5 @@
 import type { FlueSession } from "@flue/runtime";
-import { ModelCallRole } from "./cost.js";
+import { ModelCallRole, ModelRunCostSummary } from "./cost.js";
 import {
   applyOutputFiles,
   appendGuidanceLedger,
@@ -28,6 +28,15 @@ import { join } from "node:path";
 export interface FlueAutoresearchOptions extends Omit<OrchestrateOptions, "agent" | "researcher"> {
   session: FlueSession;
 }
+
+export type FlueWorkflowResult = {
+  completedIterations: number;
+  normalizedScore: number;
+  bestSkillDir?: string;
+  runLogPath?: string;
+  cost: ModelRunCostSummary;
+  events: string[];
+};
 
 const PRODUCER_AGENT = "producer";
 const JUDGE_AGENT = "judge";
