@@ -30,7 +30,7 @@ workspace/baseline/
 The baseline can be imported without model calls:
 
 ```bash
-pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"regression-smoke"}'
+pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project
 ```
 
 This validates the project and imported score artifacts.
@@ -40,12 +40,12 @@ This validates the project and imported score artifacts.
 To evaluate an updated seed skill through the normal research loop:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"regression-research"}'
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
-If the imported baseline already reaches `target_score`, the harness stops before research unless you set `forceResearch:true`.
+If the imported baseline already reaches `target_score`, the harness stops before research unless you pass `--force-research`.
 
-Use `forceResearch:true` only when you intentionally want a fresh candidate despite a passing baseline.
+Use `--force-research` only when you intentionally want a fresh candidate despite a passing baseline.
 
 ## Step 3: Review The Difference
 
@@ -62,7 +62,7 @@ Compare:
 Generated iteration artifacts are written with exclusive file creation. Use cleanup mode to rerun the same project from a clean research slate:
 
 ```bash
-pnpm exec skills-autoresearch --project path/to/my-autoresearch-project --with-baseline --with-cleanup --research --score-dir path/to/scores
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --with-cleanup
 ```
 
 Cleanup preserves the baseline and removes generated iterations, resume backups, and the guidance ledger. Only commit generated iterations when the fixture or documentation intentionally needs a recorded run.

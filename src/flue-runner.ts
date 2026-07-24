@@ -1,20 +1,52 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { FlueWorkflowResult } from "./flue-harness.js";
 import { createRunLog, RunLog } from "./run-log.js";
 
-type RunnerOptions = {
+export type RunnerMode = "smoke" | "research";
+
+export type RunnerOptions = {
   verbose: boolean;
   writeRunLog: boolean;
   payload: Record<string, unknown>;
+  help?: boolean;
 };
 
 const QUIET_STDOUT_MAX_CHARS = 1_048_576;
 
+function usage(): string {
+  return [
+    "Usage:",
+    "  skills-autoresearch-flue smoke [options]",
+    "  skills-autoresearch-flue research [options]",
+    "  skills-autoresearch-flue --payload <json> [options]",
+    "",
+    "Config-driven options:",
+    "  --project <dir>         Project root. Defaults to current directory.",
+    "  --seed-skill <dir>      Override config.json origin_skill for this run.",
+    "  --guidance-skill <dir>  Override config.json guidance_skill for this run.",
+    "  --session <name>        Override the derived project-mode session name.",
+    "  --resume                Resume validated artifacts from an interrupted run.",
+    "  --with-cleanup          Remove generated research artifacts before a fresh run.",
+    "  --force-research        Research even when the baseline reaches target_score.",
+    "  --budget-usd <amount>   Override config.json budget_usd for this run.",
+    "",
+    "General options:",
+    "  --payload <json>        Advanced: pass a complete Flue payload directly.",
+    "  --verbose               Print the complete Flue event stream.",
+    "  --no-run-log            Do not write the complete local run log.",
+    "  -h, --help              Show this help."
+  ].join("\n");
+}
+
 export async function runFlueCommand(argv = process.argv.slice(2)): Promise<number> {
   const options = parseRunnerArgs(argv);
+  if (options.help) {
+    process.stdout.write(`${usage()}\n`);
+    return 0;
+  }
   const projectRoot = resolve(String(options.payload.projectRoot ?? process.cwd()));
   const sessionId = String(options.payload.sessionId ?? "autoresearch");
   const runLog = options.writeRunLog ? createRunLog(projectRoot, sessionId) : undefined;
@@ -39,22 +71,128 @@ export async function runFlueCommand(argv = process.argv.slice(2)): Promise<numb
 }
 
 export function parseRunnerArgs(argv: string[]): RunnerOptions {
-  const { values } = parseArgs({
-    args: argv,
+  const runnerArgv = argv[0] === "--" ? argv.slice(1) : argv;
+  const { values, positionals } = parseArgs({
+    args: runnerArgv,
     options: {
       verbose: { type: "boolean" },
       "no-run-log": { type: "boolean" },
-      payload: { type: "string" }
+      payload: { type: "string" },
+      project: { type: "string" },
+      "seed-skill": { type: "string" },
+      "guidance-skill": { type: "string" },
+      session: { type: "string" },
+      resume: { type: "boolean" },
+      "with-cleanup": { type: "boolean" },
+      "force-research": { type: "boolean" },
+      "budget-usd": { type: "string" },
+      help: { type: "boolean", short: "h" }
     },
     strict: true,
-    allowPositionals: false
+    allowPositionals: true
   });
 
+  if (values.help) {
+    return {
+      verbose: values.verbose ?? false,
+      writeRunLog: !(values["no-run-log"] ?? false),
+      payload: {},
+      help: true
+    };
+  }
+
+  const configOptionsUsed = [
+    values.project,
+    values["seed-skill"],
+    values["guidance-skill"],
+    values.session,
+    values.resume,
+    values["with-cleanup"],
+    values["force-research"],
+    values["budget-usd"]
+  ].some((value) => value !== undefined);
+
+  if (values.payload !== undefined) {
+    if (positionals.length > 0 || configOptionsUsed) {
+      throw new Error("Use either a smoke/research command or --payload, not both.");
+    }
+    return {
+      verbose: values.verbose ?? false,
+      writeRunLog: !(values["no-run-log"] ?? false),
+      payload: parsePayload(values.payload)
+    };
+  }
+
+  if (positionals.length !== 1 || !isRunnerMode(positionals[0])) {
+    throw new Error("Choose a config-driven command: smoke or research. Use --help for usage.");
+  }
+
+  const mode = positionals[0];
   return {
     verbose: values.verbose ?? false,
     writeRunLog: !(values["no-run-log"] ?? false),
-    payload: JSON.parse(values.payload ?? "{}") as Record<string, unknown>
+    payload: buildConfigDrivenPayload(mode, {
+      projectRoot: values.project,
+      seedSkillDir: values["seed-skill"],
+      guidanceSkillDir: values["guidance-skill"],
+      sessionId: values.session,
+      resume: values.resume,
+      withCleanup: values["with-cleanup"],
+      forceResearch: values["force-research"],
+      budgetUsd: parseBudgetUsd(values["budget-usd"])
+    })
   };
+}
+
+export function buildConfigDrivenPayload(
+  mode: RunnerMode,
+  options: {
+    projectRoot?: string;
+    seedSkillDir?: string;
+    guidanceSkillDir?: string;
+    sessionId?: string;
+    resume?: boolean;
+    withCleanup?: boolean;
+    forceResearch?: boolean;
+    budgetUsd?: number;
+  } = {}
+): Record<string, unknown> {
+  const projectRoot = resolve(options.projectRoot ?? process.cwd());
+  return {
+    projectRoot,
+    withBaseline: true,
+    runResearch: mode === "research",
+    sessionId: options.sessionId ?? `${basename(projectRoot)}-${mode}`,
+    ...(options.seedSkillDir ? { seedSkillDir: options.seedSkillDir } : {}),
+    ...(options.guidanceSkillDir ? { guidanceSkillDir: options.guidanceSkillDir } : {}),
+    ...(options.resume ? { resume: true } : {}),
+    ...(options.withCleanup ? { withCleanup: true } : {}),
+    ...(options.forceResearch ? { forceResearch: true } : {}),
+    ...(options.budgetUsd === undefined ? {} : { budgetUsd: options.budgetUsd })
+  };
+}
+
+function isRunnerMode(value: string): value is RunnerMode {
+  return value === "smoke" || value === "research";
+}
+
+function parsePayload(value: string): Record<string, unknown> {
+  const payload = JSON.parse(value) as unknown;
+  if (payload === null || Array.isArray(payload) || typeof payload !== "object") {
+    throw new Error("--payload must be a JSON object.");
+  }
+  return payload as Record<string, unknown>;
+}
+
+function parseBudgetUsd(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("--budget-usd must be a non-negative number.");
+  }
+  return parsed;
 }
 
 export function buildFlueArgs(payload: Record<string, unknown>): string[] {

@@ -26,7 +26,7 @@ Use seed skill improvement when:
 If `workspace/baseline/` already exists, you can import it:
 
 ```bash
-pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
+pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project
 ```
 
 If no baseline exists yet, generate one:
@@ -38,7 +38,7 @@ varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autore
 ## Step 2: Run Research
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
 If the imported baseline already reaches `target_score`, the run stops with `baseline-target-score-reached`.

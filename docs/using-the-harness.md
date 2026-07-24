@@ -30,7 +30,7 @@ The default alpha fixture uses:
 
 When this guide says "project layout", it means an autoresearch project root: a repository or directory that contains the config, evals, reference material, candidate skill files, and workspace artifacts for one bounded improvement effort.
 
-For example, a dedicated repository such as [`skills-autoresearch-security/`](https://github.com/schalkneethling/skills-autoresearch-security/tree/main) is a project root. The harness does not require the project root to live inside this repository; the `projectRoot` payload value points Flue at the project you want to run.
+For example, a dedicated repository such as [`skills-autoresearch-security/`](https://github.com/schalkneethling/skills-autoresearch-security/tree/main) is a project root. The harness does not require the project root to live inside this repository; pass its path with `--project`, or run from that directory and omit the flag.
 
 ## Terminology
 
@@ -86,7 +86,7 @@ skills-autoresearch-security/
       ...
 ```
 
-The important parts are not the exact directory names for every project, but that `config.json` and the run payload point at the correct project root and seed skill directory.
+The important parts are not the exact directory names for every project, but that `config.json` and the run command point at the correct project root. `origin_skill` selects the default seed skill.
 
 ## Config
 
@@ -169,10 +169,10 @@ iteration judge calls = eval count * max_iterations when runResearch is true
 
 Imported baseline smoke runs with `withBaseline:true` plan no baseline producer or judge calls. `max_concurrency` controls how many evals can run at once; it does not reduce the number of producer or judge calls.
 
-Set `budget_usd` in `config.json` to cap observed spend for repeated runs, or pass `--budget-usd <amount>` to the CLI for a one-off override. Flue payloads accept `budgetUsd`:
+Set `budget_usd` in `config.json` to cap observed spend for repeated runs, or pass `--budget-usd <amount>` for a one-off override:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"budgetUsd":0.5,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --budget-usd 0.5
 ```
 
 The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue runs currently record call counts, but they do not expose token usage to this harness, so dollar-cost caps only take effect when usage and known pricing are available. Treat the dollar estimate as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
@@ -187,9 +187,9 @@ That file includes planned calls, observed calls by role, token usage when avail
 
 ## Seed Skill Selection
 
-`origin_skill` is the `config.json` field for the default seed skill. The harness uses this path when a run payload does not provide a skill override.
+`origin_skill` is the `config.json` field for the default seed skill. Normal runs use it automatically.
 
-`seedSkillDir` is the run payload override for one invocation. Payload overrides resolve relative to the shell working directory unless absolute. Do not add it to `config.json`; pass it in the JSON payload you send to the project-local Flue autoresearch command when you want that specific run to improve a different skill directory.
+Use `--seed-skill <dir>` to override `origin_skill` for one invocation. Overrides resolve relative to the shell working directory unless absolute.
 
 For example, this config default improves the audit skill:
 
@@ -199,16 +199,12 @@ For example, this config default improves the audit skill:
 }
 ```
 
-To improve the authoring skill without editing `config.json`, keep the config default as-is and pass `seedSkillDir` in that run's payload:
+To improve the authoring skill without editing `config.json`, keep the config default as-is and pass a concise override:
 
-```json
-{
-  "projectRoot": "path/to/skills-autoresearch-security",
-  "withBaseline": true,
-  "runResearch": true,
-  "seedSkillDir": "path/to/skills-autoresearch-security/skills/secure-authoring",
-  "sessionId": "security-authoring-research"
-}
+```bash
+varlock run -- pnpm run autoresearch -- research \
+  --project path/to/skills-autoresearch-security \
+  --seed-skill path/to/skills-autoresearch-security/skills/secure-authoring
 ```
 
 Current alpha behavior improves one seed skill per run. For multi-skill projects, run the harness once per target skill.
@@ -386,31 +382,24 @@ pnpm run alpha:smoke
 For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
-pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-smoke"}'
+pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project
 ```
 
-This command uses the repository's wrapper around its project-local `flue` dependency. It does not require a globally installed `flue` CLI.
+This command imports and validates `workspace/baseline/`, then stops before research. It uses the repository's project-local Flue dependency and does not require a global `flue` CLI.
 
-The command parts are:
+The simple commands derive common payload fields for you:
 
-- `pnpm run flue:run`: runs the project wrapper, which invokes the project-local Flue dependency with the Node target and this checkout as its root.
-- `--payload '...'`: passes harness-specific options as JSON.
-
-The payload fields are:
-
-- `projectRoot`: path to the autoresearch project you want the harness to load. Relative paths are resolved from the directory where you run the command, so in this guide they are relative to the local `skills-autoresearch-flue` checkout root. Use an absolute path if the project lives somewhere else and you want to avoid ambiguity.
-- `withBaseline`: tells the harness to load or validate the baseline artifacts for the project.
-- `runResearch`: controls whether the researcher should patch the skill. `false` makes this a smoke run that stops before model-backed research.
-- `forceResearch`: optional override for research runs. When omitted or `false`, `runResearch:true` stops before the researcher if the baseline aggregate score already meets `target_score`.
-- `resume`: optional recovery mode. When `true`, the harness validates and reuses completed baseline scores, candidate research, producer output, and iteration scores before running only the missing phases.
-- `sessionId`: run/session name passed in the payload and used when writing harness artifacts.
-- `withCleanup`: remove generated research state before a fresh run. This cannot be combined with `resume`.
+- `--project` defaults to the current directory.
+- `smoke` sets `withBaseline:true` and `runResearch:false`.
+- `research` sets `withBaseline:true` and `runResearch:true`.
+- The session name is derived from the project directory and command.
+- Research uses `origin_skill`, model assignments, iteration limits, target score, concurrency, and budget from `config.json`.
 
 This should return events ending with `research-loop-ready`.
 
 ## Terminal Output And Run Logs
 
-The supported `flue:run` wrapper keeps terminal output concise by default. It shows run identity, phase and eval progress, tool starts/completions, scores, stop conditions, errors, and artifact paths, while suppressing streamed reasoning, full prompts, model completions, and generated file contents.
+The supported `autoresearch` wrapper keeps terminal output concise by default. It shows run identity, phase and eval progress, tool starts/completions, scores, stop conditions, errors, and artifact paths, while suppressing streamed reasoning, full prompts, model completions, and generated file contents.
 
 By default, each invocation creates an append-only NDJSON log under:
 
@@ -423,13 +412,13 @@ When run-log writing is enabled, the log path is printed when the run starts and
 Run with full terminal detail when debugging:
 
 ```bash
-pnpm run flue:run -- --verbose --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-verbose-smoke"}'
+pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project --verbose
 ```
 
 Disable the full local log only when you explicitly do not want that audit trail:
 
 ```bash
-pnpm run flue:run -- --no-run-log --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":false,"sessionId":"my-unlogged-smoke"}'
+pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project --no-run-log
 ```
 
 Run logs can contain prompts, model output, tool arguments, errors, and generated content. Treat them as sensitive audit artifacts and do not commit them. This repository ignores `**/workspace/run-logs/`, but that rule does not protect a separate external `projectRoot` repository. Add the following rule to the external project's `.gitignore`:
@@ -438,13 +427,9 @@ Run logs can contain prompts, model output, tool arguments, errors, and generate
 workspace/run-logs/
 ```
 
-Direct `pnpm exec flue run autoresearch ...` remains available as an advanced debugging path and retains Flue's unfiltered event stream.
-
-The standalone `skills-autoresearch` CLI supports the same `--verbose` and `--no-run-log` flags.
-
 ## Generate An Initial Baseline
 
-If your project does not have `workspace/baseline/` yet, run a model-backed baseline generation pass without `withBaseline` and with `runResearch:false`:
+The config-driven `smoke` and `research` commands expect an imported baseline. If your project does not have `workspace/baseline/` yet, use the advanced payload form for a model-backed baseline generation pass:
 
 ```bash
 varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","runResearch":false,"sessionId":"my-baseline"}'
@@ -467,18 +452,20 @@ pnpm run alpha:research
 For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
-This also uses `pnpm exec` to run the project-local `flue` binary. `varlock run --` wraps the command so model credentials are available during the run.
+`varlock run --` makes model credentials available. The command reads the default seed skill from `origin_skill` and all model assignments and limits from `config.json`.
 
-For a multi-skill project, point `seedSkillDir` at the specific skill you want that run to improve:
+For a multi-skill project, use the concise seed override:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/skills-autoresearch-security","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/skills-autoresearch-security/skills/security-audit","sessionId":"security-audit-research"}'
+varlock run -- pnpm run autoresearch -- research \
+  --project path/to/skills-autoresearch-security \
+  --seed-skill path/to/skills-autoresearch-security/skills/security-audit
 ```
 
-The run first scores the baseline. If the baseline aggregate `normalizedScore` is already greater than or equal to `target_score`, the harness emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1` or calling the researcher. To intentionally run improvements anyway, add `"forceResearch": true` to the payload.
+The run first scores the baseline. If the baseline aggregate `normalizedScore` is already greater than or equal to `target_score`, the harness emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1` or calling the researcher. To intentionally run improvements anyway, add `--force-research`.
 
 When research proceeds, the run stops when either:
 
@@ -514,7 +501,7 @@ Key questions:
 Use resume mode after a provider error, network failure, quota limit, or interrupted process:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"resume":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research-resume"}'
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --resume
 ```
 
 Resume walks the run in order and validates artifacts before trusting them:
@@ -528,20 +515,30 @@ Resume walks the run in order and validates artifacts before trusting them:
 
 Incomplete candidate research and producer output directories that are safe to retry are moved under `workspace/resume-backups/` before that phase runs again, preserving the interrupted artifacts for audit.
 
-`resume:true` without `withBaseline` recovers a baseline that the harness was generating when it failed. `resume:true` with `withBaseline:true` keeps the strict imported-baseline behavior, then recovers research iterations.
+The config-driven resume command keeps the strict imported-baseline behavior, then recovers research iterations. Recovering an interrupted initial baseline remains available through the advanced payload form with `resume:true` and without `withBaseline`.
 
 Resume assumes that `config.json`, eval cases, input, reference material, models, and seed skill have not changed since the interrupted run. There is not yet a run manifest that fingerprints those inputs. Start a fresh run after changing them.
 
 The cost summary and actual call counts written by a resumed invocation describe that invocation, while the call preview remains the configured maximum. Consult earlier transcripts and provider records for costs from previous failed attempts.
 
-To intentionally rerun research from an imported baseline, pass `"withCleanup":true`:
+To intentionally rerun research from an imported baseline, pass `--with-cleanup`:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"withCleanup":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research-clean"}'
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --with-cleanup
 ```
 
 Cleanup removes `workspace/iterations`, `workspace/resume-backups`, and `workspace/guidance-ledger.json` as a true clean slate for research. It deliberately preserves `workspace/baseline`, configuration, evals, inputs, references, and skills. The conservative exclusive-create behavior remains the default when `withCleanup` is omitted. Do not combine cleanup with resume: cleanup discards the artifacts that resume needs.
 
-The standalone CLI uses the equivalent `--with-cleanup` flag. If the harness generated the baseline and you also intend to replace it, remove `workspace/baseline` separately before the run.
+If the harness generated the baseline and you also intend to replace it, remove `workspace/baseline` separately before the run.
 
 Keep committed fixtures baseline-only unless you intentionally want to preserve a specific alpha run artifact.
+
+## Advanced Direct Flue Invocation
+
+The wrapper still accepts a complete payload when you need uncommon workflow fields or are debugging:
+
+```bash
+varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
+```
+
+Direct `pnpm exec flue run autoresearch --target node --root . --payload '...'` also remains available and retains Flue's unfiltered event stream. Payload fields use the camel-case names accepted by `.flue/workflows/autoresearch.ts`, including `projectRoot`, `withBaseline`, `runResearch`, `forceResearch`, `resume`, `withCleanup`, `seedSkillDir`, `guidanceSkillDir`, `budgetUsd`, and `sessionId`.

@@ -42,9 +42,13 @@ pnpm test
 pnpm run typecheck
 pnpm run build
 pnpm run flue:build
+pnpm run autoresearch -- smoke --project path/to/project
+varlock run -- pnpm run autoresearch -- research --project path/to/project
 pnpm run alpha:smoke
 pnpm run alpha:research
 ```
+
+The `smoke` and `research` commands derive normal Flue payload fields and the session name, use `origin_skill` and model settings from the project config, and avoid inline JSON. Direct Flue payload invocation remains available for advanced debugging.
 
 `alpha:smoke` imports a committed baseline and does not call a model.
 

@@ -98,7 +98,7 @@ If `overall.normalizedScore < target_score`, the model likely needs either:
 After generating the baseline, you can run with `withBaseline:true` and `runResearch:true` to confirm the harness will stop before research when the baseline already passes:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research-check"}'
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
 When the baseline passes, the run emits:
