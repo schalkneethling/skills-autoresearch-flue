@@ -74,6 +74,7 @@ Generated research output lands under `workspace/iterations/<n>/`. Do not commit
 
 ## Guardrails
 
+- Treat review feedback as a hypothesis: verify it against current code, callers, CI paths, and documented behavior before changing anything. If feedback is invalid or conflicts with a repository invariant, state that clearly and explain the evidence.
 - Keep Flue as the primary harness layer for alpha work.
 - Do not collapse producer and judge into one self-scoring model call.
 - Prefer schema-validated structured model output over ad hoc parsing.
@@ -82,6 +83,7 @@ Generated research output lands under `workspace/iterations/<n>/`. Do not commit
 - Update docs and tests when config shape, artifact layout, commands, or model flow changes.
 - Never commit `.env`, resolved API keys, provider secrets, or transcripts containing secrets.
 - Score and summary writes often use exclusive file creation; rerun failures may indicate existing artifacts rather than logic failure.
+- Keep `pnpm run check` and `alpha:smoke` credential-free. Do not route smoke runs through Varlock or require `op`; use Varlock only for model-backed commands.
 
 ## What Is Still Alpha
 

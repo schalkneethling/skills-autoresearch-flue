@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import {
   appendQuietStdout,
+  buildConfigDrivenPayload,
   buildFlueArgs,
   formatQuietResult,
   parseRunnerArgs,
@@ -14,6 +17,88 @@ test("Flue runner parses verbose and run-log opt-out flags without forwarding th
     writeRunLog: false,
     payload: { projectRoot: "/tmp/project", sessionId: "test" }
   });
+});
+
+test("package scripts keep model-free smoke credential-free", () => {
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+
+  expect(packageJson.scripts.autoresearch).toBe("pnpm run build && node dist/src/flue-runner.js");
+  expect(packageJson.scripts["alpha:smoke"]).toContain("pnpm run autoresearch");
+  expect(packageJson.scripts["alpha:research"]).toContain("varlock run --");
+});
+
+test("Flue runner builds a config-driven baseline smoke command", () => {
+  expect(parseRunnerArgs(["--", "smoke", "--project", "/tmp/project"])).toEqual({
+    verbose: false,
+    writeRunLog: true,
+    payload: {
+      projectRoot: "/tmp/project",
+      withBaseline: true,
+      runResearch: false,
+      sessionId: "project-smoke"
+    }
+  });
+});
+
+test("Flue runner builds a config-driven research command with concise overrides", () => {
+  expect(
+    parseRunnerArgs([
+      "research",
+      "--project",
+      "/tmp/project",
+      "--seed-skill",
+      "/tmp/alternate-skill",
+      "--guidance-skill",
+      "/tmp/guidance",
+      "--session",
+      "retry",
+      "--resume",
+      "--force-research",
+      "--budget-usd",
+      "0.25"
+    ])
+  ).toEqual({
+    verbose: false,
+    writeRunLog: true,
+    payload: {
+      projectRoot: "/tmp/project",
+      withBaseline: true,
+      runResearch: true,
+      sessionId: "retry",
+      seedSkillDir: "/tmp/alternate-skill",
+      guidanceSkillDir: "/tmp/guidance",
+      resume: true,
+      forceResearch: true,
+      budgetUsd: 0.25
+    }
+  });
+});
+
+test("config-driven commands default to the current project and derive a stable session", () => {
+  expect(buildConfigDrivenPayload("research")).toMatchObject({
+    projectRoot: process.cwd(),
+    withBaseline: true,
+    runResearch: true,
+    sessionId: `${basename(process.cwd())}-research`
+  });
+});
+
+test("Flue runner keeps direct payload invocation as an advanced path", () => {
+  expect(parseRunnerArgs(["--payload", '{"projectRoot":"/tmp/project","runResearch":false}'])).toMatchObject({
+    payload: { projectRoot: "/tmp/project", runResearch: false }
+  });
+});
+
+test("Flue runner rejects ambiguous modes and invalid concise overrides", () => {
+  expect(() => parseRunnerArgs([])).toThrow(/smoke or research/);
+  expect(() => parseRunnerArgs(["unknown"])).toThrow(/smoke or research/);
+  expect(() => parseRunnerArgs(["research", "--payload", "{}"])).toThrow(/either/);
+  expect(() => parseRunnerArgs(["research", "--budget-usd=-1"])).toThrow(/non-negative/);
+  expect(() => parseRunnerArgs(["research", "--budget-usd", ""])).toThrow(/non-negative/);
+  expect(() => parseRunnerArgs(["research", "--budget-usd", "   "])).toThrow(/non-negative/);
+  expect(() => parseRunnerArgs(["--payload", "[]"])).toThrow(/JSON object/);
 });
 
 test("Flue runner emits exactly one canonical payload argument", () => {
