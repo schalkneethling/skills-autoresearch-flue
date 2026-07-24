@@ -17,10 +17,11 @@
     "typecheck": "tsc --noEmit",
     "check": "pnpm run format:check && pnpm run lint && pnpm run knip && pnpm run typecheck && pnpm test && pnpm run build && pnpm run flue:build && pnpm run alpha:smoke",
     "build": "tsc -p tsconfig.json",
+    "autoresearch": "pnpm run build && node dist/src/flue-runner.js",
     "flue:run": "pnpm run build && node dist/src/flue-runner.js",
     "flue:build": "flue build --target node --root . --output .flue-dist",
-    "alpha:smoke": "pnpm run build && node dist/src/flue-runner.js --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":false,\"sessionId\":\"alpha-smoke\"}'",
-    "alpha:research": "pnpm run build && varlock run -- node dist/src/flue-runner.js --payload '{\"projectRoot\":\"fixtures/projects/release-notes-alpha\",\"withBaseline\":true,\"runResearch\":true,\"seedSkillDir\":\"fixtures/projects/release-notes-alpha/seed-skill\",\"sessionId\":\"alpha-research\"}'",
+    "alpha:smoke": "pnpm run autoresearch -- smoke --project fixtures/projects/release-notes-alpha --session alpha-smoke",
+    "alpha:research": "pnpm run build && varlock run -- node dist/src/flue-runner.js research --project fixtures/projects/release-notes-alpha --session alpha-research",
     "env:check": "varlock load"
   },
   "dependencies": {
@@ -37,7 +38,7 @@
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.65.0",
-    "varlock": "^1.10.0",
+    "varlock": "^1.12.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.112.0"
   },

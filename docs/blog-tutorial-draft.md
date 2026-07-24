@@ -356,10 +356,10 @@ Cost preview and budget support are documented and implemented in part, but [iss
 
 ## Step 7: rerunning from a clean slate
 
-Iteration files are written conservatively to preserve evidence. To explicitly start over, add `"withCleanup":true` to the Flue payload. Cleanup removes generated iterations, resume backups, and the guidance ledger while preserving the baseline and project inputs.
+Iteration files are written conservatively to preserve evidence. To explicitly start over, add `--with-cleanup` to the config-driven command. Cleanup removes generated iterations, resume backups, and the guidance ledger while preserving the baseline and project inputs.
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"fixtures/projects/release-notes-alpha","withBaseline":true,"runResearch":true,"withCleanup":true,"seedSkillDir":"fixtures/projects/release-notes-alpha/seed-skill","sessionId":"alpha-research-clean"}'
+varlock run -- pnpm run autoresearch -- research --project fixtures/projects/release-notes-alpha --with-cleanup
 ```
 
 Cleanup is all-or-nothing from the run's perspective: if any generated artifact cannot be removed, the run stops with the artifact path in the error instead of continuing into a partially stale workspace. It cannot be combined with resume.
@@ -387,7 +387,7 @@ The alpha can already:
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | Clean install could not run Flue because CLI/runtime and Wrangler versions were incompatible   | [#84](https://github.com/schalkneethling/skills-autoresearch-flue/issues/84)       |
 | Normal terminal output exposes long model reasoning and generated content                      | Addressed by the quiet wrapper in #17; full output moves to `workspace/run-logs/`  |
-| Common runs require long, plumbing-heavy Flue payloads outside the convenience fixture scripts | [#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12)       |
+| Common runs require long, plumbing-heavy Flue payloads outside the convenience fixture scripts | Addressed by config-driven `smoke` and `research` commands in #12                  |
 | Reruns require manual cleanup                                                                  | [#10](https://github.com/schalkneethling/skills-autoresearch-flue/issues/10)       |
 | Failed runs cannot resume from the latest trustworthy phase                                    | [#55](https://github.com/schalkneethling/skills-autoresearch-flue/issues/55)       |
 | Flue call counts are captured, but this run exposed no token usage or dollar estimate          | [#19](https://github.com/schalkneethling/skills-autoresearch-flue/issues/19)       |
@@ -401,7 +401,7 @@ Two tracker housekeeping items are also worth noting. [Issue #65](https://github
 The issue tracker points to a coherent progression:
 
 - Reliability first: resume failed runs ([#55](https://github.com/schalkneethling/skills-autoresearch-flue/issues/55)) and support safe reruns ([#10](https://github.com/schalkneethling/skills-autoresearch-flue/issues/10)).
-- Make the tool pleasant to operate: build on the quiet output and durable run log from [#17](https://github.com/schalkneethling/skills-autoresearch-flue/issues/17), then add shorter config-driven commands ([#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12)) and a richer run report ([#18](https://github.com/schalkneethling/skills-autoresearch-flue/issues/18)).
+- Make the tool pleasant to operate: build on the quiet output and durable run log from [#17](https://github.com/schalkneethling/skills-autoresearch-flue/issues/17), the config-driven commands from [#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12), and a richer run report ([#18](https://github.com/schalkneethling/skills-autoresearch-flue/issues/18)).
 - Improve the quality of researched skills: place durable material in references, scripts, or assets ([#64](https://github.com/schalkneethling/skills-autoresearch-flue/issues/64)); review the candidate skill itself ([#63](https://github.com/schalkneethling/skills-autoresearch-flue/issues/63)); and evaluate trigger phrasing ([#61](https://github.com/schalkneethling/skills-autoresearch-flue/issues/61)).
 - Broaden only after the loop is dependable: multi-skill runs ([#8](https://github.com/schalkneethling/skills-autoresearch-flue/issues/8)) and cross-provider judging.
 
@@ -432,7 +432,7 @@ The final tutorial should start with two separate directories:
 /path/to/the-user-project/          # the skill project being researched
 ```
 
-The user should run the harness against an external, absolute `projectRoot` and point `seedSkillDir` at a skill in that project. The walkthrough must verify path resolution from the harness working directory, where config and eval artifacts are written, which files remain in the external repository, and how the generated candidate is adopted after a successful run.
+The user should run the harness against an external, absolute project path and configure `origin_skill` for the skill in that project. The walkthrough must verify path resolution from the harness working directory, where config and eval artifacts are written, which files remain in the external repository, and how the generated candidate is adopted after a successful run.
 
 Use a realistic project and skill rather than moving the release-notes fixture elsewhere merely to demonstrate an absolute path. The scenario should begin with a recognizable user problem, exercise more than one representative eval if affordable, and finish with an artifact the reader would plausibly keep or ship.
 
@@ -441,7 +441,7 @@ The revised article should answer these questions explicitly:
 - What must be installed in the harness checkout versus the user's project?
 - Which command is run from which directory?
 - Which paths in `config.json` resolve relative to the external project root?
-- Which payload paths resolve relative to the shell working directory?
+- Which command-line override paths resolve relative to the shell working directory?
 - Does the user's repository need Flue, Varlock, or harness dependencies installed locally?
 - Where do baseline, iteration, transcript, and cost artifacts land?
 - How does the user review and adopt the winning candidate skill?
@@ -461,7 +461,7 @@ Do not publish the final tutorial until the path it recommends works from a clea
 Likely blockers to land or explicitly resolve before publication:
 
 - [#84](https://github.com/schalkneethling/skills-autoresearch-flue/issues/84): a clean install must produce a compatible Flue CLI/runtime/Wrangler dependency graph.
-- [#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12): a normal external-project run needs a short, config-driven command instead of a long inline Flue payload.
+- Verify [#12](https://github.com/schalkneethling/skills-autoresearch-flue/issues/12) against a separate external project using the short config-driven command.
 - [#55](https://github.com/schalkneethling/skills-autoresearch-flue/issues/55): failed model-backed work should resume from the latest trustworthy phase.
 - [#10](https://github.com/schalkneethling/skills-autoresearch-flue/issues/10): rerunning should not require a tutorial to recommend manual recursive deletion.
 

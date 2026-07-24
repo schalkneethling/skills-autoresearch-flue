@@ -75,21 +75,22 @@ This runs the Flue workflow with:
   "projectRoot": "fixtures/projects/release-notes-alpha",
   "withBaseline": true,
   "runResearch": true,
-  "seedSkillDir": "fixtures/projects/release-notes-alpha/seed-skill",
   "sessionId": "alpha-research"
 }
 ```
 
-If the imported baseline already meets `target_score`, the run emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1`. Add `"forceResearch": true` to the payload only when you want to spend model calls on research anyway.
+The wrapper derives the baseline/research flags from the `research` command, and the fixture's `origin_skill` config selects `seed-skill`.
+
+If the imported baseline already meets `target_score`, the run emits `baseline-target-score-reached` and stops before creating `workspace/iterations/1`. Add `--force-research` only when you want to spend model calls on research anyway.
 
 During research, an iteration that reaches the aggregate target but lowers any eval case below its baseline score emits `target-score-blocked-by-regression` and continues until a non-regressing candidate reaches the target or `max_iterations` is exhausted.
 
 ## Resume An Interrupted Run
 
-If a model-backed run stops after writing some artifacts, rerun with the same run-defining payload and add `"resume": true`. The `sessionId` may be changed to distinguish the resumed invocation, as in this example:
+If a model-backed run stops after writing some artifacts, rerun the config-driven command with `--resume`:
 
 ```bash
-varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"fixtures/projects/release-notes-alpha","withBaseline":true,"runResearch":true,"resume":true,"seedSkillDir":"fixtures/projects/release-notes-alpha/seed-skill","sessionId":"alpha-research-resume"}'
+varlock run -- pnpm run autoresearch -- research --project fixtures/projects/release-notes-alpha --resume
 ```
 
 Resume validates and reuses completed scores, candidate research, producer output, and judge transcripts, then runs only missing phases. It rebuilds a missing iteration summary after all scores are present. Incomplete research or producer artifacts that are safe to retry are moved to `workspace/resume-backups/`; invalid or inconsistent artifacts stop the run with an actionable error rather than being overwritten.
