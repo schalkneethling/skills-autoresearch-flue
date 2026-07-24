@@ -98,7 +98,7 @@ If `overall.normalizedScore < target_score`, the model likely needs either:
 After generating the baseline, inspect `workspace/baseline/summary.json` before running this check. When `overall.normalizedScore >= target_score`, the command confirms that the harness stops before research:
 
 ```bash
-pnpm run autoresearch -- research --project path/to/my-autoresearch-project
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
 When the baseline passes, the run emits:

@@ -40,7 +40,7 @@ This validates the project and imported score artifacts.
 To evaluate an updated seed skill through the normal research loop:
 
 ```bash
-pnpm run autoresearch -- research --project path/to/my-autoresearch-project
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
 If the imported baseline already reaches `target_score`, the harness stops before research unless you pass `--force-research`.
@@ -62,7 +62,7 @@ Compare:
 Generated iteration artifacts are written with exclusive file creation. Use cleanup mode to rerun the same project from a clean research slate:
 
 ```bash
-pnpm run autoresearch -- research --project path/to/my-autoresearch-project --with-cleanup
+varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --with-cleanup
 ```
 
 Cleanup preserves the baseline and removes generated iterations, resume backups, and the guidance ledger. Only commit generated iterations when the fixture or documentation intentionally needs a recorded run.

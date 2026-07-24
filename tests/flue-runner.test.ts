@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import {
   appendQuietStdout,
@@ -16,6 +17,16 @@ test("Flue runner parses verbose and run-log opt-out flags without forwarding th
     writeRunLog: false,
     payload: { projectRoot: "/tmp/project", sessionId: "test" }
   });
+});
+
+test("package scripts keep model-free smoke credential-free", () => {
+  const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+    scripts: Record<string, string>;
+  };
+
+  expect(packageJson.scripts.autoresearch).toBe("pnpm run build && node dist/src/flue-runner.js");
+  expect(packageJson.scripts["alpha:smoke"]).toContain("pnpm run autoresearch");
+  expect(packageJson.scripts["alpha:research"]).toContain("varlock run --");
 });
 
 test("Flue runner builds a config-driven baseline smoke command", () => {
