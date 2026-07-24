@@ -172,7 +172,7 @@ Imported baseline smoke runs with `withBaseline:true` plan no baseline producer 
 Set `budget_usd` in `config.json` to cap observed spend for repeated runs, or pass `--budget-usd <amount>` for a one-off override:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --budget-usd 0.5
+pnpm run autoresearch -- research --project path/to/my-autoresearch-project --budget-usd 0.5
 ```
 
 The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue runs currently record call counts, but they do not expose token usage to this harness, so dollar-cost caps only take effect when usage and known pricing are available. Treat the dollar estimate as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
@@ -202,7 +202,7 @@ For example, this config default improves the audit skill:
 To improve the authoring skill without editing `config.json`, keep the config default as-is and pass a concise override:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research \
+pnpm run autoresearch -- research \
   --project path/to/skills-autoresearch-security \
   --seed-skill path/to/skills-autoresearch-security/skills/secure-authoring
 ```
@@ -452,15 +452,15 @@ pnpm run alpha:research
 For your own project, run the following from the root of a local `skills-autoresearch-flue` checkout:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
+pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
-`varlock run --` makes model credentials available. The command reads the default seed skill from `origin_skill` and all model assignments and limits from `config.json`.
+The `autoresearch` script loads model credentials through Varlock. The command reads the default seed skill from `origin_skill` and all model assignments and limits from `config.json`.
 
 For a multi-skill project, use the concise seed override:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research \
+pnpm run autoresearch -- research \
   --project path/to/skills-autoresearch-security \
   --seed-skill path/to/skills-autoresearch-security/skills/security-audit
 ```
@@ -501,7 +501,7 @@ Key questions:
 Use resume mode after a provider error, network failure, quota limit, or interrupted process:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --resume
+pnpm run autoresearch -- research --project path/to/my-autoresearch-project --resume
 ```
 
 Resume walks the run in order and validates artifacts before trusting them:
@@ -524,7 +524,7 @@ The cost summary and actual call counts written by a resumed invocation describe
 To intentionally rerun research from an imported baseline, pass `--with-cleanup`:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --with-cleanup
+pnpm run autoresearch -- research --project path/to/my-autoresearch-project --with-cleanup
 ```
 
 Cleanup removes `workspace/iterations`, `workspace/resume-backups`, and `workspace/guidance-ledger.json` as a true clean slate for research. It deliberately preserves `workspace/baseline`, configuration, evals, inputs, references, and skills. The conservative exclusive-create behavior remains the default when `withCleanup` is omitted. Do not combine cleanup with resume: cleanup discards the artifacts that resume needs.

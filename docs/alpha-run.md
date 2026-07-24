@@ -90,7 +90,7 @@ During research, an iteration that reaches the aggregate target but lowers any e
 If a model-backed run stops after writing some artifacts, rerun the config-driven command with `--resume`:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research --project fixtures/projects/release-notes-alpha --resume
+pnpm run autoresearch -- research --project fixtures/projects/release-notes-alpha --resume
 ```
 
 Resume validates and reuses completed scores, candidate research, producer output, and judge transcripts, then runs only missing phases. It rebuilds a missing iteration summary after all scores are present. Incomplete research or producer artifacts that are safe to retry are moved to `workspace/resume-backups/`; invalid or inconsistent artifacts stop the run with an actionable error rather than being overwritten.

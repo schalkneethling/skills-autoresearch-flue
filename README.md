@@ -43,7 +43,7 @@ pnpm run typecheck
 pnpm run build
 pnpm run flue:build
 pnpm run autoresearch -- smoke --project path/to/project
-varlock run -- pnpm run autoresearch -- research --project path/to/project
+pnpm run autoresearch -- research --project path/to/project
 pnpm run alpha:smoke
 pnpm run alpha:research
 ```

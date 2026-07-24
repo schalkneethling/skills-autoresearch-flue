@@ -188,6 +188,9 @@ function parseBudgetUsd(value: string | undefined): number | undefined {
   if (value === undefined) {
     return undefined;
   }
+  if (value.trim() === "") {
+    throw new Error("--budget-usd must be a non-negative number.");
+  }
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) {
     throw new Error("--budget-usd must be a non-negative number.");

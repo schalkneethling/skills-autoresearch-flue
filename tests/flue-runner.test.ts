@@ -1,3 +1,4 @@
+import { basename } from "node:path";
 import {
   appendQuietStdout,
   buildConfigDrivenPayload,
@@ -69,7 +70,7 @@ test("config-driven commands default to the current project and derive a stable 
     projectRoot: process.cwd(),
     withBaseline: true,
     runResearch: true,
-    sessionId: `${process.cwd().split("/").at(-1)}-research`
+    sessionId: `${basename(process.cwd())}-research`
   });
 });
 
@@ -84,6 +85,8 @@ test("Flue runner rejects ambiguous modes and invalid concise overrides", () => 
   expect(() => parseRunnerArgs(["unknown"])).toThrow(/smoke or research/);
   expect(() => parseRunnerArgs(["research", "--payload", "{}"])).toThrow(/either/);
   expect(() => parseRunnerArgs(["research", "--budget-usd=-1"])).toThrow(/non-negative/);
+  expect(() => parseRunnerArgs(["research", "--budget-usd", ""])).toThrow(/non-negative/);
+  expect(() => parseRunnerArgs(["research", "--budget-usd", "   "])).toThrow(/non-negative/);
   expect(() => parseRunnerArgs(["--payload", "[]"])).toThrow(/JSON object/);
 });
 

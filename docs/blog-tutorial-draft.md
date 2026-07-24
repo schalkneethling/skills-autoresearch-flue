@@ -359,7 +359,7 @@ Cost preview and budget support are documented and implemented in part, but [iss
 Iteration files are written conservatively to preserve evidence. To explicitly start over, add `--with-cleanup` to the config-driven command. Cleanup removes generated iterations, resume backups, and the guidance ledger while preserving the baseline and project inputs.
 
 ```bash
-varlock run -- pnpm run autoresearch -- research --project fixtures/projects/release-notes-alpha --with-cleanup
+pnpm run autoresearch -- research --project fixtures/projects/release-notes-alpha --with-cleanup
 ```
 
 Cleanup is all-or-nothing from the run's perspective: if any generated artifact cannot be removed, the run stops with the artifact path in the error instead of continuing into a partially stale workspace. It cannot be combined with resume.

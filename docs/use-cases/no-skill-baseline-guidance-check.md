@@ -95,10 +95,10 @@ If `overall.normalizedScore < target_score`, the model likely needs either:
 
 ## Step 4: Optional Early-Exit Check
 
-After generating the baseline, you can run with `withBaseline:true` and `runResearch:true` to confirm the harness will stop before research when the baseline already passes:
+After generating the baseline, inspect `workspace/baseline/summary.json` before running this check. When `overall.normalizedScore >= target_score`, the command confirms that the harness stops before research:
 
 ```bash
-varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project
+pnpm run autoresearch -- research --project path/to/my-autoresearch-project
 ```
 
 When the baseline passes, the run emits:
@@ -108,6 +108,8 @@ baseline-target-score-reached
 ```
 
 and does not create `workspace/iterations/1`.
+
+If the baseline score is below `target_score`, this same command does not stop early: it proceeds into model-backed research, requires a valid `origin_skill`, and can incur researcher, producer, and judge calls. Use it only when that fallback behavior is intended.
 
 ## Seed-As-Reference Research
 
