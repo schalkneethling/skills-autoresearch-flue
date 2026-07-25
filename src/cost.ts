@@ -5,11 +5,7 @@ import { projectLayout } from "./project-layout.js";
 import { ModelConfig } from "./schemas.js";
 
 export type ModelCallRole =
-  | "baseline_producer"
-  | "baseline_judge"
-  | "researcher"
-  | "iteration_producer"
-  | "iteration_judge";
+  "baseline_producer" | "baseline_judge" | "researcher" | "iteration_producer" | "iteration_judge";
 
 export type ModelCallCounts = Record<ModelCallRole, number>;
 
