@@ -27,7 +27,7 @@ function sourceIdentity(source: { path: string; locator?: string }): string {
   ) {
     throw new Error(`Stable IDs require a normalized source-relative POSIX path: ${source.path}`);
   }
-  return `${source.path.normalize("NFC")}#${normalizeIdentityText(source.locator ?? "")}`;
+  return JSON.stringify([source.path.normalize("NFC"), normalizeIdentityText(source.locator ?? "")]);
 }
 
 /** IDs deliberately exclude machine roots and all mutable analysis judgments. */
@@ -41,15 +41,13 @@ export function createOpportunityId(input: OpportunityIdentityInput): string {
 }
 
 export function createRecommendationId(input: RecommendationIdentityInput): string {
-  const proposedAssetIdentity =
-    input.relationship === "new"
-      ? normalizeIdentityText(
-          input.proposed_name ??
-            (() => {
-              throw new Error("New deterministic assets require a proposed name for stable identity");
-            })()
-        )
-      : null;
+  let proposedAssetIdentity: string | null = null;
+  if (input.relationship === "new") {
+    if (input.proposed_name === undefined) {
+      throw new Error("New deterministic assets require a proposed name for stable identity");
+    }
+    proposedAssetIdentity = normalizeIdentityText(input.proposed_name);
+  }
   const identity = JSON.stringify({
     asset_kind: input.asset_kind,
     catalog_asset_id: input.catalog_asset_id ?? null,

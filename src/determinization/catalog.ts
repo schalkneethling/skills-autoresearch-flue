@@ -2,14 +2,26 @@ import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import * as v from "valibot";
 import type { AnalysisOpportunitiesDocument } from "./schemas.js";
-import { DeterministicAssetKindSchema, DeterminizationSchemaVersionSchema } from "./schemas.js";
+import {
+  DeterministicAssetKindSchema,
+  DeterminizationSchemaVersionSchema,
+  NonEmptyTextSchema,
+  StableIdSchema
+} from "./schemas.js";
 
-const NonEmptyTextSchema = v.pipe(
-  v.string(),
-  v.minLength(1),
-  v.check((value) => value.trim().length > 0, "Expected nonblank text")
-);
-const StableIdSchema = v.pipe(v.string(), v.regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/u));
+export const CATALOG_DOMAIN_FILES = {
+  javascript_typescript: "javascript-typescript.json",
+  language: "language.json",
+  markdown: "markdown.json"
+} as const;
+type CatalogDomain = keyof typeof CATALOG_DOMAIN_FILES;
+const CATALOG_DOMAINS = Object.keys(CATALOG_DOMAIN_FILES) as [CatalogDomain, ...CatalogDomain[]];
+const CATALOG_FILES = Object.values(CATALOG_DOMAIN_FILES);
+const DOMAIN_BY_CATALOG_FILE = Object.fromEntries(
+  Object.entries(CATALOG_DOMAIN_FILES).map(([domain, file]) => [file, domain])
+) as Record<string, CatalogDomain>;
+
+export const CatalogDomainSchema = v.picklist(CATALOG_DOMAINS);
 const PortableCatalogPathSchema = v.pipe(
   v.string(),
   v.regex(/^[a-z0-9][a-z0-9-]*\.json$/u, "Catalog domain files must be local JSON file names")
@@ -20,7 +32,7 @@ export const CatalogCapabilityLevelSchema = v.picklist(["existing", "configurabl
 export const CatalogAssetSchema = v.strictObject({
   id: StableIdSchema,
   name: NonEmptyTextSchema,
-  domain: v.picklist(["language", "markdown", "javascript_typescript"]),
+  domain: CatalogDomainSchema,
   asset_kind: DeterministicAssetKindSchema,
   capability_level: CatalogCapabilityLevelSchema,
   priority: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(3)),
@@ -34,7 +46,7 @@ export const CatalogAssetSchema = v.strictObject({
 export const CatalogDomainDocumentSchema = v.pipe(
   v.strictObject({
     schema_version: DeterminizationSchemaVersionSchema,
-    domain: v.picklist(["language", "markdown", "javascript_typescript"]),
+    domain: CatalogDomainSchema,
     assets: v.array(CatalogAssetSchema)
   }),
   v.check((document) => document.assets.every((asset) => asset.domain === document.domain), "Asset domain mismatch"),
@@ -59,11 +71,9 @@ export const CatalogIndexSchema = v.pipe(
   v.check((index) => new Set(index.files).size === index.files.length, "Duplicate catalog files are not allowed"),
   v.check(
     (index) =>
-      index.files.length === 3 &&
-      index.files[0] === "javascript-typescript.json" &&
-      index.files[1] === "language.json" &&
-      index.files[2] === "markdown.json",
-    "Catalog index must contain exactly the three supported domain files in canonical order"
+      index.files.length === CATALOG_FILES.length &&
+      index.files.every((file, indexPosition) => file === CATALOG_FILES[indexPosition]),
+    "Catalog index must contain exactly the supported domain files in canonical order"
   )
 );
 
@@ -84,10 +94,6 @@ function parse<TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknow
   return result.output;
 }
 
-function isStrictlySorted(values: string[]): boolean {
-  return values.every((value, index) => index === 0 || values[index - 1] < value);
-}
-
 function assetsFollowCatalogPriority(assets: CatalogAsset[]): boolean {
   return assets.every((asset, index) => {
     if (index === 0) return true;
@@ -96,24 +102,26 @@ function assetsFollowCatalogPriority(assets: CatalogAsset[]): boolean {
   });
 }
 
-const EXPECTED_DOMAIN_BY_FILE: Record<string, CatalogAsset["domain"]> = {
-  "javascript-typescript.json": "javascript_typescript",
-  "language.json": "language",
-  "markdown.json": "markdown"
-};
+async function readJson(path: string, label: string): Promise<unknown> {
+  const contents = await readFile(path, "utf8");
+  try {
+    return JSON.parse(contents) as unknown;
+  } catch (cause) {
+    throw new Error(`Invalid JSON in ${label}: ${path}`, { cause });
+  }
+}
 
 /** Reads and validates the repository-owned catalog without ever opening files for writing. */
 export async function loadDeterministicAssetCatalog(indexPath: string): Promise<DeterministicAssetCatalog> {
-  const index = parse(CatalogIndexSchema, JSON.parse(await readFile(indexPath, "utf8")) as unknown, "catalog index");
-  if (!isStrictlySorted(index.files)) throw new Error("Catalog files must be sorted by portable path");
+  const index = parse(CatalogIndexSchema, await readJson(indexPath, "catalog index"), "catalog index");
 
   const documents = await Promise.all(
     index.files.map(async (file) => {
-      const expectedDomain = EXPECTED_DOMAIN_BY_FILE[file];
+      const expectedDomain = DOMAIN_BY_CATALOG_FILE[file];
       if (!expectedDomain) throw new Error(`Unsupported catalog domain file: ${file}`);
       const document = parse(
         CatalogDomainDocumentSchema,
-        JSON.parse(await readFile(join(dirname(indexPath), file), "utf8")) as unknown,
+        await readJson(join(dirname(indexPath), file), `catalog file ${file}`),
         `catalog file ${file}`
       );
       if (document.domain !== expectedDomain) {

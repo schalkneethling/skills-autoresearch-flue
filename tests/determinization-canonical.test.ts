@@ -49,6 +49,19 @@ test("stable IDs ignore source order, temporary roots, classification, and recom
   ).toThrow(/source-relative/);
 });
 
+test("source identity keeps path and locator boundaries unambiguous", () => {
+  const normalized_requirement = "Keep output concise";
+  const locatorDelimiter = createOpportunityId({
+    normalized_requirement,
+    source_refs: [{ path: "a", locator: "b#c" }]
+  });
+  const pathDelimiter = createOpportunityId({
+    normalized_requirement,
+    source_refs: [{ path: "a#b", locator: "c" }]
+  });
+  expect(locatorDelimiter).not.toBe(pathDelimiter);
+});
+
 test("opportunity ordering sorts only opportunities and recommendations by stable ID", () => {
   function makeRequirement(requirement: string, path: string) {
     const source_refs = [{ path, evidence_kind: "skill" as const }];

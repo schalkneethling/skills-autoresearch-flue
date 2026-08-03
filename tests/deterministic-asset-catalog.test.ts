@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 import {
   CatalogIndexSchema,
@@ -11,7 +12,7 @@ import {
 import { createOpportunityId, createRecommendationId } from "../src/determinization/ids.js";
 import { parseAnalysisOpportunities } from "../src/determinization/schemas.js";
 
-const catalogIndex = resolve("catalog", "deterministic-assets", "catalog.json");
+const catalogIndex = fileURLToPath(new URL("../catalog/deterministic-assets/catalog.json", import.meta.url));
 
 function documentWithCatalogReference(catalog_asset_id: string) {
   const source_refs = [{ path: "seed-skill/SKILL.md", evidence_kind: "skill" as const }];
@@ -66,8 +67,36 @@ test("loads the deterministic catalog in stable order without changing its bytes
   expect(catalog.assets.length).toBeGreaterThan(0);
   for (const domain of ["language", "markdown", "javascript_typescript"]) {
     const assets = catalog.assets.filter((asset) => asset.domain === domain);
-    expect(assets.map(({ priority }) => priority)).toEqual([...assets.map(({ priority }) => priority)].sort());
+    const priorities = assets.map(({ priority }) => priority);
+    expect(priorities).toEqual([...priorities].sort((left, right) => left - right));
   }
+});
+
+test("identifies the catalog path when JSON is malformed", async () => {
+  const malformedIndexRoot = await mkdtemp(join(tmpdir(), "malformed-catalog-index-"));
+  const malformedIndex = join(malformedIndexRoot, "catalog.json");
+  await writeFile(malformedIndex, "{");
+  await expect(loadDeterministicAssetCatalog(malformedIndex)).rejects.toThrow(malformedIndex);
+
+  const malformedDomainRoot = await mkdtemp(join(tmpdir(), "malformed-catalog-domain-"));
+  const indexPath = join(malformedDomainRoot, "catalog.json");
+  await writeFile(
+    indexPath,
+    JSON.stringify({
+      schema_version: "1.0.0",
+      files: ["javascript-typescript.json", "language.json", "markdown.json"]
+    })
+  );
+  await writeFile(join(malformedDomainRoot, "javascript-typescript.json"), "{");
+  await writeFile(
+    join(malformedDomainRoot, "language.json"),
+    JSON.stringify({ schema_version: "1.0.0", domain: "language", assets: [] })
+  );
+  await writeFile(
+    join(malformedDomainRoot, "markdown.json"),
+    JSON.stringify({ schema_version: "1.0.0", domain: "markdown", assets: [] })
+  );
+  await expect(loadDeterministicAssetCatalog(indexPath)).rejects.toThrow("javascript-typescript.json");
 });
 
 test("rejects duplicate catalog asset IDs", () => {

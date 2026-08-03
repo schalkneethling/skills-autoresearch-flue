@@ -33,13 +33,13 @@ const PortablePathSchema = v.pipe(
   }, "Expected a normalized, source-relative POSIX path")
 );
 
-const NonEmptyTextSchema = v.pipe(
+export const NonEmptyTextSchema = v.pipe(
   v.string(),
   v.minLength(1),
   v.check((value) => value.trim().length > 0, "Expected nonblank text")
 );
 const NonEmptyTextListSchema = v.pipe(v.array(NonEmptyTextSchema), v.minLength(1));
-const StableIdSchema = v.pipe(v.string(), v.regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/u));
+export const StableIdSchema = v.pipe(v.string(), v.regex(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/u));
 
 export const SourceReferenceSchema = v.strictObject({
   path: PortablePathSchema,
