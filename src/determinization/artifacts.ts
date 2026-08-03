@@ -8,6 +8,7 @@ import { renderResearchPrompt } from "./research-prompt.js";
 import { createResearchRequest, serializeResearchRequest, type DerivativeLineage } from "./research-request.js";
 import { withReadOnlyInputs } from "./read-only-snapshot.js";
 import { canonicalAnalysisSha256, orderAnalysisOpportunities, serializeAnalysisOpportunities } from "./schemas.js";
+import { validateCanonicalAnalysis } from "./validation.js";
 import {
   assertSourceManifestCurrent,
   createSourceManifest,
@@ -33,7 +34,16 @@ export interface WriteAnalysisArtifactsOptions {
   catalogIndexPath: string;
   analysis?: AnalysisIdentity;
   analysisResponse: unknown;
+  expectedAnalysisRequest?: unknown;
   transcript?: { request: unknown; response: unknown };
+}
+
+export interface ResumeAnalysisArtifactsOptions {
+  outputRoot: string;
+  selections: SourceSelection[];
+  catalogIndexPath: string;
+  expectedModel?: { provider: string; name: string };
+  expectedAnalysisRequest: unknown;
 }
 
 const REQUIRED_CATALOG_PATHS = [
@@ -109,6 +119,27 @@ async function assertOutputSeparate(outputRoot: string, selections: SourceSelect
     const rel = relative(root, output);
     if (!rel || (!isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`))) {
       throw new Error(`Artifact output root must not be inside a selected read-only root: ${selection.namespace}`);
+    }
+  }
+}
+
+/** Read-only preflight for callers that must reject unsafe output placement before invoking a transport. */
+export async function assertAnalysisArtifactBoundary(outputRoot: string, selections: SourceSelection[]): Promise<void> {
+  await assertOutputSeparate(outputRoot, selections);
+  let cursor = resolve(outputRoot);
+  for (;;) {
+    try {
+      const metadata = await lstat(cursor);
+      if (metadata.isSymbolicLink()) {
+        throw new Error(`Artifact output root or nearest existing parent must not be a symlink: ${cursor}`);
+      }
+      if (!metadata.isDirectory()) throw new Error(`Artifact output root parent must be a directory: ${cursor}`);
+      break;
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+      const parent = dirname(cursor);
+      if (parent === cursor) throw error;
+      cursor = parent;
     }
   }
 }
@@ -194,14 +225,126 @@ async function ensureExactFile(outputRoot: string, path: string, contents: strin
   }
 }
 
-function transcriptContents(lineage: DerivativeLineage, transcript: { request: unknown; response: unknown }): string {
+function transcriptContents(
+  lineage: DerivativeLineage,
+  transcript: { request: unknown; response: unknown },
+  manifest: SourceManifest,
+  analysisResponse: unknown,
+  expectedAnalysisRequest: unknown
+): string {
   const jsonCompatible = JSON.parse(JSON.stringify(transcript)) as { request: unknown; response: unknown };
+  const response = JSON.parse(JSON.stringify(analysisResponse)) as unknown;
+  const expectedRequest = JSON.parse(JSON.stringify(expectedAnalysisRequest)) as unknown;
+  if (serializeCanonical(jsonCompatible.request) !== serializeCanonical(expectedRequest)) {
+    throw new Error("Determinization transcript request does not match the expected analysis request");
+  }
+  assertTranscriptRequestIdentity({ request: jsonCompatible.request }, manifest);
+  if (serializeCanonical(jsonCompatible.response) !== serializeCanonical(response)) {
+    throw new Error("Determinization transcript response does not match the analyzed response");
+  }
+  const requestBytes = serializeCanonical(jsonCompatible.request);
+  const responseBytes = serializeCanonical(jsonCompatible.response);
   return serializeCanonical({
     ...lineage,
     authority: "audit_only",
+    source_manifest_sha256: sha256(serializeSourceManifest(manifest)),
+    request_sha256: sha256(requestBytes),
+    response_sha256: sha256(responseBytes),
     request: jsonCompatible.request,
     response: jsonCompatible.response
   });
+}
+
+function analysisIdentityWithRawHashes(options: WriteAnalysisArtifactsOptions): AnalysisIdentity | undefined {
+  if (!options.transcript) return options.analysis;
+  if (options.expectedAnalysisRequest === undefined) {
+    throw new Error("An independently constructed expected analysis request is required with a transcript");
+  }
+  if (!options.analysis) {
+    throw new Error("A source analysis identity is required with a transcript");
+  }
+  const request = JSON.parse(JSON.stringify(options.expectedAnalysisRequest)) as unknown;
+  const response = JSON.parse(JSON.stringify(options.analysisResponse)) as unknown;
+  return {
+    ...options.analysis,
+    request_sha256: sha256(serializeCanonical(request)),
+    response_sha256: sha256(serializeCanonical(response))
+  };
+}
+
+function strictTranscriptObject(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Cannot resume determinization: transcript must be an object");
+  }
+  const transcript = value as Record<string, unknown>;
+  const expectedKeys = new Set([
+    "schema_version",
+    "source_opportunities_sha256",
+    "opportunity_ids",
+    "authority",
+    "source_manifest_sha256",
+    "request_sha256",
+    "response_sha256",
+    "request",
+    "response"
+  ]);
+  const unknown = Object.keys(transcript).filter((key) => !expectedKeys.has(key));
+  const missing = [...expectedKeys].filter((key) => !(key in transcript));
+  if (unknown.length || missing.length) {
+    throw new Error("Cannot resume determinization: transcript shape is invalid");
+  }
+  return transcript;
+}
+
+function assertTranscriptRequestIdentity(transcript: Record<string, unknown>, manifest: SourceManifest): void {
+  const request = transcript.request;
+  if (request === null || typeof request !== "object" || Array.isArray(request)) {
+    throw new Error("Cannot resume determinization: transcript request identity is invalid");
+  }
+  const model = (request as Record<string, unknown>).model;
+  if (model === null || typeof model !== "object" || Array.isArray(model)) {
+    throw new Error("Cannot resume determinization: transcript request model identity is missing");
+  }
+  const sourceModel = manifest.analysis?.model;
+  const requestModel = model as Record<string, unknown>;
+  if (
+    sourceModel?.provider === undefined ||
+    sourceModel.name === undefined ||
+    requestModel.provider !== sourceModel.provider ||
+    requestModel.name !== sourceModel.name
+  ) {
+    throw new Error("Cannot resume determinization: transcript request does not match source model identity");
+  }
+}
+
+function derivativePlan(
+  artifactPaths: DeterminizationArtifactPaths,
+  analysis: ReturnType<typeof orderAnalysisOpportunities>,
+  lineage: DerivativeLineage
+): Array<[string, string]> {
+  const request = createResearchRequest(analysis, lineage);
+  return [
+    [artifactPaths.report, renderDeterminizationReport(analysis, lineage)],
+    [artifactPaths.researchRequest, serializeResearchRequest(request)],
+    [artifactPaths.researchPrompt, renderResearchPrompt(request)]
+  ];
+}
+
+async function persistPlan(
+  artifactPaths: DeterminizationArtifactPaths,
+  manifest: SourceManifest,
+  selections: SourceSelection[],
+  planned: Array<[string, string]>
+): Promise<{ createdFiles: string[]; resumedFiles: string[] }> {
+  const createdFiles: string[] = [];
+  const resumedFiles: string[] = [];
+  for (const [path, contents] of planned) {
+    await assertSourceManifestCurrent(manifest, selections);
+    const disposition = await ensureExactFile(artifactPaths.root, path, contents);
+    (disposition === "created" ? createdFiles : resumedFiles).push(path);
+  }
+  await assertSourceManifestCurrent(manifest, selections);
+  return { createdFiles, resumedFiles };
 }
 
 /** Writes only hash-linked Stage A artifacts and safely resumes only byte-identical files. */
@@ -210,7 +353,7 @@ export async function writeAnalysisArtifacts(options: WriteAnalysisArtifactsOpti
   await assertOutputSeparate(options.outputRoot, options.selections);
   return withReadOnlyInputs(options.selections, async () => {
     const artifactPaths = paths(options.outputRoot);
-    const manifest = await createSourceManifest(options.selections, options.analysis);
+    const manifest = await createSourceManifest(options.selections, analysisIdentityWithRawHashes(options));
     const catalog = await loadDeterministicAssetCatalog(options.catalogIndexPath);
     const analysis = orderAnalysisOpportunities(normalizeAnalysisResponse(options.analysisResponse, catalog));
     assertKnownSourceReferences(analysis, manifest);
@@ -223,24 +366,24 @@ export async function writeAnalysisArtifacts(options: WriteAnalysisArtifactsOpti
       source_opportunities_sha256: opportunitiesHash,
       opportunity_ids: analysis.opportunities.map(({ id }) => id)
     };
-    const request = createResearchRequest(analysis, lineage);
     const planned: Array<[string, string]> = [
       [artifactPaths.source, serializeSourceManifest(manifest)],
       [artifactPaths.opportunities, opportunitiesContents],
-      [artifactPaths.report, renderDeterminizationReport(analysis, lineage)],
-      [artifactPaths.researchRequest, serializeResearchRequest(request)],
-      [artifactPaths.researchPrompt, renderResearchPrompt(request)]
+      ...derivativePlan(artifactPaths, analysis, lineage)
     ];
-    if (options.transcript) planned.push([artifactPaths.transcript, transcriptContents(lineage, options.transcript)]);
-
-    const createdFiles: string[] = [];
-    const resumedFiles: string[] = [];
-    for (const [path, contents] of planned) {
-      await assertSourceManifestCurrent(manifest, options.selections);
-      const disposition = await ensureExactFile(artifactPaths.root, path, contents);
-      (disposition === "created" ? createdFiles : resumedFiles).push(path);
+    if (options.transcript) {
+      planned.push([
+        artifactPaths.transcript,
+        transcriptContents(
+          lineage,
+          options.transcript,
+          manifest,
+          options.analysisResponse,
+          options.expectedAnalysisRequest
+        )
+      ]);
     }
-    await assertSourceManifestCurrent(manifest, options.selections);
+    const { createdFiles, resumedFiles } = await persistPlan(artifactPaths, manifest, options.selections, planned);
     return {
       paths: artifactPaths,
       opportunityCount: analysis.opportunities.length,
@@ -248,6 +391,81 @@ export async function writeAnalysisArtifacts(options: WriteAnalysisArtifactsOpti
       sourceOpportunitiesSha256: opportunitiesHash,
       resumedFiles,
       createdFiles
+    };
+  });
+}
+
+/** Reuses immutable canonical analysis without making another model call. */
+export async function resumeAnalysisArtifacts(
+  options: ResumeAnalysisArtifactsOptions
+): Promise<AnalysisArtifactResult> {
+  assertSelectedCatalogIndex(options.catalogIndexPath, options.selections);
+  await assertOutputSeparate(options.outputRoot, options.selections);
+  return withReadOnlyInputs(options.selections, async () => {
+    const artifactPaths = paths(options.outputRoot);
+    const existingSource = await readFile(artifactPaths.source, "utf8");
+    const recordedSource = JSON.parse(existingSource) as { analysis?: AnalysisIdentity };
+    if (
+      options.expectedModel &&
+      (recordedSource.analysis?.model?.provider !== options.expectedModel.provider ||
+        recordedSource.analysis.model.name !== options.expectedModel.name)
+    ) {
+      throw new Error("Cannot resume determinization: configured determinizer model changed");
+    }
+    const manifest = await createSourceManifest(options.selections, recordedSource.analysis);
+    if (existingSource !== serializeSourceManifest(manifest)) {
+      throw new Error("Cannot resume determinization: source or catalog manifest is stale");
+    }
+    const catalog = await loadDeterministicAssetCatalog(options.catalogIndexPath);
+    const opportunitiesBytes = await readFile(artifactPaths.opportunities, "utf8");
+    const analysis = orderAnalysisOpportunities(
+      validateCanonicalAnalysis(JSON.parse(opportunitiesBytes) as unknown, catalog)
+    );
+    if (serializeAnalysisOpportunities(analysis) !== opportunitiesBytes) {
+      throw new Error("Cannot resume determinization: opportunities.json is not canonical or was modified");
+    }
+    const opportunitiesHash = canonicalAnalysisSha256(analysis);
+    const lineage: DerivativeLineage = {
+      schema_version: "1.0.0",
+      source_opportunities_sha256: opportunitiesHash,
+      opportunity_ids: analysis.opportunities.map(({ id }) => id)
+    };
+    const transcriptBytes = await readFile(artifactPaths.transcript, "utf8");
+    const transcript = strictTranscriptObject(JSON.parse(transcriptBytes) as unknown);
+    const expectedRequest = JSON.parse(JSON.stringify(options.expectedAnalysisRequest)) as unknown;
+    if (
+      transcript.schema_version !== "1.0.0" ||
+      transcript.authority !== "audit_only" ||
+      transcript.source_manifest_sha256 !== sha256(existingSource) ||
+      transcript.source_opportunities_sha256 !== opportunitiesHash ||
+      JSON.stringify(transcript.opportunity_ids) !== JSON.stringify(lineage.opportunity_ids) ||
+      transcript.request_sha256 !== manifest.analysis?.request_sha256 ||
+      transcript.request_sha256 !== sha256(serializeCanonical(expectedRequest)) ||
+      serializeCanonical(transcript.request) !== serializeCanonical(expectedRequest) ||
+      transcript.response_sha256 !== manifest.analysis?.response_sha256 ||
+      transcript.response_sha256 !== sha256(serializeCanonical(transcript.response)) ||
+      serializeCanonical(transcript) !== transcriptBytes
+    ) {
+      throw new Error("Cannot resume determinization: transcript provenance is missing, stale, or non-canonical");
+    }
+    assertTranscriptRequestIdentity(transcript, manifest);
+    const transcriptAnalysis = orderAnalysisOpportunities(normalizeAnalysisResponse(transcript.response, catalog));
+    if (serializeAnalysisOpportunities(transcriptAnalysis) !== opportunitiesBytes) {
+      throw new Error("Cannot resume determinization: transcript response does not match canonical opportunities");
+    }
+    const planned: Array<[string, string]> = [
+      [artifactPaths.source, existingSource],
+      [artifactPaths.opportunities, opportunitiesBytes],
+      ...derivativePlan(artifactPaths, analysis, lineage)
+    ];
+    const { createdFiles, resumedFiles } = await persistPlan(artifactPaths, manifest, options.selections, planned);
+    return {
+      paths: artifactPaths,
+      opportunityCount: analysis.opportunities.length,
+      recommendationCount: analysis.opportunities.reduce((count, item) => count + item.recommendations.length, 0),
+      sourceOpportunitiesSha256: opportunitiesHash,
+      createdFiles,
+      resumedFiles: [...resumedFiles, artifactPaths.transcript]
     };
   });
 }

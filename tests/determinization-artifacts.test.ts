@@ -1,7 +1,12 @@
-import { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { writeAnalysisArtifacts } from "../src/determinization/artifacts.js";
+import {
+  assertAnalysisArtifactBoundary,
+  resumeAnalysisArtifacts,
+  writeAnalysisArtifacts
+} from "../src/determinization/artifacts.js";
+import { serializeCanonical, sha256 } from "../src/determinization/canonical.js";
 import { loadDeterministicAssetCatalog } from "../src/determinization/catalog.js";
 import type { SourceSelection } from "../src/determinization/source.js";
 
@@ -93,13 +98,19 @@ async function artifactBytes(root: string) {
 test("writes deterministic hash-linked artifacts across fresh temporary directories", async () => {
   const first = await workspace("det-artifacts-one-");
   const second = await workspace("det-artifacts-two-");
-  const transcript = { request: { role: "determinizer" }, response: conciseResponse() };
+  const expectedAnalysisRequest = {
+    system: "determinize",
+    prompt: "analyze",
+    model: { provider: "anthropic", name: "fixture" }
+  };
+  const transcript = { request: expectedAnalysisRequest, response: conciseResponse() };
   const one = await writeAnalysisArtifacts({
     outputRoot: join(first.root, "workspace/determinization"),
     selections: first.selections,
     catalogIndexPath: first.catalogIndexPath,
     analysis: { role: "determinizer", transport: "direct_model", model: { provider: "anthropic", name: "fixture" } },
     analysisResponse: conciseResponse(),
+    expectedAnalysisRequest,
     transcript
   });
   const two = await writeAnalysisArtifacts({
@@ -108,6 +119,7 @@ test("writes deterministic hash-linked artifacts across fresh temporary director
     catalogIndexPath: second.catalogIndexPath,
     analysis: { role: "determinizer", transport: "direct_model", model: { provider: "anthropic", name: "fixture" } },
     analysisResponse: conciseResponse(),
+    expectedAnalysisRequest,
     transcript
   });
   expect(await artifactBytes(one.paths.root)).toEqual(await artifactBytes(two.paths.root));
@@ -116,11 +128,16 @@ test("writes deterministic hash-linked artifacts across fresh temporary director
     expect(await readFile(path, "utf8")).toContain(one.sourceOpportunitiesSha256);
   }
   expect(canonical).not.toContain("audit_only");
-  const source = JSON.parse(await readFile(one.paths.source, "utf8")) as { inputs: Array<{ path: string }> };
+  const source = JSON.parse(await readFile(one.paths.source, "utf8")) as {
+    analysis: { request_sha256: string; response_sha256: string };
+    inputs: Array<{ path: string }>;
+  };
   expect(source.inputs.filter(({ path }) => path.startsWith("catalog/")).map(({ path }) => path)).toEqual(
     catalogPaths.map((path) => `catalog/${path}`).sort()
   );
   expect(await readFile(one.paths.source, "utf8")).toContain('"role": "determinizer"');
+  expect(source.analysis.request_sha256).toMatch(/^[a-f0-9]{64}$/);
+  expect(source.analysis.response_sha256).toMatch(/^[a-f0-9]{64}$/);
   expect(one.opportunityCount).toBe(1);
   expect(one.recommendationCount).toBe(2);
 });
@@ -159,6 +176,9 @@ test("leaves selected skill, context, and catalog unchanged on success and failu
     catalogIndexPath: project.catalogIndexPath,
     analysisResponse: conciseResponse()
   });
+  await expect(
+    assertAnalysisArtifactBoundary(join(project.skill, "preflight-generated"), project.selections)
+  ).rejects.toThrow(/must not be inside/);
   await expect(
     writeAnalysisArtifacts({
       outputRoot: join(project.root, "failed-output"),
@@ -203,6 +223,86 @@ test("leaves selected skill, context, and catalog unchanged on success and failu
       analysisResponse: conciseResponse()
     })
   ).rejects.toThrow(/must not be inside/);
+});
+
+test("resume rejects tampered, non-canonical, or semantically unrelated transcripts", async () => {
+  const project = await workspace("det-artifacts-transcript-resume-");
+  const outputRoot = join(project.root, "workspace/determinization");
+  const model = { provider: "anthropic", name: "fixture" };
+  const response = conciseResponse();
+  const expectedAnalysisRequest = { system: "determinize", prompt: "canonical prompt", model };
+  await expect(
+    writeAnalysisArtifacts({
+      outputRoot: join(project.root, "mismatched-transcript"),
+      selections: project.selections,
+      catalogIndexPath: project.catalogIndexPath,
+      analysis: { role: "determinizer", transport: "direct_model", model },
+      analysisResponse: response,
+      expectedAnalysisRequest,
+      transcript: {
+        request: { ...expectedAnalysisRequest, prompt: "different prompt" },
+        response
+      }
+    })
+  ).rejects.toThrow(/does not match the expected analysis request/);
+  const result = await writeAnalysisArtifacts({
+    outputRoot,
+    selections: project.selections,
+    catalogIndexPath: project.catalogIndexPath,
+    analysis: { role: "determinizer", transport: "direct_model", model },
+    analysisResponse: response,
+    expectedAnalysisRequest,
+    transcript: {
+      request: expectedAnalysisRequest,
+      response
+    }
+  });
+  const originalTranscript = await readFile(result.paths.transcript, "utf8");
+  await rm(result.paths.report);
+  const resume = () =>
+    resumeAnalysisArtifacts({
+      outputRoot,
+      selections: project.selections,
+      catalogIndexPath: project.catalogIndexPath,
+      expectedModel: model,
+      expectedAnalysisRequest
+    });
+
+  const wrongSchema = JSON.parse(originalTranscript) as Record<string, unknown>;
+  wrongSchema.schema_version = "9.9.9";
+  await writeFile(result.paths.transcript, serializeCanonical(wrongSchema));
+  await expect(resume()).rejects.toThrow(/transcript provenance/);
+  await expect(readFile(result.paths.report, "utf8")).rejects.toThrow(/ENOENT/);
+
+  const wrongRequest = JSON.parse(originalTranscript) as Record<string, unknown>;
+  wrongRequest.request = {
+    system: "replacement system",
+    prompt: "replacement prompt",
+    model
+  };
+  wrongRequest.request_sha256 = sha256(serializeCanonical(wrongRequest.request));
+  await writeFile(result.paths.transcript, serializeCanonical(wrongRequest));
+  await expect(resume()).rejects.toThrow(/transcript provenance/);
+
+  const wrongResponse = JSON.parse(originalTranscript) as Record<string, unknown>;
+  wrongResponse.response = { schema_version: "1.0.0", opportunities: [] };
+  wrongResponse.response_sha256 = sha256(serializeCanonical(wrongResponse.response));
+  await writeFile(result.paths.transcript, serializeCanonical(wrongResponse));
+  await expect(resume()).rejects.toThrow(/transcript provenance/);
+
+  const overwrittenCatalogField = JSON.parse(originalTranscript) as Record<string, unknown>;
+  const overwrittenResponse = overwrittenCatalogField.response as {
+    opportunities: Array<{ recommendations: Array<Record<string, unknown>> }>;
+  };
+  overwrittenResponse.opportunities[0].recommendations[0].contribution =
+    "Tampered raw claim that normalization would replace";
+  overwrittenCatalogField.response_sha256 = sha256(serializeCanonical(overwrittenResponse));
+  await writeFile(result.paths.transcript, serializeCanonical(overwrittenCatalogField));
+  await expect(resume()).rejects.toThrow(/transcript provenance/);
+  await expect(readFile(result.paths.report, "utf8")).rejects.toThrow(/ENOENT/);
+
+  await writeFile(result.paths.transcript, `${originalTranscript.trimEnd()}  \n`);
+  await expect(resume()).rejects.toThrow(/transcript provenance/);
 });
 
 test("rejects nested output-directory and artifact-file symlinks without writing through them", async () => {
@@ -317,12 +417,26 @@ test("catalog capability metadata overrides adversarial model claims while trans
   languageTool.expected_improvement = marker;
   languageTool.supporting_evidence = [marker];
   languageTool.limitations = [marker];
+  const expectedAnalysisRequest = {
+    system: "determinize",
+    prompt: "analyze catalog claims",
+    model: { provider: "anthropic", name: "fixture" }
+  };
   const result = await writeAnalysisArtifacts({
     outputRoot: join(project.root, "workspace/determinization"),
     selections: project.selections,
     catalogIndexPath: project.catalogIndexPath,
+    analysis: {
+      role: "determinizer",
+      transport: "direct_model",
+      model: { provider: "anthropic", name: "fixture" }
+    },
     analysisResponse: response,
-    transcript: { request: { role: "determinizer" }, response }
+    expectedAnalysisRequest,
+    transcript: {
+      request: expectedAnalysisRequest,
+      response
+    }
   });
   const canonical = await readFile(result.paths.opportunities, "utf8");
   const report = await readFile(result.paths.report, "utf8");

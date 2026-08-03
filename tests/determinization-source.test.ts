@@ -48,6 +48,21 @@ test("source manifests include only canonical, portable analysis identity metada
       model: { provider: "  " }
     })
   ).rejects.toThrow(/portable nonblank/);
+  await expect(
+    createSourceManifest(selection, {
+      role: "determinizer",
+      transport: "flue",
+      request_sha256: "not-a-hash",
+      response_sha256: "0".repeat(64)
+    })
+  ).rejects.toThrow(/strict SHA-256/);
+  await expect(
+    createSourceManifest(selection, {
+      role: "determinizer",
+      transport: "flue",
+      request_sha256: "0".repeat(64)
+    })
+  ).rejects.toThrow(/provided together/);
 });
 
 test("source selection rejects traversal, symlinks, and special files", async () => {

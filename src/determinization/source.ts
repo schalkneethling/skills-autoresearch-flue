@@ -19,6 +19,8 @@ export interface SourceManifestEntry {
 export interface AnalysisIdentity {
   role: "determinizer";
   transport: string;
+  request_sha256?: string;
+  response_sha256?: string;
   model?: {
     provider?: string;
     name?: string;
@@ -32,14 +34,26 @@ export interface SourceManifest {
 }
 
 const PORTABLE_IDENTITY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/u;
+const SHA256 = /^[a-f0-9]{64}$/u;
 
 function normalizeAnalysisIdentity(identity: AnalysisIdentity | undefined): AnalysisIdentity | undefined {
   if (identity === undefined) return undefined;
-  const unknownIdentityKeys = Object.keys(identity).filter((key) => !["role", "transport", "model"].includes(key));
+  const unknownIdentityKeys = Object.keys(identity).filter(
+    (key) => !["role", "transport", "request_sha256", "response_sha256", "model"].includes(key)
+  );
   if (unknownIdentityKeys.length > 0) throw new Error("Source analysis identity contains unsupported metadata");
   if (identity.role !== "determinizer") throw new Error("Source analysis role must be determinizer");
   if (!PORTABLE_IDENTITY.test(identity.transport)) {
     throw new Error("Source analysis transport must be a portable nonblank identifier");
+  }
+  if ((identity.request_sha256 === undefined) !== (identity.response_sha256 === undefined)) {
+    throw new Error("Source analysis request and response hashes must be provided together");
+  }
+  if (
+    (identity.request_sha256 !== undefined && !SHA256.test(identity.request_sha256)) ||
+    (identity.response_sha256 !== undefined && !SHA256.test(identity.response_sha256))
+  ) {
+    throw new Error("Source analysis request and response hashes must be strict SHA-256 values");
   }
   const model = identity.model;
   if (model !== undefined) {
@@ -57,6 +71,8 @@ function normalizeAnalysisIdentity(identity: AnalysisIdentity | undefined): Anal
   return {
     role: "determinizer",
     transport: identity.transport,
+    ...(identity.request_sha256 && { request_sha256: identity.request_sha256 }),
+    ...(identity.response_sha256 && { response_sha256: identity.response_sha256 }),
     ...(model && {
       model: { ...(model.provider && { provider: model.provider }), ...(model.name && { name: model.name }) }
     })
