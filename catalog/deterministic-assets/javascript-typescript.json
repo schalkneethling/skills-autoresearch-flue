@@ -1,0 +1,38 @@
+{
+  "assets": [
+    {
+      "applicability": "Typed TypeScript projects whose requirements can be expressed through compiler-visible types.",
+      "asset_kind": "typescript_check",
+      "capability_family": "Type-system constraints",
+      "capability_level": "existing",
+      "contribution": "TypeScript checks can deterministically reject type-level contract violations.",
+      "domain": "javascript_typescript",
+      "evidence_basis": "TypeScript compiler checks are an existing deterministic mechanism when the requirement is type-expressible.",
+      "id": "catalog_typescript_type_checks",
+      "limitations": [
+        "Runtime behavior and editorial quality are outside the type system.",
+        "Coverage depends on compiler settings and available declarations."
+      ],
+      "name": "TypeScript type checks",
+      "priority": 1
+    },
+    {
+      "applicability": "JavaScript and TypeScript source where repository lint configuration is available.",
+      "asset_kind": "eslint",
+      "capability_family": "Configured static-analysis rules",
+      "capability_level": "configurable",
+      "contribution": "Existing ESLint rules can be selected and configured to enforce supported source-code constraints.",
+      "domain": "javascript_typescript",
+      "evidence_basis": "ESLint is represented as a configurable capability family; later evidence must identify applicable rules and settings.",
+      "id": "catalog_eslint_configuration",
+      "limitations": [
+        "Configuration cannot enforce requirements for which no applicable rule or parser support exists.",
+        "Project-specific semantics can still require a plugin or repository validator."
+      ],
+      "name": "ESLint configuration",
+      "priority": 2
+    }
+  ],
+  "domain": "javascript_typescript",
+  "schema_version": "1.0.0"
+}

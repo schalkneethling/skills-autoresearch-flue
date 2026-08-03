@@ -1,0 +1,38 @@
+{
+  "assets": [
+    {
+      "applicability": "Markdown documents with structural conventions supported by existing plugins.",
+      "asset_kind": "remark",
+      "capability_family": "Markdown structure linting",
+      "capability_level": "existing",
+      "contribution": "Remark plugins can deterministically inspect supported heading, list, link, and code-fence structures.",
+      "domain": "markdown",
+      "evidence_basis": "This catalogs the plugin capability family; a later stage must identify and verify a concrete plugin.",
+      "id": "catalog_remark_existing_plugins",
+      "limitations": [
+        "Plugin availability and exact behavior must be established before claiming coverage.",
+        "Semantic writing quality is not guaranteed by structural validation."
+      ],
+      "name": "Existing Remark plugins",
+      "priority": 1
+    },
+    {
+      "applicability": "Repository-specific Markdown structure that is parseable but unsupported by reusable rules.",
+      "asset_kind": "repository_validator",
+      "capability_family": "Repository Markdown validation",
+      "capability_level": "extensible",
+      "contribution": "A repository-owned validator can extend deterministic coverage for project-specific Markdown conventions.",
+      "domain": "markdown",
+      "evidence_basis": "This is an extension path, not a claim that a validator has been implemented or verified.",
+      "id": "catalog_repository_markdown_validator",
+      "limitations": [
+        "Creation is justified only after reusable plugins and configuration are shown insufficient.",
+        "Maintenance cost and false positives require verification."
+      ],
+      "name": "Repository Markdown validator",
+      "priority": 3
+    }
+  ],
+  "domain": "markdown",
+  "schema_version": "1.0.0"
+}
