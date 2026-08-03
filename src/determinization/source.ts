@@ -1,6 +1,7 @@
-import { lstat, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { serializeCanonical, sha256 } from "./canonical.js";
+import { compareCodePoints, serializeCanonical, sha256 } from "./canonical.js";
 import { DETERMINIZATION_SCHEMA_VERSION } from "./schemas.js";
 
 export type SourceNamespace = "skill" | "evaluation" | "reference" | "context" | "catalog";
@@ -38,29 +39,37 @@ const SHA256 = /^[a-f0-9]{64}$/u;
 
 function normalizeAnalysisIdentity(identity: AnalysisIdentity | undefined): AnalysisIdentity | undefined {
   if (identity === undefined) return undefined;
+  if (identity === null || typeof identity !== "object" || Array.isArray(identity)) {
+    throw new Error("Source analysis identity must be an object");
+  }
   const unknownIdentityKeys = Object.keys(identity).filter(
     (key) => !["role", "transport", "request_sha256", "response_sha256", "model"].includes(key)
   );
   if (unknownIdentityKeys.length > 0) throw new Error("Source analysis identity contains unsupported metadata");
   if (identity.role !== "determinizer") throw new Error("Source analysis role must be determinizer");
-  if (!PORTABLE_IDENTITY.test(identity.transport)) {
+  if (typeof identity.transport !== "string" || !PORTABLE_IDENTITY.test(identity.transport)) {
     throw new Error("Source analysis transport must be a portable nonblank identifier");
   }
   if ((identity.request_sha256 === undefined) !== (identity.response_sha256 === undefined)) {
     throw new Error("Source analysis request and response hashes must be provided together");
   }
   if (
-    (identity.request_sha256 !== undefined && !SHA256.test(identity.request_sha256)) ||
-    (identity.response_sha256 !== undefined && !SHA256.test(identity.response_sha256))
+    (identity.request_sha256 !== undefined &&
+      (typeof identity.request_sha256 !== "string" || !SHA256.test(identity.request_sha256))) ||
+    (identity.response_sha256 !== undefined &&
+      (typeof identity.response_sha256 !== "string" || !SHA256.test(identity.response_sha256)))
   ) {
     throw new Error("Source analysis request and response hashes must be strict SHA-256 values");
   }
   const model = identity.model;
   if (model !== undefined) {
+    if (model === null || typeof model !== "object" || Array.isArray(model)) {
+      throw new Error("Source analysis model must be an object");
+    }
     const unknownModelKeys = Object.keys(model).filter((key) => !["provider", "name"].includes(key));
     if (unknownModelKeys.length > 0) throw new Error("Source analysis model contains unsupported metadata");
     for (const [key, value] of Object.entries(model)) {
-      if (value !== undefined && !PORTABLE_IDENTITY.test(value)) {
+      if (value !== undefined && (typeof value !== "string" || !PORTABLE_IDENTITY.test(value))) {
         throw new Error(`Source analysis model ${key} must be a portable nonblank identifier`);
       }
     }
@@ -107,17 +116,18 @@ export async function createSourceManifest(
   const logicalPaths = new Set<string>();
   for (const selection of selections) {
     for (const sourcePath of selection.paths) {
-      const portablePath = portableRelativePath(sourcePath);
+      const rawPortablePath = portableRelativePath(sourcePath);
+      const portablePath = rawPortablePath.normalize("NFC");
       const logicalPath = `${selection.namespace}/${portablePath}`;
       if (logicalPaths.has(logicalPath)) throw new Error(`Duplicate selected source path: ${logicalPath}`);
       logicalPaths.add(logicalPath);
-      const target = resolveInside(selection.root, portablePath);
+      const target = resolveInside(selection.root, rawPortablePath);
       let cursor = resolve(selection.root);
       const rootMetadata = await lstat(cursor);
       if (rootMetadata.isSymbolicLink())
         throw new Error(`Symbolic links are not valid determinization inputs: ${logicalPath}`);
       let metadata = rootMetadata;
-      for (const segment of portablePath.split("/")) {
+      for (const segment of rawPortablePath.split("/")) {
         cursor = join(cursor, segment);
         metadata = await lstat(cursor);
         if (metadata.isSymbolicLink()) {
@@ -125,10 +135,19 @@ export async function createSourceManifest(
         }
       }
       if (!metadata.isFile()) throw new Error(`Only regular files are valid determinization inputs: ${logicalPath}`);
-      entries.push({ path: logicalPath, sha256: sha256(await readFile(target)) });
+      const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const openedMetadata = await handle.stat();
+        if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
+          throw new Error(`Source input changed during determinization: ${logicalPath}`);
+        }
+        entries.push({ path: logicalPath, sha256: sha256(await handle.readFile()) });
+      } finally {
+        await handle.close();
+      }
     }
   }
-  entries.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  entries.sort((left, right) => compareCodePoints(left.path, right.path));
   const normalizedAnalysis = normalizeAnalysisIdentity(analysis);
   return {
     schema_version: DETERMINIZATION_SCHEMA_VERSION,

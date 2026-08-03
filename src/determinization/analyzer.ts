@@ -36,9 +36,10 @@ const RECOMMENDATION_KEYS = new Set([
   "alternative_assessments",
   "insufficiency_justification"
 ]);
+const ALTERNATIVE_ASSESSMENT_KEYS = new Set(["relationship", "catalog_asset_ids", "conclusion", "rationale"]);
 const SOURCE_REFERENCE_KEYS = new Set(["path", "locator", "evidence_kind"]);
 
-function object(value: unknown, label: string): JsonObject {
+function requireJsonObject(value: unknown, label: string): JsonObject {
   if (value === null || typeof value !== "object" || Array.isArray(value))
     throw new Error(`${label} must be an object`);
   return value as JsonObject;
@@ -60,7 +61,7 @@ function unverifiedList(value: unknown, label: string): unknown {
 function normalizeSourceReferences(value: unknown[], opportunityIndex: number) {
   return value
     .map((rawReference, referenceIndex) => {
-      const reference = object(rawReference, `Source reference ${opportunityIndex}.${referenceIndex}`);
+      const reference = requireJsonObject(rawReference, `Source reference ${opportunityIndex}.${referenceIndex}`);
       exactKeys(reference, SOURCE_REFERENCE_KEYS, `Source reference ${opportunityIndex}.${referenceIndex}`);
       if (
         typeof reference.path !== "string" ||
@@ -70,7 +71,7 @@ function normalizeSourceReferences(value: unknown[], opportunityIndex: number) {
         throw new Error(`Source reference ${opportunityIndex}.${referenceIndex} has invalid field types`);
       }
       return {
-        path: reference.path,
+        path: reference.path.normalize("NFC"),
         ...(reference.locator !== undefined && { locator: reference.locator }),
         evidence_kind: reference.evidence_kind
       };
@@ -110,7 +111,7 @@ export function normalizeAnalysisResponse(
   response: unknown,
   catalog: DeterministicAssetCatalog
 ): AnalysisOpportunitiesDocument {
-  const root = object(response, "Analysis response");
+  const root = requireJsonObject(response, "Analysis response");
   exactKeys(root, new Set(["schema_version", "opportunities"]), "Analysis response");
   if (root.schema_version !== DETERMINIZATION_SCHEMA_VERSION)
     throw new Error("Unsupported analysis response schema version");
@@ -118,7 +119,7 @@ export function normalizeAnalysisResponse(
   const catalogAssets = new Map(catalog.assets.map((asset) => [asset.id, asset]));
 
   const opportunities = root.opportunities.map((rawOpportunity, opportunityIndex) => {
-    const opportunity = object(rawOpportunity, `Opportunity ${opportunityIndex}`);
+    const opportunity = requireJsonObject(rawOpportunity, `Opportunity ${opportunityIndex}`);
     exactKeys(opportunity, OPPORTUNITY_KEYS, `Opportunity ${opportunityIndex}`);
     if (!Array.isArray(opportunity.source_refs))
       throw new Error(`Opportunity ${opportunityIndex} source_refs must be an array`);
@@ -134,33 +135,54 @@ export function normalizeAnalysisResponse(
       throw new Error(`Opportunity ${opportunityIndex} recommendations must be an array`);
     }
     const recommendations = opportunity.recommendations.map((rawRecommendation, recommendationIndex) => {
-      const recommendation = object(rawRecommendation, `Recommendation ${opportunityIndex}.${recommendationIndex}`);
+      const recommendation = requireJsonObject(
+        rawRecommendation,
+        `Recommendation ${opportunityIndex}.${recommendationIndex}`
+      );
       exactKeys(recommendation, RECOMMENDATION_KEYS, `Recommendation ${opportunityIndex}.${recommendationIndex}`);
-      const catalogAsset =
-        typeof recommendation.catalog_asset_id === "string"
-          ? catalogAssets.get(recommendation.catalog_asset_id)
-          : undefined;
+      const relationship = recommendation.relationship;
+      const assetKind = recommendation.asset_kind;
+      const catalogAssetId = recommendation.catalog_asset_id;
+      const proposedName = recommendation.proposed_name;
+      if (typeof relationship !== "string" || typeof assetKind !== "string") {
+        throw new Error(
+          `Recommendation ${opportunityIndex}.${recommendationIndex} relationship and asset_kind must be text`
+        );
+      }
+      if (catalogAssetId !== undefined && typeof catalogAssetId !== "string") {
+        throw new Error(`Recommendation ${opportunityIndex}.${recommendationIndex} catalog_asset_id must be text`);
+      }
+      if (proposedName !== undefined && typeof proposedName !== "string") {
+        throw new Error(`Recommendation ${opportunityIndex}.${recommendationIndex} proposed_name must be text`);
+      }
+      const catalogAsset = catalogAssetId === undefined ? undefined : catalogAssets.get(catalogAssetId);
       const alternativeAssessments = Array.isArray(recommendation.alternative_assessments)
         ? recommendation.alternative_assessments.map((rawAssessment) => {
-            const assessment = object(
+            const assessment = requireJsonObject(
               rawAssessment,
+              `Alternative assessment ${opportunityIndex}.${recommendationIndex}`
+            );
+            exactKeys(
+              assessment,
+              ALTERNATIVE_ASSESSMENT_KEYS,
               `Alternative assessment ${opportunityIndex}.${recommendationIndex}`
             );
             return {
               ...assessment,
-              rationale: unverifiedText(assessment.rationale, "Unverified analyzer rationale")
+              ...(assessment.rationale !== undefined && {
+                rationale: unverifiedText(assessment.rationale, "Unverified analyzer rationale")
+              })
             };
           })
         : recommendation.alternative_assessments;
       return {
         ...recommendation,
         id: createRecommendationId({
-          asset_kind: String(recommendation.asset_kind),
-          catalog_asset_id:
-            recommendation.catalog_asset_id === undefined ? undefined : String(recommendation.catalog_asset_id),
+          asset_kind: assetKind,
+          catalog_asset_id: catalogAssetId,
           opportunity_id: id,
-          proposed_name: recommendation.proposed_name === undefined ? undefined : String(recommendation.proposed_name),
-          relationship: String(recommendation.relationship)
+          proposed_name: proposedName,
+          relationship
         }),
         ...(catalogAsset
           ? {

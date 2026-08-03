@@ -1,14 +1,19 @@
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { normalizeAnalysisResponse } from "../src/determinization/analyzer.js";
 import { loadDeterministicAssetCatalog } from "../src/determinization/catalog.js";
-import { canonicalAnalysisSha256, serializeAnalysisOpportunities } from "../src/determinization/schemas.js";
+import { renderDeterminizationReport } from "../src/determinization/report.js";
+import {
+  DETERMINIZATION_SCHEMA_VERSION,
+  canonicalAnalysisSha256,
+  serializeAnalysisOpportunities
+} from "../src/determinization/schemas.js";
 import { validateCanonicalAnalysis } from "../src/determinization/validation.js";
 
-const catalogPath = resolve("catalog/deterministic-assets/catalog.json");
+const catalogPath = fileURLToPath(new URL("../catalog/deterministic-assets/catalog.json", import.meta.url));
 
 function conciseResponse(recommendations?: unknown[]) {
   return {
-    schema_version: "1.0.0",
+    schema_version: DETERMINIZATION_SCHEMA_VERSION,
     opportunities: [
       {
         source_refs: [{ path: "skill/SKILL.md", locator: "Keep the output concise.", evidence_kind: "skill" }],
@@ -58,6 +63,28 @@ function languageToolRecommendation() {
   };
 }
 
+function configurableLanguageToolRecommendation() {
+  return {
+    relationship: "configurable",
+    asset_kind: "languagetool",
+    catalog_asset_id: "catalog_languagetool_project_configuration",
+    proposed_name: "LanguageTool project configuration",
+    contribution: "Project configuration may select applicable rules.",
+    confidence: "medium",
+    expected_improvement: "May make selected checks repeatable.",
+    supporting_evidence: ["The catalog describes a configurable capability."],
+    limitations: ["Applicable rules still require evidence."],
+    alternative_assessments: [
+      {
+        relationship: "existing",
+        catalog_asset_ids: ["catalog_languagetool_existing_families"],
+        conclusion: "insufficient",
+        rationale: "Existing families require project-specific selection."
+      }
+    ]
+  };
+}
+
 test("normalizes untrusted transport output into stable local IDs regardless of response order", async () => {
   const catalog = await loadDeterministicAssetCatalog(catalogPath);
   const forwardResponse = conciseResponse();
@@ -78,6 +105,25 @@ test("normalizes untrusted transport output into stable local IDs regardless of 
   ).toBe(true);
 });
 
+test("maps every catalog-owned recommendation field to exact catalog metadata", async () => {
+  const catalog = await loadDeterministicAssetCatalog(catalogPath);
+  const catalogAsset = catalog.assets.find(({ id }) => id === "catalog_text_metrics");
+  const document = normalizeAnalysisResponse(conciseResponse(), catalog);
+  const recommendation = document.opportunities[0].recommendations.find(
+    ({ catalog_asset_id }) => catalog_asset_id === catalogAsset?.id
+  );
+
+  expect(catalogAsset).toBeDefined();
+  expect(recommendation).toMatchObject({
+    proposed_name: catalogAsset?.name,
+    contribution: catalogAsset?.contribution,
+    expected_improvement:
+      "Potential improvement requires later evidence and verification; catalog metadata establishes only the stated capability contribution.",
+    supporting_evidence: [`Catalog capability evidence basis: ${catalogAsset?.evidence_basis}`],
+    limitations: catalogAsset?.limitations.map((limitation) => `Catalog capability limitation: ${limitation}`)
+  });
+});
+
 test("sorts source references canonically and preserves the same bytes and hash", async () => {
   const catalog = await loadDeterministicAssetCatalog(catalogPath);
   const forward = conciseResponse();
@@ -93,6 +139,21 @@ test("sorts source references canonically and preserves the same bytes and hash"
   const normalizedReversed = normalizeAnalysisResponse(reversed, catalog);
   expect(serializeAnalysisOpportunities(normalizedForward)).toBe(serializeAnalysisOpportunities(normalizedReversed));
   expect(canonicalAnalysisSha256(normalizedForward)).toBe(canonicalAnalysisSha256(normalizedReversed));
+});
+
+test("normalizes composed and decomposed source-reference paths to the same canonical identity", async () => {
+  const catalog = await loadDeterministicAssetCatalog(catalogPath);
+  const composed = conciseResponse();
+  composed.opportunities[0].source_refs[0].path = "skill/caf\u00e9.md";
+  const decomposed = structuredClone(composed);
+  decomposed.opportunities[0].source_refs[0].path = "skill/cafe\u0301.md";
+
+  const normalizedComposed = normalizeAnalysisResponse(composed, catalog);
+  const normalizedDecomposed = normalizeAnalysisResponse(decomposed, catalog);
+
+  expect(normalizedDecomposed.opportunities[0].source_refs[0].path).toBe("skill/caf\u00e9.md");
+  expect(serializeAnalysisOpportunities(normalizedDecomposed)).toBe(serializeAnalysisOpportunities(normalizedComposed));
+  expect(normalizedDecomposed.opportunities[0].id).toBe(normalizedComposed.opportunities[0].id);
 });
 
 test("rejects mismatched namespaces, inconsistent origins, catalog provenance, and supplemental-only provenance", async () => {
@@ -138,6 +199,58 @@ test("rejects transport IDs, lifecycle claims, unsupported schemas, and unknown 
   const unknown = conciseResponse();
   (unknown.opportunities[0].recommendations[0] as Record<string, unknown>).catalog_asset_id = "catalog_unknown_asset";
   expect(() => normalizeAnalysisResponse(unknown, catalog)).toThrow(/Unknown catalog asset/);
+});
+
+test("rejects unknown or incomplete alternative assessment fields", async () => {
+  const catalog = await loadDeterministicAssetCatalog(catalogPath);
+  const withUnknownField = configurableLanguageToolRecommendation();
+  Object.assign(withUnknownField.alternative_assessments[0], { unexpected: true });
+  expect(() => normalizeAnalysisResponse(conciseResponse([withUnknownField]), catalog)).toThrow(
+    /Alternative assessment 0\.0 contains unsupported fields: unexpected/
+  );
+
+  const withoutRationale = configurableLanguageToolRecommendation();
+  delete (withoutRationale.alternative_assessments[0] as { rationale?: string }).rationale;
+  expect(() => normalizeAnalysisResponse(conciseResponse([withoutRationale]), catalog)).toThrow(
+    /Invalid analysis opportunities/
+  );
+});
+
+test("rejects invalid recommendation identity field types before deriving IDs", async () => {
+  const catalog = await loadDeterministicAssetCatalog(catalogPath);
+  for (const [field, value, message] of [
+    ["relationship", 1, /relationship and asset_kind must be text/],
+    ["asset_kind", { kind: "script" }, /relationship and asset_kind must be text/],
+    ["catalog_asset_id", { id: "catalog_text_metrics" }, /catalog_asset_id must be text/],
+    ["proposed_name", ["Text metrics"], /proposed_name must be text/]
+  ] as const) {
+    const response = conciseResponse();
+    (response.opportunities[0].recommendations[0] as Record<string, unknown>)[field] = value;
+    expect(() => normalizeAnalysisResponse(response, catalog)).toThrow(message);
+  }
+});
+
+test("renders the LanguageTool disclaimer only for opportunities that suggest LanguageTool", async () => {
+  const catalog = await loadDeterministicAssetCatalog(catalogPath);
+  const withoutLanguageTool = normalizeAnalysisResponse(conciseResponse([metricsRecommendation()]), catalog);
+  const withoutLanguageToolHash = canonicalAnalysisSha256(withoutLanguageTool);
+  const lineage = {
+    schema_version: DETERMINIZATION_SCHEMA_VERSION,
+    source_opportunities_sha256: withoutLanguageToolHash,
+    opportunity_ids: withoutLanguageTool.opportunities.map(({ id }) => id)
+  };
+  const disclaimer = "LanguageTool references describe candidate capability families only.";
+
+  expect(renderDeterminizationReport(withoutLanguageTool, lineage)).not.toContain(disclaimer);
+
+  const withLanguageTool = normalizeAnalysisResponse(conciseResponse(), catalog);
+  expect(
+    renderDeterminizationReport(withLanguageTool, {
+      ...lineage,
+      source_opportunities_sha256: canonicalAnalysisSha256(withLanguageTool),
+      opportunity_ids: withLanguageTool.opportunities.map(({ id }) => id)
+    })
+  ).toContain(disclaimer);
 });
 
 test("rejects unjustified new assets before they become canonical", async () => {

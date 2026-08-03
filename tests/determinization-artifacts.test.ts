@@ -6,8 +6,14 @@ import {
   resumeAnalysisArtifacts,
   writeAnalysisArtifacts
 } from "../src/determinization/artifacts.js";
+import { normalizeAnalysisResponse } from "../src/determinization/analyzer.js";
 import { serializeCanonical, sha256 } from "../src/determinization/canonical.js";
 import { loadDeterministicAssetCatalog } from "../src/determinization/catalog.js";
+import {
+  canonicalAnalysisSha256,
+  orderAnalysisOpportunities,
+  serializeAnalysisOpportunities
+} from "../src/determinization/schemas.js";
 import type { SourceSelection } from "../src/determinization/source.js";
 
 const catalogIndex = resolve("catalog/deterministic-assets/catalog.json");
@@ -65,7 +71,7 @@ async function workspace(prefix: string, selectedCatalogRoot = catalogRoot) {
   const root = await mkdtemp(join(tmpdir(), prefix));
   const skill = join(root, "selected-skill");
   const context = join(root, "context");
-  await import("node:fs/promises").then(({ mkdir }) => Promise.all([mkdir(skill), mkdir(context)]));
+  await Promise.all([mkdir(skill), mkdir(context)]);
   await writeFile(join(skill, "SKILL.md"), "# Release Summary\n\nKeep the output concise.\n");
   await writeFile(join(context, "rubric.md"), "Prefer useful, concise release notes.\n");
   const selections: SourceSelection[] = [
@@ -258,6 +264,7 @@ test("resume rejects tampered, non-canonical, or semantically unrelated transcri
     }
   });
   const originalTranscript = await readFile(result.paths.transcript, "utf8");
+  const originalReport = await readFile(result.paths.report, "utf8");
   await rm(result.paths.report);
   const resume = () =>
     resumeAnalysisArtifacts({
@@ -271,8 +278,18 @@ test("resume rejects tampered, non-canonical, or semantically unrelated transcri
   const wrongSchema = JSON.parse(originalTranscript) as Record<string, unknown>;
   wrongSchema.schema_version = "9.9.9";
   await writeFile(result.paths.transcript, serializeCanonical(wrongSchema));
-  await expect(resume()).rejects.toThrow(/transcript provenance/);
+  await expect(resume()).rejects.toThrow(/transcript shape/);
   await expect(readFile(result.paths.report, "utf8")).rejects.toThrow(/ENOENT/);
+
+  const extraField = JSON.parse(originalTranscript) as Record<string, unknown>;
+  extraField.unexpected = true;
+  await writeFile(result.paths.transcript, serializeCanonical(extraField));
+  await expect(resume()).rejects.toThrow(/transcript shape/);
+
+  const missingRequest = JSON.parse(originalTranscript) as Record<string, unknown>;
+  delete missingRequest.request;
+  await writeFile(result.paths.transcript, serializeCanonical(missingRequest));
+  await expect(resume()).rejects.toThrow(/transcript shape/);
 
   const wrongRequest = JSON.parse(originalTranscript) as Record<string, unknown>;
   wrongRequest.request = {
@@ -303,6 +320,69 @@ test("resume rejects tampered, non-canonical, or semantically unrelated transcri
 
   await writeFile(result.paths.transcript, `${originalTranscript.trimEnd()}  \n`);
   await expect(resume()).rejects.toThrow(/transcript provenance/);
+
+  await writeFile(result.paths.transcript, originalTranscript);
+  const resumed = await resume();
+  expect(await readFile(result.paths.report, "utf8")).toBe(originalReport);
+  expect(resumed.createdFiles).toEqual([result.paths.report]);
+  expect(resumed.resumedFiles).toEqual([
+    result.paths.source,
+    result.paths.opportunities,
+    result.paths.researchRequest,
+    result.paths.researchPrompt
+  ]);
+  expect(resumed.sourceOpportunitiesSha256).toBe(result.sourceOpportunitiesSha256);
+});
+
+test("resume rejects a self-consistent chain with an unselected source reference", async () => {
+  const project = await workspace("det-artifacts-resume-source-reference-");
+  const outputRoot = join(project.root, "workspace/determinization");
+  const model = { provider: "anthropic", name: "fixture" };
+  const expectedAnalysisRequest = { system: "determinize", prompt: "canonical prompt", model };
+  const result = await writeAnalysisArtifacts({
+    outputRoot,
+    selections: project.selections,
+    catalogIndexPath: project.catalogIndexPath,
+    analysis: { role: "determinizer", transport: "direct_model", model },
+    analysisResponse: conciseResponse(),
+    expectedAnalysisRequest,
+    transcript: { request: expectedAnalysisRequest, response: conciseResponse() }
+  });
+  const tamperedResponse = conciseResponse();
+  tamperedResponse.opportunities[0].source_refs[0].path = "skill/not-selected.md";
+  const catalog = await loadDeterministicAssetCatalog(project.catalogIndexPath);
+  const analysis = orderAnalysisOpportunities(normalizeAnalysisResponse(tamperedResponse, catalog));
+  const opportunitiesBytes = serializeAnalysisOpportunities(analysis);
+  const opportunitiesHash = canonicalAnalysisSha256(analysis);
+  const responseHash = sha256(serializeCanonical(tamperedResponse));
+  const source = JSON.parse(await readFile(result.paths.source, "utf8")) as {
+    analysis: { response_sha256: string };
+  } & Record<string, unknown>;
+  source.analysis.response_sha256 = responseHash;
+  const sourceBytes = serializeCanonical(source);
+  const transcript = JSON.parse(await readFile(result.paths.transcript, "utf8")) as Record<string, unknown>;
+  transcript.response = tamperedResponse;
+  transcript.response_sha256 = responseHash;
+  transcript.source_manifest_sha256 = sha256(sourceBytes);
+  transcript.source_opportunities_sha256 = opportunitiesHash;
+  transcript.opportunity_ids = analysis.opportunities.map(({ id }) => id);
+  await Promise.all([
+    writeFile(result.paths.source, sourceBytes),
+    writeFile(result.paths.opportunities, opportunitiesBytes),
+    writeFile(result.paths.transcript, serializeCanonical(transcript)),
+    rm(result.paths.report)
+  ]);
+
+  await expect(
+    resumeAnalysisArtifacts({
+      outputRoot,
+      selections: project.selections,
+      catalogIndexPath: project.catalogIndexPath,
+      expectedModel: model,
+      expectedAnalysisRequest
+    })
+  ).rejects.toThrow(/Unknown selected source reference: skill\/not-selected\.md/);
+  await expect(readFile(result.paths.report, "utf8")).rejects.toThrow(/ENOENT/);
 });
 
 test("rejects nested output-directory and artifact-file symlinks without writing through them", async () => {

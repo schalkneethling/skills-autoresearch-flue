@@ -1,5 +1,6 @@
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import * as v from "valibot";
 import { normalizeAnalysisResponse } from "./analyzer.js";
 import { serializeCanonical, sha256 } from "./canonical.js";
 import { loadDeterministicAssetCatalog } from "./catalog.js";
@@ -7,7 +8,12 @@ import { renderDeterminizationReport } from "./report.js";
 import { renderResearchPrompt } from "./research-prompt.js";
 import { createResearchRequest, serializeResearchRequest, type DerivativeLineage } from "./research-request.js";
 import { withReadOnlyInputs } from "./read-only-snapshot.js";
-import { canonicalAnalysisSha256, orderAnalysisOpportunities, serializeAnalysisOpportunities } from "./schemas.js";
+import {
+  DETERMINIZATION_SCHEMA_VERSION,
+  canonicalAnalysisSha256,
+  orderAnalysisOpportunities,
+  serializeAnalysisOpportunities
+} from "./schemas.js";
 import { validateCanonicalAnalysis } from "./validation.js";
 import {
   assertSourceManifestCurrent,
@@ -52,6 +58,25 @@ const REQUIRED_CATALOG_PATHS = [
   "language.json",
   "markdown.json"
 ] as const;
+
+const Sha256Schema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
+const RequiredUnknownSchema = v.pipe(
+  v.unknown(),
+  v.check((value) => value !== undefined, "Expected a required transcript value")
+);
+const AnalysisTranscriptSchema = v.strictObject({
+  schema_version: v.literal(DETERMINIZATION_SCHEMA_VERSION),
+  source_opportunities_sha256: Sha256Schema,
+  opportunity_ids: v.array(v.pipe(v.string(), v.regex(/^opp_[a-f0-9]{20}$/u))),
+  authority: v.literal("audit_only"),
+  source_manifest_sha256: Sha256Schema,
+  request_sha256: Sha256Schema,
+  response_sha256: Sha256Schema,
+  request: RequiredUnknownSchema,
+  response: RequiredUnknownSchema
+});
+
+type AnalysisTranscript = v.InferOutput<typeof AnalysisTranscriptSchema>;
 
 function assertSelectedCatalogIndex(catalogIndexPath: string, selections: SourceSelection[]): void {
   const index = resolve(catalogIndexPath);
@@ -272,31 +297,16 @@ function analysisIdentityWithRawHashes(options: WriteAnalysisArtifactsOptions): 
   };
 }
 
-function strictTranscriptObject(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Cannot resume determinization: transcript must be an object");
-  }
-  const transcript = value as Record<string, unknown>;
-  const expectedKeys = new Set([
-    "schema_version",
-    "source_opportunities_sha256",
-    "opportunity_ids",
-    "authority",
-    "source_manifest_sha256",
-    "request_sha256",
-    "response_sha256",
-    "request",
-    "response"
-  ]);
-  const unknown = Object.keys(transcript).filter((key) => !expectedKeys.has(key));
-  const missing = [...expectedKeys].filter((key) => !(key in transcript));
-  if (unknown.length || missing.length) {
-    throw new Error("Cannot resume determinization: transcript shape is invalid");
-  }
-  return transcript;
+function parseAnalysisTranscript(value: unknown): AnalysisTranscript {
+  const result = v.safeParse(AnalysisTranscriptSchema, value);
+  if (!result.success) throw new Error("Cannot resume determinization: transcript shape is invalid");
+  return result.output;
 }
 
-function assertTranscriptRequestIdentity(transcript: Record<string, unknown>, manifest: SourceManifest): void {
+function assertTranscriptRequestIdentity(
+  transcript: Pick<AnalysisTranscript, "request">,
+  manifest: SourceManifest
+): void {
   const request = transcript.request;
   if (request === null || typeof request !== "object" || Array.isArray(request)) {
     throw new Error("Cannot resume determinization: transcript request identity is invalid");
@@ -362,7 +372,7 @@ export async function writeAnalysisArtifacts(options: WriteAnalysisArtifactsOpti
     if (sha256(opportunitiesContents) !== opportunitiesHash)
       throw new Error("Canonical opportunities byte hash mismatch");
     const lineage: DerivativeLineage = {
-      schema_version: "1.0.0",
+      schema_version: DETERMINIZATION_SCHEMA_VERSION,
       source_opportunities_sha256: opportunitiesHash,
       opportunity_ids: analysis.opportunities.map(({ id }) => id)
     };
@@ -424,17 +434,18 @@ export async function resumeAnalysisArtifacts(
     if (serializeAnalysisOpportunities(analysis) !== opportunitiesBytes) {
       throw new Error("Cannot resume determinization: opportunities.json is not canonical or was modified");
     }
+    assertKnownSourceReferences(analysis, manifest);
     const opportunitiesHash = canonicalAnalysisSha256(analysis);
     const lineage: DerivativeLineage = {
-      schema_version: "1.0.0",
+      schema_version: DETERMINIZATION_SCHEMA_VERSION,
       source_opportunities_sha256: opportunitiesHash,
       opportunity_ids: analysis.opportunities.map(({ id }) => id)
     };
     const transcriptBytes = await readFile(artifactPaths.transcript, "utf8");
-    const transcript = strictTranscriptObject(JSON.parse(transcriptBytes) as unknown);
+    const transcript = parseAnalysisTranscript(JSON.parse(transcriptBytes) as unknown);
     const expectedRequest = JSON.parse(JSON.stringify(options.expectedAnalysisRequest)) as unknown;
     if (
-      transcript.schema_version !== "1.0.0" ||
+      transcript.schema_version !== DETERMINIZATION_SCHEMA_VERSION ||
       transcript.authority !== "audit_only" ||
       transcript.source_manifest_sha256 !== sha256(existingSource) ||
       transcript.source_opportunities_sha256 !== opportunitiesHash ||
@@ -465,7 +476,7 @@ export async function resumeAnalysisArtifacts(
       recommendationCount: analysis.opportunities.reduce((count, item) => count + item.recommendations.length, 0),
       sourceOpportunitiesSha256: opportunitiesHash,
       createdFiles,
-      resumedFiles: [...resumedFiles, artifactPaths.transcript]
+      resumedFiles
     };
   });
 }

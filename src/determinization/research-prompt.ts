@@ -1,13 +1,5 @@
 import type { ResearchRequest } from "./research-request.js";
-
-function markdownText(value: string): string {
-  return value
-    .replace(/\r\n?/g, "\n")
-    .normalize("NFC")
-    .trim()
-    .replace(/\s+/gu, " ")
-    .replace(/([\\`*_[\]<>#|])/gu, "\\$1");
-}
+import { markdownText } from "./markdown.js";
 
 export function renderResearchPrompt(request: ResearchRequest): string {
   const opportunities = request.opportunity_requests.flatMap((opportunity) => [

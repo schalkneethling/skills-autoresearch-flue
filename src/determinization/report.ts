@@ -1,14 +1,6 @@
 import type { AnalysisOpportunitiesDocument } from "./schemas.js";
 import type { DerivativeLineage } from "./research-request.js";
-
-function markdownText(value: string): string {
-  return value
-    .replace(/\r\n?/g, "\n")
-    .normalize("NFC")
-    .trim()
-    .replace(/\s+/gu, " ")
-    .replace(/([\\`*_[\]<>#|])/gu, "\\$1");
-}
+import { markdownText } from "./markdown.js";
 
 function bullets(label: string, values: string[], indent = ""): string[] {
   return [`${indent}- ${label}:`, ...values.map((value) => `${indent}  - ${markdownText(value)}`)];
@@ -19,6 +11,7 @@ export function renderDeterminizationReport(
   lineage: DerivativeLineage
 ): string {
   const sections = document.opportunities.flatMap((opportunity) => {
+    const hasLanguageToolAsset = opportunity.recommendations.some(({ asset_kind }) => asset_kind === "languagetool");
     const sources = opportunity.source_refs.map(
       (source) => `${source.path} [${source.evidence_kind}]${source.locator ? ` — ${source.locator}` : ""}`
     );
@@ -64,7 +57,11 @@ export function renderDeterminizationReport(
       "### Suggested deterministic assets",
       "",
       ...(assets.length ? assets : ["No deterministic asset was suggested.", ""]),
-      "LanguageTool references describe candidate capability families only. A later evidence stage must establish whether relevant rules, versions, language variants, or configuration exist; no LanguageTool signal by itself fully establishes concision or editorial quality.",
+      ...(hasLanguageToolAsset
+        ? [
+            "LanguageTool references describe candidate capability families only. A later evidence stage must establish whether relevant rules, versions, language variants, or configuration exist; no LanguageTool signal by itself fully establishes concision or editorial quality."
+          ]
+        : []),
       ""
     ];
   });
