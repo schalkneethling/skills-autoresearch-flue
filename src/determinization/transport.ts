@@ -16,10 +16,12 @@ export interface DeterminizationTransportResult {
   response: unknown;
   transcript: { request: DeterminizationTransportRequest; response: unknown };
   usage?: ModelUsage;
+  costUsd?: number;
 }
 
 export interface DeterminizationTransport {
   readonly name: string;
+  readonly makesModelCall: boolean;
   analyze(request: DeterminizationTransportRequest): Promise<DeterminizationTransportResult>;
 }
 
@@ -35,6 +37,7 @@ function parseJsonResponse(completion: ModelCompletion): unknown {
 
 export class DirectModelDeterminizationTransport implements DeterminizationTransport {
   readonly name = "direct-model";
+  readonly makesModelCall = true;
 
   constructor(private readonly client: ModelClient) {}
 
@@ -56,24 +59,41 @@ export class DirectModelDeterminizationTransport implements DeterminizationTrans
   }
 }
 
+/**
+ * FlueSession.task has no system-prompt option, so the workflow supplies the
+ * determinizer system guidance through determinizerProfile.instructions.
+ */
 export class FlueDeterminizationTransport implements DeterminizationTransport {
   readonly name = "flue";
+  readonly makesModelCall = true;
 
   constructor(private readonly session: FlueSession) {}
 
+  /** Maps Flue's aggregate token usage and model-registry-derived cost into the transport-neutral result. */
   async analyze(request: DeterminizationTransportRequest): Promise<DeterminizationTransportResult> {
-    const { data } = await this.session.task(request.prompt, {
+    const { data, usage } = await this.session.task(request.prompt, {
       result: v.unknown(),
       agent: "determinizer",
       model: `${request.model.provider}/${request.model.name}`,
       ...(request.cwd && { cwd: request.cwd })
     });
-    return { response: data, transcript: { request, response: data } };
+    return {
+      response: data,
+      transcript: { request, response: data },
+      usage: {
+        inputTokens: usage.input,
+        outputTokens: usage.output,
+        cacheCreationInputTokens: usage.cacheWrite,
+        cacheReadInputTokens: usage.cacheRead
+      },
+      costUsd: usage.cost.total
+    };
   }
 }
 
 export class StaticDeterminizationTransport implements DeterminizationTransport {
   readonly name = "response-file";
+  readonly makesModelCall = false;
 
   constructor(private readonly response: unknown) {}
 

@@ -1,5 +1,9 @@
+import type { FlueContext, FlueSession } from "@flue/runtime";
 import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { run as runDeterminizeWorkflow } from "../.flue/workflows/determinize.js";
 import {
   appendQuietStdout,
   buildConfigDrivenPayload,
@@ -9,6 +13,13 @@ import {
   parseRunnerArgs,
   shouldPrintQuietLine
 } from "../src/flue-runner.js";
+import { tempProject } from "./helpers.js";
+
+const fixtureProject = fileURLToPath(new URL("../fixtures/projects/release-notes-alpha", import.meta.url));
+const fixtureResponse = fileURLToPath(
+  new URL("../fixtures/expected/determinization/release-notes-alpha/analysis-response.json", import.meta.url)
+);
+const catalogRoot = fileURLToPath(new URL("../catalog/deterministic-assets", import.meta.url));
 
 test("Flue runner parses verbose and run-log opt-out flags without forwarding them", () => {
   expect(
@@ -119,6 +130,78 @@ test("Flue runner builds the determinize workflow payload without autoresearch f
   expect(formatFlueModelCallPreview("autoresearch")).toBeUndefined();
   expect(() => parseRunnerArgs(["determinize", "--resume"])).toThrow(/does not accept autoresearch-only/);
   expect(() => parseRunnerArgs(["determinize", "--budget-usd", "1"])).toThrow(/does not accept autoresearch-only/);
+});
+
+test("determinize workflow produces the report through a Flue session", async () => {
+  const outputRoot = await tempProject("det-flue-workflow-");
+  const response = JSON.parse(readFileSync(fixtureResponse, "utf8")) as unknown;
+  const task = vi.fn(async () => ({
+    data: response,
+    usage: {
+      input: 120,
+      output: 30,
+      cacheRead: 20,
+      cacheWrite: 10,
+      totalTokens: 180,
+      cost: { input: 0.001, output: 0.002, cacheRead: 0.0001, cacheWrite: 0.0002, total: 0.0033 }
+    },
+    model: { provider: "anthropic", id: "claude-haiku-4-5" }
+  }));
+  const session = {
+    task
+  } as unknown as FlueSession;
+  const sessionFactory = vi.fn(async () => session);
+  const init = vi.fn(async () => ({ session: sessionFactory }));
+
+  const result = await runDeterminizeWorkflow({
+    init,
+    payload: {
+      projectRoot: fixtureProject,
+      catalogRoot,
+      outputRoot,
+      sessionId: "workflow-test",
+      model: "anthropic/claude-haiku-4-5"
+    },
+    env: {}
+  } as unknown as FlueContext);
+
+  expect(init).toHaveBeenCalledOnce();
+  expect(sessionFactory).toHaveBeenCalledWith("workflow-test");
+  expect(task).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ agent: "determinizer", model: "anthropic/claude-haiku-4-5" })
+  );
+  expect(result.paths.report).toBe(join(outputRoot, "report.md"));
+  expect(result.cost).toMatchObject({
+    model: { provider: "anthropic", name: "claude-haiku-4-5" },
+    usage: {
+      inputTokens: 120,
+      outputTokens: 30,
+      cacheCreationInputTokens: 10,
+      cacheReadInputTokens: 20
+    },
+    costUsd: 0.0033
+  });
+  expect(await readFile(result.paths.report, "utf8")).toContain("# Determinization opportunity report");
+});
+
+test.each(["openai/gpt-5", "anthropic/", "anthropic/claude/extra", "anthropic/claude sonnet"])(
+  "determinize workflow rejects invalid model override %j before initialization",
+  async (model) => {
+    const init = vi.fn();
+    await expect(
+      runDeterminizeWorkflow({ init, payload: { model }, env: {} } as unknown as FlueContext)
+    ).rejects.toThrow(/anthropic\/<non-empty-model>/);
+    expect(init).not.toHaveBeenCalled();
+  }
+);
+
+test("determinize workflow rejects an invalid environment model override before initialization", async () => {
+  const init = vi.fn();
+  await expect(
+    runDeterminizeWorkflow({ init, payload: {}, env: { FLUE_MODEL: "openai/gpt-5" } } as unknown as FlueContext)
+  ).rejects.toThrow(/anthropic\/<non-empty-model>/);
+  expect(init).not.toHaveBeenCalled();
 });
 
 test("Flue runner keeps direct payload invocation as an advanced path", () => {

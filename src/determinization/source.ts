@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { lstat, open } from "node:fs/promises";
+import { lstat, open, type FileHandle } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { compareCodePoints, serializeCanonical, sha256 } from "./canonical.js";
 import { DETERMINIZATION_SCHEMA_VERSION } from "./schemas.js";
@@ -36,6 +36,44 @@ export interface SourceManifest {
 
 const PORTABLE_IDENTITY = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
+export const MAX_DETERMINIZATION_SOURCE_FILE_BYTES = 256 * 1024;
+
+function oversizedInputError(label: string): Error {
+  return new Error(`Determinization input exceeds 256 KiB: ${label}`);
+}
+
+async function readBoundedHandle(handle: FileHandle, label: string): Promise<Buffer> {
+  const buffer = Buffer.allocUnsafe(MAX_DETERMINIZATION_SOURCE_FILE_BYTES + 1);
+  let offset = 0;
+  while (offset < buffer.length) {
+    const { bytesRead } = await handle.read(buffer, offset, buffer.length - offset, offset);
+    if (bytesRead === 0) break;
+    offset += bytesRead;
+  }
+  if (offset > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) throw oversizedInputError(label);
+  const finalMetadata = await handle.stat();
+  if (finalMetadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) throw oversizedInputError(label);
+  return buffer.subarray(0, offset);
+}
+
+export async function readBoundedDeterminizationFile(path: string, label: string): Promise<Buffer> {
+  const metadata = await lstat(path);
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error(`Only regular files are valid determinization inputs: ${label}`);
+  }
+  if (metadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) throw oversizedInputError(label);
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const openedMetadata = await handle.stat();
+    if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
+      throw new Error(`Source input changed during determinization: ${label}`);
+    }
+    if (openedMetadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) throw oversizedInputError(label);
+    return await readBoundedHandle(handle, label);
+  } finally {
+    await handle.close();
+  }
+}
 
 function normalizeAnalysisIdentity(identity: AnalysisIdentity | undefined): AnalysisIdentity | undefined {
   if (identity === undefined) return undefined;
@@ -135,13 +173,19 @@ export async function createSourceManifest(
         }
       }
       if (!metadata.isFile()) throw new Error(`Only regular files are valid determinization inputs: ${logicalPath}`);
+      if (metadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
+        throw oversizedInputError(logicalPath);
+      }
       const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
       try {
         const openedMetadata = await handle.stat();
         if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
           throw new Error(`Source input changed during determinization: ${logicalPath}`);
         }
-        entries.push({ path: logicalPath, sha256: sha256(await handle.readFile()) });
+        if (openedMetadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
+          throw oversizedInputError(logicalPath);
+        }
+        entries.push({ path: logicalPath, sha256: sha256(await readBoundedHandle(handle, logicalPath)) });
       } finally {
         await handle.close();
       }

@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import * as v from "valibot";
 import type { AnalysisOpportunitiesDocument } from "./schemas.js";
@@ -8,6 +7,7 @@ import {
   NonEmptyTextSchema,
   StableIdSchema
 } from "./schemas.js";
+import { readBoundedDeterminizationFile } from "./source.js";
 
 export const CATALOG_DOMAIN_FILES = {
   javascript_typescript: "javascript-typescript.json",
@@ -103,7 +103,7 @@ function assetsFollowCatalogPriority(assets: CatalogAsset[]): boolean {
 }
 
 async function readJson(path: string, label: string): Promise<unknown> {
-  const contents = await readFile(path, "utf8");
+  const contents = (await readBoundedDeterminizationFile(path, `${label}: ${path}`)).toString("utf8");
   try {
     return JSON.parse(contents) as unknown;
   } catch (cause) {

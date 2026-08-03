@@ -229,7 +229,7 @@ Set `budget_usd` in `config.json` to cap observed spend for repeated runs, or pa
 varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --budget-usd 0.5
 ```
 
-The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue runs currently record call counts, but they do not expose token usage to this harness, so dollar-cost caps only take effect when usage and known pricing are available. Treat the dollar estimate as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
+The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue autoresearch runs currently record call counts only; the determinization report records the usage and model-registry-derived cost returned by Flue. Dollar-cost caps only take effect where the corresponding flow records cost data. Treat any dollar value as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
 
 Each successful run writes:
 

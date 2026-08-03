@@ -1,5 +1,5 @@
 import type { FlueSession } from "@flue/runtime";
-import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { main } from "../src/cli.js";
 import { runDeterminizationReport } from "../src/determinization/run.js";
@@ -56,6 +56,24 @@ test("runs the release-notes fixture deterministically and preserves the read-on
   expect(await Promise.all([readFile(skillPath), readFile(catalogPath)])).toEqual(before);
 });
 
+test("counts model calls from the transport capability rather than its name", async () => {
+  const recordedResponse = await response();
+  const result = await runDeterminizationReport({
+    projectRoot: fixtureProject,
+    outputRoot: await tempProject("det-call-capability-"),
+    catalogRoot,
+    transport: {
+      name: "custom-recording",
+      makesModelCall: false,
+      async analyze(request) {
+        return { response: recordedResponse, transcript: { request, response: recordedResponse } };
+      }
+    }
+  });
+
+  expect(result.cost).toMatchObject({ plannedCalls: 0, actualCalls: 0 });
+});
+
 test("rejects a symlinked input root before invoking the transport", async () => {
   const links = await tempProject("det-symlink-root-");
   const linkedSkill = join(links, "linked-skill");
@@ -69,6 +87,7 @@ test("rejects a symlinked input root before invoking the transport", async () =>
       catalogRoot,
       transport: {
         name: "audit-spy",
+        makesModelCall: false,
         async analyze(request) {
           calls += 1;
           const response = { schema_version: "1.0.0", opportunities: [] };
@@ -92,6 +111,7 @@ test("rejects output beneath a selected read-only root before invoking the trans
       catalogRoot,
       transport: {
         name: "audit-spy",
+        makesModelCall: false,
         async analyze(request) {
           calls += 1;
           const response = { schema_version: "1.0.0", opportunities: [] };
@@ -112,6 +132,7 @@ test("rejects symlinked project and output roots before invoking the transport",
   let calls = 0;
   const transport = {
     name: "audit-spy",
+    makesModelCall: false,
     async analyze(request: Parameters<DeterminizationTransport["analyze"]>[0]) {
       calls += 1;
       const response = { schema_version: "1.0.0", opportunities: [] };
@@ -125,6 +146,29 @@ test("rejects symlinked project and output roots before invoking the transport",
     runDeterminizationReport({ projectRoot: fixtureProject, outputRoot: linkedOutput, catalogRoot, transport })
   ).rejects.toThrow(/output root or nearest existing parent must not be a symlink/);
   expect(calls).toBe(0);
+});
+
+test("rejects an oversized input before attempting to read it", async () => {
+  const root = await tempProject("det-oversized-input-");
+  await writeFixture(root, syntheticConfig, syntheticEvals);
+  await mkdir(join(root, "seed-skill"));
+  await writeFile(join(root, "seed-skill", "SKILL.md"), "# Seed\n");
+  const oversized = join(root, "evals", "oversized.txt");
+  await writeFile(oversized, "");
+  await truncate(oversized, 256 * 1024 + 1);
+  await chmod(oversized, 0);
+  try {
+    await expect(
+      runDeterminizationReport({
+        projectRoot: root,
+        outputRoot: await tempProject("det-oversized-output-"),
+        catalogRoot,
+        transport: new StaticDeterminizationTransport(await response())
+      })
+    ).rejects.toThrow(/Determinization input exceeds 256 KiB: .*oversized\.txt/);
+  } finally {
+    await chmod(oversized, 0o600);
+  }
 });
 
 test("CLI prints an absolute inspectable path and resumes without a model call", async () => {
@@ -209,14 +253,34 @@ test("direct-model and Flue transports preserve their role boundary", async () =
   const session = {
     async task(text: string, options: unknown) {
       tasks.push({ text, options });
-      return { data: { schema_version: "1.0.0", opportunities: [] } };
+      return {
+        data: { schema_version: "1.0.0", opportunities: [] },
+        usage: {
+          input: 10,
+          output: 5,
+          cacheRead: 3,
+          cacheWrite: 2,
+          totalTokens: 20,
+          cost: { input: 0.001, output: 0.002, cacheRead: 0.0001, cacheWrite: 0.0002, total: 0.0033 }
+        },
+        model: { provider: "anthropic", id: "claude-sonnet-4-6" }
+      };
     }
   } as unknown as FlueSession;
-  await new FlueDeterminizationTransport(session).analyze(request);
+  const flue = await new FlueDeterminizationTransport(session).analyze(request);
   expect(tasks).toEqual([
     expect.objectContaining({
       text: "prompt",
       options: expect.objectContaining({ agent: "determinizer", model: "anthropic/claude-sonnet-4-6" })
     })
   ]);
+  expect(flue).toMatchObject({
+    usage: {
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheCreationInputTokens: 2,
+      cacheReadInputTokens: 3
+    },
+    costUsd: 0.0033
+  });
 });

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -129,6 +129,21 @@ test("source selection rejects traversal, symlinks, and special files", async ()
     ])
   ).rejects.toThrow(/Duplicate selected source path/);
   expect(await readFile(outside, "utf8")).toBe("outside");
+});
+
+test("source manifests reject oversized files before reading their contents", async () => {
+  const root = await mkdtemp(join(tmpdir(), "det-source-oversized-"));
+  const oversized = join(root, "oversized.md");
+  await writeFile(oversized, "");
+  await truncate(oversized, 256 * 1024 + 1);
+  await chmod(oversized, 0);
+  try {
+    await expect(createSourceManifest([{ namespace: "catalog", root, paths: ["oversized.md"] }])).rejects.toThrow(
+      "Determinization input exceeds 256 KiB: catalog/oversized.md"
+    );
+  } finally {
+    await chmod(oversized, 0o600);
+  }
 });
 
 test("source manifest entries use Unicode code-point ordering", async () => {

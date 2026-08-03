@@ -83,6 +83,7 @@ Generated research output lands under `workspace/iterations/<n>/`. Do not commit
 - Update docs and tests when config shape, artifact layout, commands, or model flow changes.
 - Never commit `.env`, resolved API keys, provider secrets, or transcripts containing secrets.
 - Score and summary writes often use exclusive file creation; rerun failures may indicate existing artifacts rather than logic failure.
+- Enforce bounded reads before allocation: when a file has a size limit, use `lstat`/`stat` and reject an oversized file before `readFile`. Keep a post-read byte check for races and encoding differences; checking only after a full read does not protect memory.
 - Keep `pnpm run check` and `alpha:smoke` credential-free. Do not route smoke runs through Varlock or require `op`; use Varlock only for model-backed commands.
 
 ## What Is Still Alpha

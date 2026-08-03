@@ -12,10 +12,9 @@ import {
   type AnalysisArtifactResult
 } from "./artifacts.js";
 import { loadDeterministicAssetCatalog } from "./catalog.js";
-import { createSourceManifest, type SourceSelection } from "./source.js";
+import { createSourceManifest, MAX_DETERMINIZATION_SOURCE_FILE_BYTES, type SourceSelection } from "./source.js";
 import type { DeterminizationTransport } from "./transport.js";
 
-const MAX_FILE_BYTES = 256 * 1024;
 const MAX_TOTAL_BYTES = 2 * 1024 * 1024;
 const CATALOG_FILES = ["catalog.json", "javascript-typescript.json", "language.json", "markdown.json"];
 const DETERMINIZER_SYSTEM_PROMPT = "You are the read-only determinizer for an agent-skill evaluation harness.";
@@ -27,9 +26,10 @@ export interface RunDeterminizationReportOptions {
   contextRoot?: string;
   catalogRoot?: string;
   outputRoot?: string;
+  modelOverride?: ModelConfig;
 }
 
-export type ResumeDeterminizationReportOptions = Omit<RunDeterminizationReportOptions, "transport">;
+export type ResumeDeterminizationReportOptions = Omit<RunDeterminizationReportOptions, "transport" | "modelOverride">;
 
 export interface DeterminizationRunCost {
   plannedCalls: number;
@@ -242,9 +242,15 @@ async function prepareInputs(
   for (const selection of selections.filter(({ namespace }) => namespace !== "catalog")) {
     for (const path of selection.paths) {
       const absolute = join(selection.root, ...path.split("/"));
+      const metadata = await lstat(absolute);
+      if (metadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
+        throw new Error(`Determinization input exceeds 256 KiB: ${path}`);
+      }
       const contents = await readFile(absolute, "utf8");
       const bytes = Buffer.byteLength(contents);
-      if (bytes > MAX_FILE_BYTES) throw new Error(`Determinization input exceeds 256 KiB: ${path}`);
+      if (bytes > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
+        throw new Error(`Determinization input exceeds 256 KiB: ${path}`);
+      }
       totalBytes += bytes;
       if (totalBytes > MAX_TOTAL_BYTES) throw new Error("Determinization inputs exceed the 2 MiB total limit");
       files.push({ path: `${selection.namespace}/${path}`, contents });
@@ -270,7 +276,7 @@ export async function runDeterminizationReport(
     options.outputRoot ?? projectLayout(projectRoot).determinizationDir,
     prepared.selections
   );
-  const model = resolveDeterminizerModel(config);
+  const model = options.modelOverride ?? resolveDeterminizerModel(config);
   const request = buildAnalysisRequest(prepared, catalog, model);
   const completion = await options.transport.analyze(request);
   const result = await writeAnalysisArtifacts({
@@ -286,8 +292,8 @@ export async function runDeterminizationReport(
     expectedAnalysisRequest: request,
     transcript: completion.transcript
   });
-  const costUsd = estimateUsageCostUsd(model, completion.usage);
-  const modelCalls = options.transport.name === "response-file" ? 0 : 1;
+  const costUsd = completion.costUsd ?? estimateUsageCostUsd(model, completion.usage);
+  const modelCalls = options.transport.makesModelCall ? 1 : 0;
   return {
     ...result,
     selectedSkillDir: selected.dir,

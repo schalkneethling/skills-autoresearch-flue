@@ -67,7 +67,7 @@ export async function runDeterminizationCli(argv: string[]): Promise<void> {
       : new DirectModelDeterminizationTransport(new AnthropicMessagesClient());
   const logger = createLogger();
   if (!parsed.values.json) {
-    const plannedCalls = !transport || transport.name === "response-file" ? 0 : 1;
+    const plannedCalls = transport?.makesModelCall ? 1 : 0;
     logger.write("log", `Determinizer model call preview: ${plannedCalls} planned call(s).`);
   }
   const common = {
