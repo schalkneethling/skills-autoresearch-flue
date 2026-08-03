@@ -1,6 +1,7 @@
 import { validateConfiguredFlueRoles } from "../src/flue-roles.js";
 import { loadProject, trackForEval } from "../src/project.js";
 import { resolveModel } from "../src/model.js";
+import { resolveDeterminizerModel } from "../src/determinization/run.js";
 import {
   securityConfig,
   securityEvals,
@@ -34,6 +35,24 @@ test("resolves default model and rejects unsupported providers", async () => {
   });
   expect(resolveModel(project.config, { name: "claude-opus-4-6" }).name).toBe("claude-opus-4-6");
   expect(() => resolveModel(project.config, { provider: "openai" })).toThrow(/Unsupported model provider/);
+});
+
+test("resolves the determinizer model before researcher and default fallbacks", () => {
+  expect(
+    resolveDeterminizerModel({
+      ...syntheticConfig,
+      models: {
+        researcher: { provider: "anthropic", name: "researcher-model" },
+        determinizer: { provider: "anthropic", name: "determinizer-model" }
+      }
+    })
+  ).toEqual({ provider: "anthropic", name: "determinizer-model" });
+  expect(
+    resolveDeterminizerModel({
+      ...syntheticConfig,
+      models: { researcher: { provider: "anthropic", name: "researcher-model" } }
+    })
+  ).toEqual({ provider: "anthropic", name: "researcher-model" });
 });
 
 test("requires judge and skill builder role keys", async () => {

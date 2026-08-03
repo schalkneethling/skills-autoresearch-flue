@@ -21,6 +21,7 @@
     "flue:run": "pnpm run build && node dist/src/flue-runner.js",
     "flue:build": "flue build --target node --root . --output .flue-dist",
     "alpha:smoke": "pnpm run autoresearch -- smoke --project fixtures/projects/release-notes-alpha --session alpha-smoke",
+    "alpha:determinize": "pnpm run build && node dist/src/cli.js determinize report --project fixtures/projects/release-notes-alpha --response-file fixtures/expected/determinization/release-notes-alpha/analysis-response.json --catalog-root catalog/deterministic-assets",
     "alpha:research": "pnpm run build && varlock run -- node dist/src/flue-runner.js research --project fixtures/projects/release-notes-alpha --session alpha-research",
     "env:check": "varlock load"
   },

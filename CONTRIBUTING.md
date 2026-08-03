@@ -22,7 +22,10 @@ The harness should:
 ```text
 .flue/
   workflows/autoresearch.ts   Flue workflow entrypoint.
-  profiles.ts                 Named producer, judge, and researcher subagent profiles.
+  workflows/determinize.ts    Read-only determinization workflow entrypoint.
+  profiles.ts                 Named producer, judge, researcher, and determinizer profiles.
+catalog/
+  deterministic-assets/       Repository-owned reusable asset catalog.
 docs/
   alpha-run.md                Alpha run and credential workflow.
   using-the-harness.md        User guide for running custom skill projects.
@@ -35,7 +38,8 @@ src/
   run-options.ts              Canonical normalized run options used by CLI and Flue adapters.
   project-layout.ts           Canonical generated-artifact paths and filenames.
   artifact-lifecycle.ts       Provider-independent transcript and research-artifact persistence.
-  flue-harness.ts             Flue session adapters for producer/judge/researcher.
+  determinization/            Canonical opportunity analysis, artifacts, and transports.
+  flue-harness.ts             Autoresearch Flue adapters for producer/judge/researcher.
   model-agent.ts              Prompt builders, schemas, artifact application helpers.
   runner.ts                   Eval runner and concurrency helper.
   sandbox.ts                  Local readonly/write sandbox abstraction.
@@ -65,6 +69,8 @@ src/flue-harness.ts
 ```
 
 It uses `session.task(..., { agent, result })` so Flue runs the named subagent profile and performs structured-output validation before the harness writes artifacts or scores.
+
+The determinizer does not use `src/flue-harness.ts`. Its separate `.flue/workflows/determinize.ts` workflow calls the transport-neutral determinization runner through the Flue transport in `src/determinization/transport.ts`.
 
 ## Research Flow
 
@@ -105,6 +111,8 @@ Important contracts:
 - `EvalScoreSchema`
 - `ModelProduceResponseSchema`
 - `SkillResearchPatchSchema`
+- `AnalysisOpportunitiesDocumentSchema`
+- `CatalogIndexSchema` and `CatalogDomainDocumentSchema`
 
 When changing a schema:
 
@@ -122,6 +130,10 @@ the Flue workflow translates camelCase payload fields. Both must call
 Generated workspace locations and artifact filenames belong in
 `src/project-layout.ts`. Cleanup, resume, and persistence must consume that
 manifest so a new generated artifact is declared once and remains auditable.
+
+Determinization has one canonical analysis source of truth: `workspace/determinization/opportunities.json`. Reports, research requests, prompts, and transcripts carry its SHA-256 hash and opportunity IDs. Preserve this lineage, stable IDs, canonical ordering, portable source paths, and the immutability of original analysis fields.
+
+Normal determinization runs are read-only for the selected skill, optional context root, and `catalog/deterministic-assets/`. Phase 1 may only mark assets `suggested`; do not add proposal, verification, apply, adoption, or catalog-mutation behavior to this stage. LanguageTool catalog entries are candidate capability families, not claims that a rule exists, is configured, or fully replaces editorial judgment.
 
 ## Fixtures
 
@@ -183,6 +195,12 @@ Then run the same ordered verification command as CI:
 
 ```bash
 pnpm run check
+```
+
+To inspect the committed deterministic-extraction fixture without credentials:
+
+```bash
+pnpm run alpha:determinize
 ```
 
 The `check` script is the single source of truth for the verification order. Its final `alpha:smoke` command imports the

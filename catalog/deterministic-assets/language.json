@@ -1,0 +1,70 @@
+{
+  "assets": [
+    {
+      "applicability": "Natural-language guidance where grammar or style signals may reduce, but not replace, editorial judgment.",
+      "asset_kind": "languagetool",
+      "capability_family": "Grammar and style capability families",
+      "capability_level": "existing",
+      "contribution": "LanguageTool may contribute existing grammar and style signals after later evidence identifies applicable rules.",
+      "domain": "language",
+      "evidence_basis": "This catalogs a capability family only; it does not assert that a specific rule satisfies an opportunity.",
+      "id": "catalog_languagetool_existing_families",
+      "limitations": [
+        "A later evidence stage must establish rule availability for the selected language and version.",
+        "No individual warning proves that text is concise, readable, or editorially correct."
+      ],
+      "name": "LanguageTool existing capability families",
+      "priority": 1
+    },
+    {
+      "applicability": "Prose requirements with measurable length, sentence, or lexical indicators.",
+      "asset_kind": "script",
+      "capability_family": "Text metrics",
+      "capability_level": "existing",
+      "contribution": "Deterministic metrics can measure properties such as word count and sentence length as partial signals.",
+      "domain": "language",
+      "evidence_basis": "The measurements are deterministic; useful thresholds remain project-specific and require evidence.",
+      "id": "catalog_text_metrics",
+      "limitations": [
+        "Metrics are proxies and do not establish clarity, usefulness, or concision by themselves.",
+        "Thresholds can incentivize unhelpfully terse output."
+      ],
+      "name": "Text metrics",
+      "priority": 1
+    },
+    {
+      "applicability": "Projects with language variants, category choices, severity policy, or rule enablement requirements.",
+      "asset_kind": "languagetool",
+      "capability_family": "Project-specific LanguageTool configuration",
+      "capability_level": "configurable",
+      "contribution": "LanguageTool categories, language variants, enablement, and severity mapping may be configured after evidence identifies useful settings.",
+      "domain": "language",
+      "evidence_basis": "Configuration is a possible deterministic asset path, not evidence that a useful project configuration already exists.",
+      "id": "catalog_languagetool_project_configuration",
+      "limitations": [
+        "Configuration only exposes behavior supported by the chosen LanguageTool version.",
+        "Editorial policies may remain subjective even after configuration."
+      ],
+      "name": "LanguageTool project configuration",
+      "priority": 2
+    },
+    {
+      "applicability": "Terminology, prohibited wording, and organization-specific writing conventions that can be expressed as rules.",
+      "asset_kind": "languagetool",
+      "capability_family": "Project-owned LanguageTool rules",
+      "capability_level": "extensible",
+      "contribution": "A project may extend LanguageTool with custom rules when evidence shows built-in rules and configuration are insufficient.",
+      "domain": "language",
+      "evidence_basis": "This records an extension point only; it does not imply that a custom rule exists, is verified, or has been adopted.",
+      "id": "catalog_languagetool_custom_rules",
+      "limitations": [
+        "Custom-rule feasibility and false-positive behavior require later verification.",
+        "Rules cannot fully replace judgment about audience, nuance, or overall concision."
+      ],
+      "name": "Custom LanguageTool rules",
+      "priority": 3
+    }
+  ],
+  "domain": "language",
+  "schema_version": "1.0.0"
+}

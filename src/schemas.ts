@@ -10,7 +10,8 @@ export const ModelConfigSchema = v.object({
 export const RoleModelsSchema = v.object({
   producer: v.optional(ModelConfigSchema),
   judge: v.optional(ModelConfigSchema),
-  researcher: v.optional(ModelConfigSchema)
+  researcher: v.optional(ModelConfigSchema),
+  determinizer: v.optional(ModelConfigSchema)
 });
 
 export const RolesConfigSchema = v.object({

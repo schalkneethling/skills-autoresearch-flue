@@ -12,6 +12,8 @@ The current alpha flow is:
 4. Run the Flue autoresearch agent.
 5. Inspect the candidate skill and eval artifacts.
 
+You can then run a separate, read-only determinization report to identify where deterministic assets could reduce human judgment without claiming that those assets have been verified or adopted.
+
 ## What the Harness Does
 
 For each research iteration, the harness runs three Flue-backed phases:
@@ -155,6 +157,58 @@ Flue subagent profiles live in `.flue/profiles.ts`. The configured role labels a
 
 For a multi-skill project, use one track per skill or skill responsibility. For example, a security project might have an `audit` track that targets `skills/security-audit` and an `authoring` track that targets `skills/secure-authoring`.
 
+The optional `models.determinizer` entry selects the model used by `determinize report`. When it is absent, the command falls back to `models.researcher`, then the top-level `model`, and finally `anthropic/claude-sonnet-4-6`.
+
+## Read-Only Determinization Report
+
+Build the CLI, then analyze the project with either a recorded structured response or a direct Anthropic call:
+
+```bash
+pnpm run build
+node dist/src/cli.js determinize report \
+  --project path/to/my-autoresearch-project \
+  --response-file path/to/analysis-response.json
+
+varlock run -- node dist/src/cli.js determinize report \
+  --project path/to/my-autoresearch-project \
+  --model-client anthropic
+```
+
+Without `--skill`, the command selects the highest-scoring iteration with a valid `skill/SKILL.md`, breaking equal scores by the lower iteration number. If none exists, it uses the configured `origin_skill`. Pass `--skill <dir>` to select a skill explicitly.
+
+The source manifest fingerprints the selected skill, eval definitions, project `input/`, reference context, and the applicable baseline or iteration task, input, output, scores, and summary. These inputs are included in the analyzer context so a changed task fixture makes an existing report stale.
+
+`--context-root <dir>` may add external repository context, but only the allowlisted `AGENTS.md`, `README.md`, and `package.json` files are read. The context root must not contain the project's determinization output directory; this strict separation keeps generated artifacts outside the read-only context. The selected skill, project evidence, optional context, and repository-owned catalog are input-only. The command rejects symbolic links and does not write beneath those roots.
+
+The default output is:
+
+```text
+workspace/determinization/
+  source.json
+  opportunities.json
+  report.md
+  research-request.json
+  prompts/research.md
+  transcript.json
+```
+
+`opportunities.json` is the immutable canonical analysis. Each derivative records its SHA-256 hash and ordered opportunity IDs so stale or mismatched artifacts can be rejected. `--resume` validates the current source and catalog fingerprints, then re-renders derivatives from that canonical file without calling a model. It cannot be combined with a response file or model client.
+
+On success, normal CLI output prints the absolute report path and useful opportunity, deterministic-asset, and model-call counts. Use `--json` when a caller needs the structured result.
+
+Every Phase 1 asset is `suggested` and unverified. LanguageTool entries describe possible capability families, configuration, or extension points; they do not establish that a relevant rule exists, is configured, or fully solves the requirement. For example, “Keep the output concise” remains partially deterministic: metrics and LanguageTool may contribute, while editorial judgment is still necessary.
+
+This stage produces no evidence findings, asset proposal, verification result, application plan, catalog change, or skill edit. Proposal, verification, apply, and adoption behavior are explicitly out of scope.
+
+The Flue wrapper provides the same read-only analysis through its `determinizer` profile:
+
+```bash
+pnpm run build
+node dist/src/flue-runner.js determinize --project path/to/my-autoresearch-project
+```
+
+The Flue path is model-backed and requires the configured Anthropic credentials. The direct CLI's `--response-file` mode is the repeatable credential-free inspection path.
+
 ## Cost Preview And Budget
 
 Before model-backed work starts, the harness emits a cost preview with the maximum planned model-call count by role:
@@ -175,7 +229,7 @@ Set `budget_usd` in `config.json` to cap observed spend for repeated runs, or pa
 varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --budget-usd 0.5
 ```
 
-The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue runs currently record call counts, but they do not expose token usage to this harness, so dollar-cost caps only take effect when usage and known pricing are available. Treat the dollar estimate as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
+The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue autoresearch runs currently record call counts only; the determinization report records the usage and model-registry-derived cost returned by Flue. Dollar-cost caps only take effect where the corresponding flow records cost data. Treat any dollar value as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
 
 Each successful run writes:
 
