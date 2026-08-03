@@ -1,14 +1,14 @@
 # Determinization opportunity report
 
 schema_version: 1.0.0
-source_opportunities_sha256: bedb49f15aa080dd49bf4af59018eb5e949192f1b800a96358fa49d62a8f516a
-opportunity_ids: opp_120f5c5976237ea3fe00
+source_opportunities_sha256: 52d040a1a5bfc71a8fc63dcafaaf5beba5b629f6820ee11e402f97bba131bdcd
+opportunity_ids: opp_ee93c287a4111f72d9b8
 
 > Read-only analysis. Every asset below is suggested and unverified. This report does not propose, verify, adopt, apply, or modify an asset.
 
 Opportunities: 1
 
-## opp_120f5c5976237ea3fe00: Keep the output concise.
+## opp_ee93c287a4111f72d9b8: Keep the output concise.
 
 - Origin: skill_guidance
 - Source references:
@@ -25,7 +25,7 @@ Opportunities: 1
 
 ### Suggested deterministic assets
 
-#### asset_31094d7c06cac874a50d: LanguageTool existing capability families
+#### asset_0181d919fd309da638ac: LanguageTool existing capability families
 
 - Lifecycle: suggested (unverified)
 - Relationship: existing
@@ -43,7 +43,7 @@ Opportunities: 1
   - None required for this relationship tier.
 - New-asset insufficiency justification: not applicable
 
-#### asset_3268d1e5ce88e2671304: Text metrics
+#### asset_614cb50b3e3a5532bf96: Text metrics
 
 - Lifecycle: suggested (unverified)
 - Relationship: existing
@@ -61,7 +61,7 @@ Opportunities: 1
   - None required for this relationship tier.
 - New-asset insufficiency justification: not applicable
 
-#### asset_a85bb333999302e66b6c: Custom LanguageTool rules
+#### asset_cb1e63e580dc0af0da51: Custom LanguageTool rules
 
 - Lifecycle: suggested (unverified)
 - Relationship: extensible
