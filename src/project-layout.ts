@@ -23,6 +23,7 @@ export interface ProjectLayout {
   resumeBackupsDir: string;
   guidanceLedgerPath: string;
   costSummaryPath: string;
+  determinizationDir: string;
   iterationDir(iteration: number): string;
   iterationSkillDir(iteration: number): string;
   iterationOutputDir(iteration: number, evalId?: string): string;
@@ -41,6 +42,7 @@ export function projectLayout(root: string): ProjectLayout {
     resumeBackupsDir: join(workspaceDir, "resume-backups"),
     guidanceLedgerPath: join(workspaceDir, "guidance-ledger.json"),
     costSummaryPath: join(workspaceDir, "cost-summary.json"),
+    determinizationDir: join(workspaceDir, "determinization"),
     iterationDir: (iteration) => join(iterationsDir, String(iteration)),
     iterationSkillDir: (iteration) => join(iterationsDir, String(iteration), "skill"),
     iterationOutputDir: (iteration, evalId) =>

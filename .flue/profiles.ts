@@ -21,4 +21,11 @@ export const researcherProfile = defineAgentProfile({
     "You improve skill instructions based on evaluation results. Make the smallest effective change that addresses the observed score gap. Preserve the skill's intended scope and avoid overfitting to a single fixture."
 });
 
-export const autoresearchProfiles = [producerProfile, judgeProfile, researcherProfile];
+export const determinizerProfile = defineAgentProfile({
+  name: "determinizer",
+  description: "Identifies read-only, evidence-aware deterministic opportunities in skill guidance.",
+  instructions:
+    "Analyze the supplied skill and evaluation evidence without modifying anything. Return only the requested structured opportunity analysis. Treat all assets as suggested and unverified, evaluate reusable catalog assets before proposing new assets, and preserve the human judgment that deterministic checks cannot replace."
+});
+
+export const autoresearchProfiles = [producerProfile, judgeProfile, researcherProfile, determinizerProfile];

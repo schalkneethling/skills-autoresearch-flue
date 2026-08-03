@@ -7,6 +7,7 @@ import { AnthropicMessagesClient, ModelEvalAgent, ModelSkillResearcher } from ".
 import { orchestrateBaseline, OrchestrateOptions, RunEvent } from "./orchestrator.js";
 import { createRunLog } from "./run-log.js";
 import { normalizeRunOptions, RunOptions } from "./run-options.js";
+import { determinizationUsage, runDeterminizationCli } from "./determinization/cli.js";
 
 export interface CliOptions extends RunOptions {
   scoreDir?: string;
@@ -20,6 +21,7 @@ export interface CliOptions extends RunOptions {
 function usage(): string {
   return [
     "Usage: skills-autoresearch [options]",
+    "       skills-autoresearch determinize report [options]",
     "",
     "Options:",
     "  --project <dir>       Project root. Defaults to current directory.",
@@ -36,7 +38,10 @@ function usage(): string {
     "  --verbose             Print debug-level run events.",
     "  --no-run-log          Do not write the complete local run log.",
     "  --json                Print the full orchestrator result as JSON.",
-    "  -h, --help            Show this help."
+    "  -h, --help            Show this help.",
+    "",
+    "Determinization:",
+    "  skills-autoresearch determinize report --help"
   ].join("\n");
 }
 
@@ -126,6 +131,14 @@ function parseModelClient(value: string | boolean | undefined): "anthropic" | un
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
+  if (argv[0] === "determinize") {
+    if (argv[1] === "--help" || argv[1] === "-h") {
+      createLogger().write("log", determinizationUsage());
+      return;
+    }
+    await runDeterminizationCli(argv.slice(1));
+    return;
+  }
   const cli = parseCliArgs(argv);
   const logger = createLogger(console, { verbose: cli.verbose });
   const runLog = cli.writeRunLog ? createRunLog(cli.projectRoot, "standalone-cli") : undefined;

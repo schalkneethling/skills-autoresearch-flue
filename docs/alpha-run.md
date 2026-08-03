@@ -66,6 +66,40 @@ This requires `ANTHROPIC_API_KEY` to resolve through Varlock.
 pnpm run alpha:research
 ```
 
+## Run The Read-Only Determinization Fixture
+
+The committed response fixture makes the complete report reproducible without credentials or a model call:
+
+```bash
+pnpm run alpha:determinize
+```
+
+Inspect the generated report at:
+
+```text
+fixtures/projects/release-notes-alpha/workspace/determinization/report.md
+```
+
+The command also prints that absolute path plus opportunity and deterministic-asset counts. The fixture intentionally classifies “Keep the output concise” as partially deterministic: text metrics and LanguageTool capability families may contribute, a custom LanguageTool rule may be worth later investigation, and editorial judgment remains necessary.
+
+All reported assets are suggested and unverified. This run does not establish that a LanguageTool rule exists or is configured, and it does not propose, verify, apply, or adopt anything. The fixture skill and repository catalog remain read-only.
+
+For a live Flue-backed analysis with Anthropic credentials, build and run:
+
+```bash
+pnpm run build
+varlock run -- node dist/src/flue-runner.js determinize \
+  --project fixtures/projects/release-notes-alpha
+```
+
+Determinization resume is available only through the direct `determinize report` CLI, not the Flue wrapper. It validates current inputs and re-renders the existing immutable `opportunities.json` without another model call:
+
+```bash
+node dist/src/cli.js determinize report \
+  --project fixtures/projects/release-notes-alpha \
+  --resume
+```
+
 Normal runs print compact phase/eval progress and write the complete Flue process stream under `fixtures/projects/release-notes-alpha/workspace/run-logs/`. Add `-- --verbose` to `alpha:smoke` or `alpha:research` to expose the full stream in the terminal, or `-- --no-run-log` to explicitly disable the local audit log.
 
 This runs the Flue workflow with:

@@ -5,12 +5,13 @@ import { parseArgs } from "node:util";
 import type { FlueWorkflowResult } from "./flue-harness.js";
 import { createRunLog, RunLog } from "./run-log.js";
 
-export type RunnerMode = "smoke" | "research";
+export type RunnerMode = "smoke" | "research" | "determinize";
 
 export type RunnerOptions = {
   verbose: boolean;
   writeRunLog: boolean;
   payload: Record<string, unknown>;
+  workflow?: "autoresearch" | "determinize";
   help?: boolean;
 };
 
@@ -21,12 +22,17 @@ function usage(): string {
     "Usage:",
     "  skills-autoresearch-flue smoke [options]",
     "  skills-autoresearch-flue research [options]",
+    "  skills-autoresearch-flue determinize [options]",
     "  skills-autoresearch-flue --payload <json> [options]",
     "",
     "Config-driven options:",
     "  --project <dir>         Project root. Defaults to current directory.",
     "  --seed-skill <dir>      Override config.json origin_skill for this run.",
     "  --guidance-skill <dir>  Override config.json guidance_skill for this run.",
+    "  --skill <dir>           Explicit skill directory for determinize.",
+    "  --context-root <dir>    Optional external read-only context for determinize.",
+    "  --catalog-root <dir>    Deterministic-asset catalog root.",
+    "  --output <dir>          Determinization artifact root.",
     "  --session <name>        Override the derived project-mode session name.",
     "  --resume                Resume validated artifacts from an interrupted run.",
     "  --with-cleanup          Remove generated research artifacts before a fresh run.",
@@ -57,12 +63,14 @@ export async function runFlueCommand(argv = process.argv.slice(2)): Promise<numb
     writeRunLog: options.writeRunLog,
     ...(runLog ? { runLogPath: runLog.path } : {})
   };
-  const flueArgs = buildFlueArgs(payload);
+  const flueArgs = buildFlueArgs(payload, options.workflow ?? "autoresearch");
 
   runLog?.append("run-start", { command: "flue", args: flueArgs, projectRoot, sessionId });
   if (runLog) {
     process.stderr.write(`Run log: ${runLog.path}\n`);
   }
+  const modelCallPreview = formatFlueModelCallPreview(options.workflow ?? "autoresearch");
+  if (modelCallPreview) process.stderr.write(`${modelCallPreview}\n`);
 
   const exitCode = await spawnFlue(flueArgs, options.verbose, runLog);
   runLog?.append("run-end", { exitCode });
@@ -81,6 +89,10 @@ export function parseRunnerArgs(argv: string[]): RunnerOptions {
       project: { type: "string" },
       "seed-skill": { type: "string" },
       "guidance-skill": { type: "string" },
+      skill: { type: "string" },
+      "context-root": { type: "string" },
+      "catalog-root": { type: "string" },
+      output: { type: "string" },
       session: { type: "string" },
       resume: { type: "boolean" },
       "with-cleanup": { type: "boolean" },
@@ -105,6 +117,10 @@ export function parseRunnerArgs(argv: string[]): RunnerOptions {
     values.project,
     values["seed-skill"],
     values["guidance-skill"],
+    values.skill,
+    values["context-root"],
+    values["catalog-root"],
+    values.output,
     values.session,
     values.resume,
     values["with-cleanup"],
@@ -114,7 +130,7 @@ export function parseRunnerArgs(argv: string[]): RunnerOptions {
 
   if (values.payload !== undefined) {
     if (positionals.length > 0 || configOptionsUsed) {
-      throw new Error("Use either a smoke/research command or --payload, not both.");
+      throw new Error("Use either a config-driven command or --payload, not both.");
     }
     return {
       verbose: values.verbose ?? false,
@@ -124,17 +140,37 @@ export function parseRunnerArgs(argv: string[]): RunnerOptions {
   }
 
   if (positionals.length !== 1 || !isRunnerMode(positionals[0])) {
-    throw new Error("Choose a config-driven command: smoke or research. Use --help for usage.");
+    throw new Error("Choose a config-driven command: smoke or research, or determinize. Use --help for usage.");
   }
 
   const mode = positionals[0];
+  if (
+    mode === "determinize" &&
+    [
+      values["seed-skill"],
+      values["guidance-skill"],
+      values.resume,
+      values["with-cleanup"],
+      values["force-research"],
+      values["budget-usd"]
+    ].some((value) => value !== undefined && value !== false)
+  ) {
+    throw new Error(
+      "Determinize does not accept autoresearch-only seed, guidance, resume, cleanup, force, or budget options."
+    );
+  }
   return {
     verbose: values.verbose ?? false,
     writeRunLog: !(values["no-run-log"] ?? false),
+    ...(mode === "determinize" ? { workflow: "determinize" as const } : {}),
     payload: buildConfigDrivenPayload(mode, {
       projectRoot: values.project,
       seedSkillDir: values["seed-skill"],
       guidanceSkillDir: values["guidance-skill"],
+      skillDir: values.skill,
+      contextRoot: values["context-root"],
+      catalogRoot: values["catalog-root"],
+      outputRoot: values.output,
       sessionId: values.session,
       resume: values.resume,
       withCleanup: values["with-cleanup"],
@@ -150,6 +186,10 @@ export function buildConfigDrivenPayload(
     projectRoot?: string;
     seedSkillDir?: string;
     guidanceSkillDir?: string;
+    skillDir?: string;
+    contextRoot?: string;
+    catalogRoot?: string;
+    outputRoot?: string;
     sessionId?: string;
     resume?: boolean;
     withCleanup?: boolean;
@@ -160,11 +200,14 @@ export function buildConfigDrivenPayload(
   const projectRoot = resolve(options.projectRoot ?? process.cwd());
   return {
     projectRoot,
-    withBaseline: true,
-    runResearch: mode === "research",
+    ...(mode === "determinize" ? {} : { withBaseline: true, runResearch: mode === "research" }),
     sessionId: options.sessionId ?? `${basename(projectRoot)}-${mode}`,
     ...(options.seedSkillDir ? { seedSkillDir: options.seedSkillDir } : {}),
     ...(options.guidanceSkillDir ? { guidanceSkillDir: options.guidanceSkillDir } : {}),
+    ...(options.skillDir ? { skillDir: options.skillDir } : {}),
+    ...(options.contextRoot ? { contextRoot: options.contextRoot } : {}),
+    ...(options.catalogRoot ? { catalogRoot: options.catalogRoot } : {}),
+    ...(options.outputRoot ? { outputRoot: options.outputRoot } : {}),
     ...(options.resume ? { resume: true } : {}),
     ...(options.withCleanup ? { withCleanup: true } : {}),
     ...(options.forceResearch ? { forceResearch: true } : {}),
@@ -173,7 +216,7 @@ export function buildConfigDrivenPayload(
 }
 
 function isRunnerMode(value: string): value is RunnerMode {
-  return value === "smoke" || value === "research";
+  return value === "smoke" || value === "research" || value === "determinize";
 }
 
 function parsePayload(value: string): Record<string, unknown> {
@@ -198,19 +241,15 @@ function parseBudgetUsd(value: string | undefined): number | undefined {
   return parsed;
 }
 
-export function buildFlueArgs(payload: Record<string, unknown>): string[] {
-  return [
-    "exec",
-    "flue",
-    "run",
-    "autoresearch",
-    "--target",
-    "node",
-    "--root",
-    ".",
-    "--payload",
-    JSON.stringify(payload)
-  ];
+export function buildFlueArgs(
+  payload: Record<string, unknown>,
+  workflow: "autoresearch" | "determinize" = "autoresearch"
+): string[] {
+  return ["exec", "flue", "run", workflow, "--target", "node", "--root", ".", "--payload", JSON.stringify(payload)];
+}
+
+export function formatFlueModelCallPreview(workflow: "autoresearch" | "determinize"): string | undefined {
+  return workflow === "determinize" ? "Determinizer model call preview: 1 planned call(s)." : undefined;
 }
 
 function spawnFlue(args: string[], verbose: boolean, runLog: RunLog | undefined): Promise<number> {
@@ -286,7 +325,19 @@ export function formatQuietResult(output: string, truncated = false): string | u
       : undefined;
   }
   try {
-    const result = JSON.parse(output.slice(jsonStart)) as Partial<FlueWorkflowResult>;
+    const result = JSON.parse(output.slice(jsonStart)) as Partial<FlueWorkflowResult> & {
+      paths?: { report?: string };
+      opportunityCount?: number;
+      recommendationCount?: number;
+    };
+    if (result.paths?.report) {
+      const determinizationCost = (result as unknown as { cost?: { actualCalls?: number; costUsd?: number } }).cost;
+      return (
+        `Determinization report: ${result.paths.report}; opportunities ${result.opportunityCount ?? "unknown"}; ` +
+        `deterministic assets ${result.recommendationCount ?? "unknown"}; model calls ${determinizationCost?.actualCalls ?? "unknown"}` +
+        (determinizationCost?.costUsd === undefined ? "" : `; observed cost $${determinizationCost.costUsd.toFixed(4)}`)
+      );
+    }
     const score = result.normalizedScore?.toFixed(3) ?? "unknown";
     const iterations = result.completedIterations ?? "unknown";
     const calls = result.cost?.actual?.totalCalls ?? "unknown";

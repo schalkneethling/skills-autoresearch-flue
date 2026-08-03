@@ -34,3 +34,4 @@ test-results/
 **/workspace/iterations/
 **/workspace/cost-summary.json
 **/workspace/run-logs/
+**/workspace/determinization/

@@ -4,6 +4,7 @@ import {
   appendQuietStdout,
   buildConfigDrivenPayload,
   buildFlueArgs,
+  formatFlueModelCallPreview,
   formatQuietResult,
   parseRunnerArgs,
   shouldPrintQuietLine
@@ -85,6 +86,41 @@ test("config-driven commands default to the current project and derive a stable 
   });
 });
 
+test("Flue runner builds the determinize workflow payload without autoresearch flags", () => {
+  expect(
+    parseRunnerArgs([
+      "determinize",
+      "--project",
+      "/tmp/project",
+      "--skill",
+      "/tmp/skill",
+      "--context-root",
+      "/tmp/context",
+      "--catalog-root",
+      "/tmp/catalog",
+      "--output",
+      "/tmp/output"
+    ])
+  ).toEqual({
+    verbose: false,
+    writeRunLog: true,
+    workflow: "determinize",
+    payload: {
+      projectRoot: "/tmp/project",
+      sessionId: "project-determinize",
+      skillDir: "/tmp/skill",
+      contextRoot: "/tmp/context",
+      catalogRoot: "/tmp/catalog",
+      outputRoot: "/tmp/output"
+    }
+  });
+  expect(buildFlueArgs({ projectRoot: "/tmp/project" }, "determinize")).toContain("determinize");
+  expect(formatFlueModelCallPreview("determinize")).toBe("Determinizer model call preview: 1 planned call(s).");
+  expect(formatFlueModelCallPreview("autoresearch")).toBeUndefined();
+  expect(() => parseRunnerArgs(["determinize", "--resume"])).toThrow(/does not accept autoresearch-only/);
+  expect(() => parseRunnerArgs(["determinize", "--budget-usd", "1"])).toThrow(/does not accept autoresearch-only/);
+});
+
 test("Flue runner keeps direct payload invocation as an advanced path", () => {
   expect(parseRunnerArgs(["--payload", '{"projectRoot":"/tmp/project","runResearch":false}'])).toMatchObject({
     payload: { projectRoot: "/tmp/project", runResearch: false }
@@ -130,6 +166,21 @@ test("quiet Flue output replaces the full result with a compact summary", () => 
     )
   ).toBe(
     "Run complete: score 0.900; iterations 2; model calls 8; best skill /tmp/project/workspace/iterations/2/skill"
+  );
+});
+
+test("quiet Flue output summarizes determinization results", () => {
+  expect(
+    formatQuietResult(
+      JSON.stringify({
+        paths: { report: "/tmp/project/workspace/determinization/report.md" },
+        opportunityCount: 2,
+        recommendationCount: 4,
+        cost: { actualCalls: 1, costUsd: 0.0123 }
+      })
+    )
+  ).toBe(
+    "Determinization report: /tmp/project/workspace/determinization/report.md; opportunities 2; deterministic assets 4; model calls 1; observed cost $0.0123"
   );
 });
 

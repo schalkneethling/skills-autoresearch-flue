@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0.0",
+  "opportunities": [
+    {
+      "source_refs": [
+        {
+          "path": "skill/SKILL.md",
+          "locator": "Keep the output concise.",
+          "evidence_kind": "skill"
+        }
+      ],
+      "normalized_requirement": "Keep the output concise.",
+      "origin": "skill_guidance",
+      "classification": "partially_deterministic",
+      "current_automation_potential": "medium",
+      "remaining_human_judgment": "An editor must judge whether the release note is useful, appropriately concise, and complete for its developer audience.",
+      "recommendations": [
+        {
+          "relationship": "existing",
+          "asset_kind": "script",
+          "catalog_asset_id": "catalog_text_metrics",
+          "proposed_name": "Text metrics",
+          "contribution": "Word count and sentence-length metrics can contribute bounded concision signals.",
+          "confidence": "high",
+          "expected_improvement": "Adds repeatable measurements without treating brevity as quality.",
+          "supporting_evidence": ["Length is measurable."],
+          "limitations": ["Metrics cannot determine whether important changes were omitted."],
+          "alternative_assessments": []
+        },
+        {
+          "relationship": "existing",
+          "asset_kind": "languagetool",
+          "catalog_asset_id": "catalog_languagetool_existing_families",
+          "proposed_name": "LanguageTool style capability families",
+          "contribution": "Style warnings may contribute signals for wordiness and sentence construction.",
+          "confidence": "medium",
+          "expected_improvement": "May identify repeatable style issues after relevant rules are evidenced.",
+          "supporting_evidence": ["LanguageTool exposes grammar and style capability families."],
+          "limitations": ["No specific rule is established and style warnings cannot prove concision."],
+          "alternative_assessments": []
+        },
+        {
+          "relationship": "extensible",
+          "asset_kind": "languagetool",
+          "catalog_asset_id": "catalog_languagetool_custom_rules",
+          "proposed_name": "Project-owned LanguageTool rules",
+          "contribution": "A custom rule may add value for project-specific prohibited wording or terminology.",
+          "confidence": "low",
+          "expected_improvement": "Could make narrow editorial policies repeatable after evidence and verification.",
+          "supporting_evidence": ["Some organization-specific phrasing can be expressed as patterns."],
+          "limitations": ["A custom rule does not exist yet and cannot replace editorial judgment."],
+          "alternative_assessments": [
+            {
+              "relationship": "existing",
+              "catalog_asset_ids": ["catalog_languagetool_existing_families"],
+              "conclusion": "insufficient",
+              "rationale": "Built-in capability families may not encode project-specific wording policy."
+            },
+            {
+              "relationship": "configurable",
+              "catalog_asset_ids": ["catalog_languagetool_project_configuration"],
+              "conclusion": "insufficient",
+              "rationale": "Configuration can enable supported behavior but cannot create a missing project-specific pattern."
+            }
+          ]
+        }
+      ],
+      "confidence": "high",
+      "expected_improvement": "Combined metrics and evidenced style checks can reduce inconsistent review while keeping editorial judgment explicit.",
+      "supporting_evidence": ["Conciseness combines measurable length with audience- and context-dependent judgment."],
+      "limitations": [
+        "No deterministic asset can fully establish that a release note is concise, complete, and useful."
+      ]
+    }
+  ]
+}

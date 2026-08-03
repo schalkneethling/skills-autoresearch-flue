@@ -44,8 +44,10 @@ pnpm run build
 pnpm run flue:build
 pnpm run autoresearch -- smoke --project path/to/project
 varlock run -- pnpm run autoresearch -- research --project path/to/project
+node dist/src/cli.js determinize report --project path/to/project --response-file path/to/analysis-response.json
 pnpm run alpha:smoke
 pnpm run alpha:research
+pnpm run alpha:determinize
 ```
 
 The `smoke` and `research` commands derive normal Flue payload fields and the session name, use `origin_skill` and model settings from the project config, and avoid inline JSON. Direct Flue payload invocation remains available for advanced debugging.
@@ -55,6 +57,8 @@ The `smoke` and `research` commands derive normal Flue payload fields and the se
 `alpha:research` runs the model-backed Flue harness through `varlock run`.
 
 Flue-backed commands are quiet by default and write a complete append-only process log under the target project's `workspace/run-logs/`. Pass `-- --verbose` to expose full Flue output in the terminal, or `-- --no-run-log` to explicitly opt out of the local log.
+
+`determinize report` performs read-only analysis and writes an inspectable report plus its canonical opportunity data under `workspace/determinization/`. Use a recorded `--response-file` for a credential-free deterministic run, or run through Varlock for a direct Anthropic model call. The analysis only suggests unverified deterministic assets: it does not propose, verify, apply, or adopt them, and it never modifies the selected skill, external context, or repository-owned asset catalog.
 
 ## Using The Harness
 
