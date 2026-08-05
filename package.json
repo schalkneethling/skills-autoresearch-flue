@@ -34,7 +34,7 @@
     "@eslint/js": "^10.0.1",
     "@flue/cli": "0.11.1",
     "@types/node": "^26.1.1",
-    "@varlock/1password-plugin": "^2.0.0",
+    "@varlock/1password-plugin": "^2.0.3",
     "eslint": "^10.8.0",
     "knip": "^6.31.0",
     "prettier": "^3.9.6",
