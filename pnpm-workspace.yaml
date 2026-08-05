@@ -1,3 +1,6 @@
+packages:
+  - "compat/flue2-role-boundary"
+
 allowBuilds:
   "@google/genai": true
   "@mongodb-js/zstd": true

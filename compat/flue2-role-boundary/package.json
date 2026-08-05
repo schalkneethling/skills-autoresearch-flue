@@ -1,0 +1,25 @@
+{
+  "name": "flue2-role-boundary-compatibility",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "pnpm run typecheck && pnpm run test",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "0.83.0",
+    "@flue/runtime": "2.0.1",
+    "valibot": "1.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.1.2"
+}

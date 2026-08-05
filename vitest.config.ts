@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    exclude: ["dist/**", ".flue-dist/**", "node_modules/**"]
+    exclude: ["dist/**", ".flue-dist/**", "node_modules/**", "compat/**"]
   }
 });
