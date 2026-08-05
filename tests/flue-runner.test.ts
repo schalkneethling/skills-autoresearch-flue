@@ -1,17 +1,17 @@
-import type { FlueContext, FlueSession } from "@flue/runtime";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { run as runDeterminizeWorkflow } from "../.flue/workflows/determinize.js";
+
+import type { RawDeterminizationAnalysis } from "../src/flue-agents.js";
+import type { FlueRoleDispatcher, FlueRoleRuntime } from "../src/flue-runtime.js";
 import {
-  appendQuietStdout,
   buildConfigDrivenPayload,
-  buildFlueArgs,
   formatFlueModelCallPreview,
   formatQuietResult,
   parseRunnerArgs,
-  shouldPrintQuietLine
+  runFlueCommand,
+  type FlueRunnerDependencies
 } from "../src/flue-runner.js";
 import { tempProject } from "./helpers.js";
 
@@ -31,7 +31,7 @@ test("Flue runner parses verbose and run-log opt-out flags without forwarding th
   });
 });
 
-test("package scripts keep model-free smoke credential-free", () => {
+test("package scripts keep model-free smoke credential-free and remove the beta Flue build", () => {
   const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
     scripts: Record<string, string>;
   };
@@ -39,9 +39,10 @@ test("package scripts keep model-free smoke credential-free", () => {
   expect(packageJson.scripts.autoresearch).toBe("pnpm run build && node dist/src/flue-runner.js");
   expect(packageJson.scripts["alpha:smoke"]).toContain("pnpm run autoresearch");
   expect(packageJson.scripts["alpha:research"]).toContain("varlock run --");
+  expect(packageJson.scripts["flue:build"]).toBeUndefined();
 });
 
-test("Flue runner builds a config-driven baseline smoke command", () => {
+test("Flue runner builds config-driven smoke, research, and determinize payloads", () => {
   expect(parseRunnerArgs(["--", "smoke", "--project", "/tmp/project"])).toEqual({
     verbose: false,
     writeRunLog: true,
@@ -52,9 +53,7 @@ test("Flue runner builds a config-driven baseline smoke command", () => {
       sessionId: "project-smoke"
     }
   });
-});
 
-test("Flue runner builds a config-driven research command with concise overrides", () => {
   expect(
     parseRunnerArgs([
       "research",
@@ -86,18 +85,7 @@ test("Flue runner builds a config-driven research command with concise overrides
       budgetUsd: 0.25
     }
   });
-});
 
-test("config-driven commands default to the current project and derive a stable session", () => {
-  expect(buildConfigDrivenPayload("research")).toMatchObject({
-    projectRoot: process.cwd(),
-    withBaseline: true,
-    runResearch: true,
-    sessionId: `${basename(process.cwd())}-research`
-  });
-});
-
-test("Flue runner builds the determinize workflow payload without autoresearch flags", () => {
   expect(
     parseRunnerArgs([
       "determinize",
@@ -125,165 +113,164 @@ test("Flue runner builds the determinize workflow payload without autoresearch f
       outputRoot: "/tmp/output"
     }
   });
-  expect(buildFlueArgs({ projectRoot: "/tmp/project" }, "determinize")).toContain("determinize");
+
+  expect(buildConfigDrivenPayload("research")).toMatchObject({
+    projectRoot: process.cwd(),
+    withBaseline: true,
+    runResearch: true,
+    sessionId: `${basename(process.cwd())}-research`
+  });
   expect(formatFlueModelCallPreview("determinize")).toBe("Determinizer model call preview: 1 planned call(s).");
   expect(formatFlueModelCallPreview("autoresearch")).toBeUndefined();
-  expect(() => parseRunnerArgs(["determinize", "--resume"])).toThrow(/does not accept autoresearch-only/);
-  expect(() => parseRunnerArgs(["determinize", "--budget-usd", "1"])).toThrow(/does not accept autoresearch-only/);
-});
-
-test("determinize workflow produces the report through a Flue session", async () => {
-  const outputRoot = await tempProject("det-flue-workflow-");
-  const response = JSON.parse(readFileSync(fixtureResponse, "utf8")) as unknown;
-  const task = vi.fn(async () => ({
-    data: response,
-    usage: {
-      input: 120,
-      output: 30,
-      cacheRead: 20,
-      cacheWrite: 10,
-      totalTokens: 180,
-      cost: { input: 0.001, output: 0.002, cacheRead: 0.0001, cacheWrite: 0.0002, total: 0.0033 }
-    },
-    model: { provider: "anthropic", id: "claude-haiku-4-5" }
-  }));
-  const session = {
-    task
-  } as unknown as FlueSession;
-  const sessionFactory = vi.fn(async () => session);
-  const init = vi.fn(async () => ({ session: sessionFactory }));
-
-  const result = await runDeterminizeWorkflow({
-    init,
-    payload: {
-      projectRoot: fixtureProject,
-      catalogRoot,
-      outputRoot,
-      sessionId: "workflow-test",
-      model: "anthropic/claude-haiku-4-5"
-    },
-    env: {}
-  } as unknown as FlueContext);
-
-  expect(init).toHaveBeenCalledOnce();
-  expect(sessionFactory).toHaveBeenCalledWith("workflow-test");
-  expect(task).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({ agent: "determinizer", model: "anthropic/claude-haiku-4-5" })
-  );
-  expect(result.paths.report).toBe(join(outputRoot, "report.md"));
-  expect(result.cost).toMatchObject({
-    model: { provider: "anthropic", name: "claude-haiku-4-5" },
-    usage: {
-      inputTokens: 120,
-      outputTokens: 30,
-      cacheCreationInputTokens: 10,
-      cacheReadInputTokens: 20
-    },
-    costUsd: 0.0033
-  });
-  expect(await readFile(result.paths.report, "utf8")).toContain("# Determinization opportunity report");
-});
-
-test.each(["openai/gpt-5", "anthropic/", "anthropic/claude/extra", "anthropic/claude sonnet"])(
-  "determinize workflow rejects invalid model override %j before initialization",
-  async (model) => {
-    const init = vi.fn();
-    await expect(
-      runDeterminizeWorkflow({ init, payload: { model }, env: {} } as unknown as FlueContext)
-    ).rejects.toThrow(/anthropic\/<non-empty-model>/);
-    expect(init).not.toHaveBeenCalled();
-  }
-);
-
-test("determinize workflow rejects an invalid environment model override before initialization", async () => {
-  const init = vi.fn();
-  await expect(
-    runDeterminizeWorkflow({ init, payload: {}, env: { FLUE_MODEL: "openai/gpt-5" } } as unknown as FlueContext)
-  ).rejects.toThrow(/anthropic\/<non-empty-model>/);
-  expect(init).not.toHaveBeenCalled();
-});
-
-test("Flue runner keeps direct payload invocation as an advanced path", () => {
-  expect(parseRunnerArgs(["--payload", '{"projectRoot":"/tmp/project","runResearch":false}'])).toMatchObject({
-    payload: { projectRoot: "/tmp/project", runResearch: false }
-  });
 });
 
 test("Flue runner rejects ambiguous modes and invalid concise overrides", () => {
-  expect(() => parseRunnerArgs([])).toThrow(/smoke or research/);
-  expect(() => parseRunnerArgs(["unknown"])).toThrow(/smoke or research/);
-  expect(() => parseRunnerArgs(["research", "--payload", "{}"])).toThrow(/either/);
-  expect(() => parseRunnerArgs(["research", "--budget-usd=-1"])).toThrow(/non-negative/);
-  expect(() => parseRunnerArgs(["research", "--budget-usd", ""])).toThrow(/non-negative/);
-  expect(() => parseRunnerArgs(["research", "--budget-usd", "   "])).toThrow(/non-negative/);
-  expect(() => parseRunnerArgs(["--payload", "[]"])).toThrow(/JSON object/);
+  expect(() => parseRunnerArgs([])).toThrow(/smoke or research/u);
+  expect(() => parseRunnerArgs(["unknown"])).toThrow(/smoke or research/u);
+  expect(() => parseRunnerArgs(["research", "--payload", "{}"])).toThrow(/either/u);
+  expect(() => parseRunnerArgs(["research", "--budget-usd=-1"])).toThrow(/non-negative/u);
+  expect(() => parseRunnerArgs(["research", "--budget-usd", ""])).toThrow(/non-negative/u);
+  expect(() => parseRunnerArgs(["--payload", "[]"])).toThrow(/JSON object/u);
+  expect(() => parseRunnerArgs(["determinize", "--resume"])).toThrow(/autoresearch-only/u);
+  expect(() => parseRunnerArgs(["determinize", "--budget-usd", "1"])).toThrow(/autoresearch-only/u);
 });
 
-test("Flue runner emits exactly one canonical payload argument", () => {
-  const args = buildFlueArgs({ projectRoot: "/tmp/project", verbose: true });
-  expect(args.filter((arg) => arg === "--payload")).toHaveLength(1);
-  expect(JSON.parse(args.at(-1) ?? "")).toEqual({ projectRoot: "/tmp/project", verbose: true });
+test("model-free smoke bypasses the Flue runtime", async () => {
+  const runtime = vi.fn(async () => {
+    throw new Error("Smoke must not start Flue");
+  }) as unknown as NonNullable<FlueRunnerDependencies["withRuntime"]>;
+  const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+  try {
+    await expect(
+      runFlueCommand(["smoke", "--project", fixtureProject, "--session", "runner-smoke", "--no-run-log"], {
+        withRuntime: runtime
+      })
+    ).resolves.toBe(0);
+    expect(runtime).not.toHaveBeenCalled();
+    expect(stdout.mock.calls.flat().join("")).toContain("Run complete: score");
+  } finally {
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
 });
 
-test.each([
-  ["[flue] tool:start  write  /tmp/result.md", true],
-  ["[flue] info: Iteration 1: eval 1/2 started", true],
-  ["[flue] Run ID: workflow:autoresearch:123", true],
-  ["[flue] thinking:start", false],
-  ["  full generated output contents", false],
-  ["  hidden chain of thought", false]
-])("quiet Flue output filters content-bearing lines", (line, expected) => {
-  expect(shouldPrintQuietLine(line)).toBe(expected);
+test("determinize runs through the owned Flue 2 runtime boundary", async () => {
+  const outputRoot = await tempProject("det-flue-runner-");
+  const response = JSON.parse(readFileSync(fixtureResponse, "utf8")) as RawDeterminizationAnalysis;
+  const determinize = vi.fn<FlueRoleDispatcher["determinize"]>(async ({ prompt, model }) => ({
+    data: response,
+    text: "submitted",
+    usage: { inputTokens: 120, outputTokens: 30, cacheCreationInputTokens: 10, cacheReadInputTokens: 20 },
+    costUsd: 0.0033,
+    instanceId: `${model}:${prompt.length}`,
+    submissionId: "determinization-submission"
+  }));
+  const runtime = createRuntime({ determinize });
+  let starts = 0;
+  const withRuntime: NonNullable<FlueRunnerDependencies["withRuntime"]> = async (run) => {
+    starts++;
+    return run(runtime);
+  };
+  const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+  const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+  vi.stubEnv("FLUE_MODEL", "anthropic/claude-haiku-4-5");
+
+  try {
+    await expect(
+      runFlueCommand(
+        [
+          "determinize",
+          "--project",
+          fixtureProject,
+          "--catalog-root",
+          catalogRoot,
+          "--output",
+          outputRoot,
+          "--session",
+          "runner-determinize",
+          "--no-run-log"
+        ],
+        { withRuntime }
+      )
+    ).resolves.toBe(0);
+
+    expect(starts).toBe(1);
+    expect(determinize).toHaveBeenCalledOnce();
+    expect(determinize).toHaveBeenCalledWith({
+      prompt: expect.any(String),
+      model: "anthropic/claude-haiku-4-5"
+    });
+    expect(await readFile(join(outputRoot, "report.md"), "utf8")).toContain("# Determinization opportunity report");
+    expect(stdout.mock.calls.flat().join("")).toContain(`Determinization report: ${join(outputRoot, "report.md")}`);
+  } finally {
+    vi.unstubAllEnvs();
+    stdout.mockRestore();
+    stderr.mockRestore();
+  }
 });
 
-test("quiet Flue output replaces the full result with a compact summary", () => {
+test.each(["openai/gpt-5", "anthropic/", "anthropic/claude/extra", "anthropic/claude sonnet"])(
+  "determinize rejects invalid model override %j before runtime startup",
+  async (model) => {
+    const runtime = vi.fn(async () => {
+      throw new Error("Runtime must not start");
+    }) as unknown as NonNullable<FlueRunnerDependencies["withRuntime"]>;
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    vi.stubEnv("FLUE_MODEL", model);
+    try {
+      await expect(
+        runFlueCommand(["determinize", "--project", fixtureProject, "--no-run-log"], {
+          withRuntime: runtime
+        })
+      ).rejects.toThrow(/anthropic\/<non-empty-model>/u);
+      expect(runtime).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+      stderr.mockRestore();
+    }
+  }
+);
+
+test("quiet result formatting preserves autoresearch and determinization summaries", () => {
   expect(
     formatQuietResult(
-      `[flue] build output\n${JSON.stringify({
+      JSON.stringify({
         completedIterations: 2,
         normalizedScore: 0.9,
         bestSkillDir: "/tmp/project/workspace/iterations/2/skill",
         cost: { actual: { totalCalls: 8 } }
-      })}\n`
+      })
     )
   ).toBe(
     "Run complete: score 0.900; iterations 2; model calls 8; best skill /tmp/project/workspace/iterations/2/skill"
   );
-});
 
-test("quiet Flue output summarizes determinization results", () => {
   expect(
     formatQuietResult(
       JSON.stringify({
         paths: { report: "/tmp/project/workspace/determinization/report.md" },
         opportunityCount: 2,
-        recommendationCount: 4,
-        cost: { actualCalls: 1, costUsd: 0.0123 }
+        recommendationCount: 3,
+        cost: { actualCalls: 1, costUsd: 0.0042 }
       })
     )
   ).toBe(
-    "Determinization report: /tmp/project/workspace/determinization/report.md; opportunities 2; deterministic assets 4; model calls 1; observed cost $0.0123"
+    "Determinization report: /tmp/project/workspace/determinization/report.md; opportunities 2; " +
+      "deterministic assets 3; model calls 1; observed cost $0.0042"
   );
 });
 
-test("quiet Flue output keeps a fixed-size tail that can still contain the final result", () => {
-  const resultJson = JSON.stringify({
-    completedIterations: 1,
-    normalizedScore: 0.8,
-    cost: { actual: { totalCalls: 5 } }
-  });
-  const buffered = appendQuietStdout("x".repeat(1_048_570), resultJson);
-
-  expect(buffered.truncated).toBe(true);
-  expect(buffered.output.length).toBeLessThanOrEqual(1_048_576);
-  expect(formatQuietResult(buffered.output, buffered.truncated)).toBe(
-    "Run complete: score 0.800; iterations 1; model calls 5"
-  );
-});
-
-test("quiet Flue output explains when a truncated result cannot be parsed", () => {
-  expect(formatQuietResult("result tail without JSON", true)).toBe(
-    "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
-  );
-});
+function createRuntime(overrides: Partial<FlueRoleDispatcher>): FlueRoleRuntime {
+  const unexpected = async () => {
+    throw new Error("Unexpected role dispatch");
+  };
+  return {
+    produce: overrides.produce ?? unexpected,
+    judge: overrides.judge ?? unexpected,
+    research: overrides.research ?? unexpected,
+    determinize: overrides.determinize ?? unexpected,
+    async stop() {}
+  } as FlueRoleRuntime;
+}

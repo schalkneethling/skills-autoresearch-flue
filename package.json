@@ -16,23 +16,22 @@
     "knip": "knip",
     "typecheck": "tsc --noEmit",
     "compat:flue2": "pnpm --filter flue2-role-boundary-compatibility run check",
-    "check": "pnpm run format:check && pnpm run lint && pnpm run knip && pnpm run typecheck && pnpm test && pnpm run compat:flue2 && pnpm run build && pnpm run flue:build && pnpm run alpha:smoke",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run knip && pnpm run typecheck && pnpm test && pnpm run compat:flue2 && pnpm run build && pnpm run alpha:smoke",
     "build": "tsc -p tsconfig.json",
     "autoresearch": "pnpm run build && node dist/src/flue-runner.js",
     "flue:run": "pnpm run build && node dist/src/flue-runner.js",
-    "flue:build": "flue build --target node --root . --output .flue-dist",
     "alpha:smoke": "pnpm run autoresearch -- smoke --project fixtures/projects/release-notes-alpha --session alpha-smoke",
     "alpha:determinize": "pnpm run build && node dist/src/cli.js determinize report --project fixtures/projects/release-notes-alpha --response-file fixtures/expected/determinization/release-notes-alpha/analysis-response.json --catalog-root catalog/deterministic-assets",
     "alpha:research": "pnpm run build && varlock run -- node dist/src/flue-runner.js research --project fixtures/projects/release-notes-alpha --session alpha-research",
     "env:check": "varlock load"
   },
   "dependencies": {
-    "@flue/runtime": "0.11.1",
+    "@flue/runtime": "2.0.3",
     "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@flue/cli": "0.11.1",
+    "@earendil-works/pi-ai": "0.83.0",
     "@types/node": "^26.1.2",
     "@varlock/1password-plugin": "^2.0.3",
     "eslint": "^10.8.0",

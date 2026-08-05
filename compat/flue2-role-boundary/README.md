@@ -1,7 +1,7 @@
 # Flue 2 role-boundary compatibility gate
 
 This isolated, credential-free fixture tests one compatibility question against
-the exact public Flue 2.0.1 API: can producer and judge responsibilities remain
+the exact public Flue 2.0.3 API: can producer and judge responsibilities remain
 separate, addressable agent roles in one Node runtime?
 
 ## Verified contract
@@ -28,12 +28,10 @@ separate, addressable agent roles in one Node runtime?
 **GO** for planning a production role-boundary migration around addressable
 top-level agents, `init()`/`dispatch()`/`read()`, and schema-backed data writers.
 
-**NO-GO** for starting that production migration until this compatibility PR is
-accepted and merged, and sandbox, routing, model/workspace, lifecycle, and
-persistence behavior is explicitly designed. In particular, Flue supplies a
-shared `task` tool but no implicit sandbox; validation retries add model calls;
-`dispatch()` has no beta-style per-call model or cwd overrides; lifecycle hooks
-are at-least-once; and beta persisted state is reset-only across the v2 boundary.
+The production migration now uses this verified boundary. Its agents intentionally
+declare no sandbox; application code provides bounded prompt inputs and applies
+validated results. The runtime remains process-local and in-memory, and beta
+persisted state was not migrated across the v2 boundary.
 
 Run the gate from the repository root:
 
@@ -47,7 +45,7 @@ keeping the compatibility evidence reproducible with the rest of the workspace.
 
 ## Pins
 
-- `@flue/runtime`: `2.0.1`
+- `@flue/runtime`: `2.0.3`
 - `@earendil-works/pi-ai`: `0.83.0`
 
 The fixture intentionally does not depend on `@flue/cli`; the executable
@@ -55,8 +53,9 @@ evidence uses the role-boundary runtime APIs directly.
 
 ## Risks and exclusions
 
-This gate does not test production migration, CLI/build transforms, durable
+This gate does not itself test production migration, CLI lifecycle, durable
 database adapters, crash recovery, sandboxes, skills, telemetry, real providers,
 or credential-backed calls. Passing it establishes go/no-go evidence for the
 role boundary only. It is not, by itself, a recommendation to migrate production
-code.
+code. Production integration has separate tests; this fixture remains focused on
+the original role-boundary evidence.

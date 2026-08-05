@@ -4,12 +4,12 @@ The model-backed alpha run uses Varlock to inject provider credentials into the 
 
 The current alpha harness is Flue-first:
 
-- `.flue/workflows/autoresearch.ts` is the runnable Flue workflow.
-- `.flue/profiles.ts` defines the named producer, judge, and researcher subagent profiles.
-- `src/flue-harness.ts` adapts Flue `session.task(..., { agent, result })` calls into the autoresearch loop.
+- `src/flue-agents.ts` defines addressable producer, judge, researcher, and determinizer agents for Flue 2.0.3.
+- `src/flue-runtime.ts` owns the application-level `start()`/`init()`/`dispatch()`/`read()` boundary.
+- `src/flue-harness.ts` adapts role dispatch into the autoresearch loop, and `src/flue-runner.ts` owns CLI lifecycle.
 - `fixtures/projects/release-notes-alpha/` is the committed alpha fixture.
 
-Flue role artifacts are Markdown files named for the registered role. Project-local roles may live in either supported directory; discovery combines both locations, removes duplicates, and sorts the role names:
+Role Markdown files are application-level configured labels and prompt context; they do not register Flue agents. Project-local roles may live in either supported directory; discovery combines both locations, removes duplicates, and sorts the role names:
 
 ```text
 roles/
@@ -92,7 +92,7 @@ varlock run -- node dist/src/flue-runner.js determinize \
   --project fixtures/projects/release-notes-alpha
 ```
 
-Determinization resume is available only through the direct `determinize report` CLI, not the Flue wrapper. It validates current inputs and re-renders the existing immutable `opportunities.json` without another model call:
+Determinization resume is available only through the direct `determinize report` CLI, not the Flue-backed `determinize` command. It validates current inputs and re-renders the existing immutable `opportunities.json` without another model call:
 
 ```bash
 node dist/src/cli.js determinize report \
@@ -100,9 +100,9 @@ node dist/src/cli.js determinize report \
   --resume
 ```
 
-Normal runs print compact phase/eval progress and write the complete Flue process stream under `fixtures/projects/release-notes-alpha/workspace/run-logs/`. Add `-- --verbose` to `alpha:smoke` or `alpha:research` to expose the full stream in the terminal, or `-- --no-run-log` to explicitly disable the local audit log.
+Normal runs print compact phase/eval progress and write application events, results, and errors under `fixtures/projects/release-notes-alpha/workspace/run-logs/`. Add `-- --verbose` to `alpha:smoke` or `alpha:research` to print debug application events and the structured result, or `-- --no-run-log` to disable the local audit log. Run logs intentionally omit Flue's full prompt and tool stream because `turn_request` events contain complete prompts and tools.
 
-This runs the Flue workflow with:
+This runs the application-owned Flue 2 runtime with:
 
 ```json
 {
@@ -155,6 +155,10 @@ The alpha fixture config assigns different models per phase:
 ```
 
 The producer writes eval outputs only. The judge reads those outputs and returns the score. This reduces self-grading bias and gives us a clean path to cross-provider evaluation later.
+
+All four agents use schema-backed submit tools, and the runtime accepts exactly one validated result on the expected role channel. They deliberately declare no sandbox: the application serializes bounded selected inputs into prompts and alone applies validated outputs. Flue usage and cost are attached through response-finish metadata and included in the current accounting.
+
+When started, the runtime is process-local, uses in-memory persistence, and is always stopped in `finally`. Beta persisted conversation state was not migrated. Existing application artifact resume remains available; durable Flue submissions and runtime-level recovery are a later phase.
 
 ## Expected Artifacts
 

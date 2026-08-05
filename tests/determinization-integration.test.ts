@@ -1,4 +1,3 @@
-import type { FlueSession } from "@flue/runtime";
 import { chmod, mkdir, readFile, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { main } from "../src/cli.js";
@@ -9,6 +8,7 @@ import {
   StaticDeterminizationTransport,
   type DeterminizationTransport
 } from "../src/determinization/transport.js";
+import type { FlueRoleDispatcher } from "../src/flue-runtime.js";
 import type { ModelClient } from "../src/model-agent.js";
 import { tempProject, writeFixture, syntheticConfig, syntheticEvals } from "./helpers.js";
 
@@ -249,32 +249,47 @@ test("direct-model and Flue transports preserve their role boundary", async () =
   expect(direct.response).toEqual({ schema_version: "1.0.0", opportunities: [] });
   expect(direct.usage).toEqual({ inputTokens: 10 });
 
-  const tasks: unknown[] = [];
-  const session = {
-    async task(text: string, options: unknown) {
-      tasks.push({ text, options });
-      return {
-        data: { schema_version: "1.0.0", opportunities: [] },
-        usage: {
-          input: 10,
-          output: 5,
-          cacheRead: 3,
-          cacheWrite: 2,
-          totalTokens: 20,
-          cost: { input: 0.001, output: 0.002, cacheRead: 0.0001, cacheWrite: 0.0002, total: 0.0033 }
-        },
-        model: { provider: "anthropic", id: "claude-sonnet-4-6" }
-      };
-    }
-  } as unknown as FlueSession;
-  const flue = await new FlueDeterminizationTransport(session).analyze(request);
-  expect(tasks).toEqual([
-    expect.objectContaining({
-      text: "prompt",
-      options: expect.objectContaining({ agent: "determinizer", model: "anthropic/claude-sonnet-4-6" })
+  const determinize = vi.fn<FlueRoleDispatcher["determinize"]>(async ({ prompt, model: dispatchedModel }) => {
+    return {
+      data: { schema_version: "1.0.0", opportunities: [] },
+      text: "submitted",
+      usage: {
+        inputTokens: 10,
+        outputTokens: 5,
+        cacheCreationInputTokens: 2,
+        cacheReadInputTokens: 3
+      },
+      costUsd: 0.0033,
+      instanceId: `${dispatchedModel}:${prompt}`,
+      submissionId: "submission-1"
+    };
+  });
+  const dispatcher: FlueRoleDispatcher = {
+    determinize,
+    produce: vi.fn(async () => {
+      throw new Error("Unexpected producer dispatch");
+    }),
+    judge: vi.fn(async () => {
+      throw new Error("Unexpected judge dispatch");
+    }),
+    research: vi.fn(async () => {
+      throw new Error("Unexpected researcher dispatch");
     })
-  ]);
-  expect(flue).toMatchObject({
+  };
+  const flue = await new FlueDeterminizationTransport(dispatcher).analyze(request);
+  expect(determinize).toHaveBeenCalledExactlyOnceWith({
+    prompt: "prompt",
+    model: "anthropic/claude-sonnet-4-6"
+  });
+  expect(dispatcher.produce).not.toHaveBeenCalled();
+  expect(dispatcher.judge).not.toHaveBeenCalled();
+  expect(dispatcher.research).not.toHaveBeenCalled();
+  expect(flue).toEqual({
+    response: { schema_version: "1.0.0", opportunities: [] },
+    transcript: {
+      request,
+      response: { schema_version: "1.0.0", opportunities: [] }
+    },
     usage: {
       inputTokens: 10,
       outputTokens: 5,

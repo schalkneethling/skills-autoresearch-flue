@@ -1,9 +1,14 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
 import { basename, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import type { FlueWorkflowResult } from "./flue-harness.js";
-import { createRunLog, RunLog } from "./run-log.js";
+import { formatEvent } from "./cli.js";
+import { runDeterminizationReport } from "./determinization/run.js";
+import { FlueDeterminizationTransport } from "./determinization/transport.js";
+import { runFlueAutoresearch, type FlueWorkflowResult } from "./flue-harness.js";
+import { withFlueRoleRuntime } from "./flue-runtime.js";
+import { orchestrateBaseline, type OrchestratorResult, type RunEvent } from "./orchestrator.js";
+import { createRunLog } from "./run-log.js";
+import { normalizeRunOptions } from "./run-options.js";
 
 export type RunnerMode = "smoke" | "research" | "determinize";
 
@@ -15,7 +20,9 @@ export type RunnerOptions = {
   help?: boolean;
 };
 
-const QUIET_STDOUT_MAX_CHARS = 1_048_576;
+export interface FlueRunnerDependencies {
+  withRuntime?: typeof withFlueRoleRuntime;
+}
 
 function usage(): string {
   return [
@@ -41,20 +48,23 @@ function usage(): string {
     "",
     "General options:",
     "  --payload <json>        Advanced: pass a complete Flue payload directly.",
-    "  --verbose               Print the complete Flue event stream.",
-    "  --no-run-log            Do not write the complete local run log.",
+    "  --verbose               Print debug events and the structured result.",
+    "  --no-run-log            Do not write the local event and result log.",
     "  -h, --help              Show this help."
   ].join("\n");
 }
 
-export async function runFlueCommand(argv = process.argv.slice(2)): Promise<number> {
+export async function runFlueCommand(
+  argv = process.argv.slice(2),
+  dependencies: FlueRunnerDependencies = {}
+): Promise<number> {
   const options = parseRunnerArgs(argv);
   if (options.help) {
     process.stdout.write(`${usage()}\n`);
     return 0;
   }
-  const projectRoot = resolve(String(options.payload.projectRoot ?? process.cwd()));
-  const sessionId = String(options.payload.sessionId ?? "autoresearch");
+  const projectRoot = resolve(optionalString(options.payload, "projectRoot") ?? process.cwd());
+  const sessionId = optionalString(options.payload, "sessionId") ?? "autoresearch";
   const runLog = options.writeRunLog ? createRunLog(projectRoot, sessionId) : undefined;
   const payload = {
     ...options.payload,
@@ -63,19 +73,136 @@ export async function runFlueCommand(argv = process.argv.slice(2)): Promise<numb
     writeRunLog: options.writeRunLog,
     ...(runLog ? { runLogPath: runLog.path } : {})
   };
-  const flueArgs = buildFlueArgs(payload, options.workflow ?? "autoresearch");
-
-  runLog?.append("run-start", { command: "flue", args: flueArgs, projectRoot, sessionId });
+  const workflow = options.workflow ?? "autoresearch";
+  const runWithRuntime = dependencies.withRuntime ?? withFlueRoleRuntime;
+  runLog?.append("run-start", { command: "skills-autoresearch-flue", workflow, payload, projectRoot, sessionId });
   if (runLog) {
     process.stderr.write(`Run log: ${runLog.path}\n`);
   }
-  const modelCallPreview = formatFlueModelCallPreview(options.workflow ?? "autoresearch");
+  const modelCallPreview = formatFlueModelCallPreview(workflow);
   if (modelCallPreview) process.stderr.write(`${modelCallPreview}\n`);
 
-  const exitCode = await spawnFlue(flueArgs, options.verbose, runLog);
-  runLog?.append("run-end", { exitCode });
-  runLog?.close();
-  return exitCode;
+  try {
+    const result =
+      workflow === "determinize"
+        ? await runDeterminizePayload(payload, runWithRuntime)
+        : await runAutoresearchPayload(payload, options.verbose, runLog, runWithRuntime);
+    runLog?.append("run-result", result);
+    if (options.verbose) {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    } else {
+      const summary = formatQuietResult(JSON.stringify(result));
+      if (summary) process.stdout.write(`${summary}\n`);
+    }
+    runLog?.append("run-end", { exitCode: 0 });
+    return 0;
+  } catch (error) {
+    runLog?.append("run-error", { message: (error as Error).message, stack: (error as Error).stack });
+    runLog?.append("run-end", { exitCode: 1 });
+    throw error;
+  } finally {
+    runLog?.close();
+  }
+}
+
+async function runAutoresearchPayload(
+  payload: Record<string, unknown>,
+  verbose: boolean,
+  runLog: ReturnType<typeof createRunLog> | undefined,
+  runWithRuntime: typeof withFlueRoleRuntime
+): Promise<FlueWorkflowResult> {
+  const runOptions = normalizeRunOptions({
+    projectRoot: optionalString(payload, "projectRoot"),
+    withBaseline: optionalBoolean(payload, "withBaseline"),
+    runResearch: optionalBoolean(payload, "runResearch"),
+    forceResearch: optionalBoolean(payload, "forceResearch"),
+    resume: optionalBoolean(payload, "resume"),
+    withCleanup: optionalBoolean(payload, "withCleanup"),
+    seedSkillDir: optionalString(payload, "seedSkillDir"),
+    guidanceSkillDir: optionalString(payload, "guidanceSkillDir"),
+    budgetUsd: optionalNumber(payload, "budgetUsd")
+  });
+  const onEvent = (event: RunEvent) => writeRunEvent(event, verbose, runLog);
+
+  if (runOptions.withBaseline && !runOptions.runResearch) {
+    return toFlueWorkflowResult(
+      await orchestrateBaseline({ ...runOptions, modelBacked: true, onEvent }),
+      optionalString(payload, "runLogPath")
+    );
+  }
+
+  return runWithRuntime(async (dispatcher) => {
+    const result = await runFlueAutoresearch({ dispatcher, ...runOptions, onEvent });
+    return toFlueWorkflowResult(result, optionalString(payload, "runLogPath"));
+  });
+}
+
+async function runDeterminizePayload(payload: Record<string, unknown>, runWithRuntime: typeof withFlueRoleRuntime) {
+  const rawModel = optionalString(payload, "model") ?? process.env.FLUE_MODEL;
+  const modelOverride = parseDeterminizationModel(rawModel);
+  const projectRoot = resolve(optionalString(payload, "projectRoot") ?? process.cwd());
+  const skillDir = optionalString(payload, "skillDir");
+  const contextRoot = optionalString(payload, "contextRoot");
+  const catalogRoot = optionalString(payload, "catalogRoot");
+  const outputRoot = optionalString(payload, "outputRoot");
+  return runWithRuntime((dispatcher) =>
+    runDeterminizationReport({
+      projectRoot,
+      transport: new FlueDeterminizationTransport(dispatcher),
+      ...(modelOverride && { modelOverride }),
+      ...(skillDir && { skillDir }),
+      ...(contextRoot && { contextRoot }),
+      ...(catalogRoot && { catalogRoot }),
+      ...(outputRoot && { outputRoot })
+    })
+  );
+}
+
+function parseDeterminizationModel(model: string | undefined): { provider: "anthropic"; name: string } | undefined {
+  if (model === undefined) return undefined;
+  const match = /^anthropic\/([^/\s]+)$/u.exec(model);
+  if (!match) throw new Error("Determinization model must use the format anthropic/<non-empty-model>");
+  return { provider: "anthropic", name: match[1] };
+}
+
+function optionalString(payload: Record<string, unknown>, key: string): string | undefined {
+  const value = payload[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new Error(`${key} must be a string.`);
+  return value;
+}
+
+function optionalBoolean(payload: Record<string, unknown>, key: string): boolean | undefined {
+  const value = payload[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "boolean") throw new Error(`${key} must be a boolean.`);
+  return value;
+}
+
+function optionalNumber(payload: Record<string, unknown>, key: string): number | undefined {
+  const value = payload[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "number") throw new Error(`${key} must be a number.`);
+  return value;
+}
+
+function toFlueWorkflowResult(result: OrchestratorResult, runLogPath?: string): FlueWorkflowResult {
+  return {
+    completedIterations: result.completedIterations,
+    normalizedScore: result.aggregate.overall.normalizedScore,
+    bestSkillDir: result.bestIteration?.skillDir,
+    ...(runLogPath && { runLogPath }),
+    cost: result.cost,
+    events: result.events.map((event) => event.type)
+  };
+}
+
+function writeRunEvent(event: RunEvent, verbose: boolean, runLog: ReturnType<typeof createRunLog> | undefined): void {
+  runLog?.append("run-event", event);
+  const formatted = formatEvent(event);
+  if (formatted.level === "debug" && !verbose) return;
+  const prefix = formatted.level === "warn" || formatted.level === "error" ? `${formatted.level}: ` : "";
+  process.stderr.write(`${prefix}${formatted.message}\n`);
 }
 
 export function parseRunnerArgs(argv: string[]): RunnerOptions {
@@ -241,80 +368,8 @@ function parseBudgetUsd(value: string | undefined): number | undefined {
   return parsed;
 }
 
-export function buildFlueArgs(
-  payload: Record<string, unknown>,
-  workflow: "autoresearch" | "determinize" = "autoresearch"
-): string[] {
-  return ["exec", "flue", "run", workflow, "--target", "node", "--root", ".", "--payload", JSON.stringify(payload)];
-}
-
 export function formatFlueModelCallPreview(workflow: "autoresearch" | "determinize"): string | undefined {
   return workflow === "determinize" ? "Determinizer model call preview: 1 planned call(s)." : undefined;
-}
-
-function spawnFlue(args: string[], verbose: boolean, runLog: RunLog | undefined): Promise<number> {
-  return new Promise((resolveExit) => {
-    const child = spawn("pnpm", args, { stdio: ["inherit", "pipe", "pipe"] });
-    let quietStdout = "";
-    let quietStdoutTruncated = false;
-    let quietStderrBuffer = "";
-
-    child.stdout.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      runLog?.append("process-output", { stream: "stdout", text });
-      if (verbose) {
-        process.stdout.write(text);
-        return;
-      }
-      const buffered = appendQuietStdout(quietStdout, text);
-      quietStdout = buffered.output;
-      quietStdoutTruncated ||= buffered.truncated;
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      const text = chunk.toString();
-      runLog?.append("process-output", { stream: "stderr", text });
-      if (verbose) {
-        process.stderr.write(text);
-        return;
-      }
-      quietStderrBuffer += text;
-      const lines = quietStderrBuffer.split("\n");
-      quietStderrBuffer = lines.pop() ?? "";
-      for (const line of lines) {
-        if (shouldPrintQuietLine(line)) {
-          process.stderr.write(`${line}\n`);
-        }
-      }
-    });
-    child.on("error", (error) => {
-      runLog?.append("process-error", { message: error.message });
-      process.stderr.write(`Unable to start Flue: ${error.message}\n`);
-      resolveExit(1);
-    });
-    child.on("close", (code) => {
-      if (!verbose) {
-        const summary = formatQuietResult(quietStdout, quietStdoutTruncated);
-        if (summary) {
-          process.stdout.write(`${summary}\n`);
-        }
-      }
-      if (!verbose && quietStderrBuffer && shouldPrintQuietLine(quietStderrBuffer)) {
-        process.stderr.write(`${quietStderrBuffer}\n`);
-      }
-      resolveExit(code ?? 1);
-    });
-  });
-}
-
-export function appendQuietStdout(current: string, chunk: string): { output: string; truncated: boolean } {
-  if (chunk.length >= QUIET_STDOUT_MAX_CHARS) {
-    return { output: chunk.slice(-QUIET_STDOUT_MAX_CHARS), truncated: true };
-  }
-  const combined = current + chunk;
-  if (combined.length <= QUIET_STDOUT_MAX_CHARS) {
-    return { output: combined, truncated: false };
-  }
-  return { output: combined.slice(-QUIET_STDOUT_MAX_CHARS), truncated: true };
 }
 
 export function formatQuietResult(output: string, truncated = false): string | undefined {
@@ -350,20 +405,6 @@ export function formatQuietResult(output: string, truncated = false): string | u
       ? "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
       : undefined;
   }
-}
-
-export function shouldPrintQuietLine(line: string): boolean {
-  return (
-    line.startsWith("[flue] Running workflow:") ||
-    line.startsWith("[flue] Run ID:") ||
-    line.startsWith("[flue] tool:") ||
-    line.startsWith("[flue] info:") ||
-    line.startsWith("[flue] warn:") ||
-    line.startsWith("[flue] error:") ||
-    line.startsWith("[flue] ERROR") ||
-    line.startsWith("[flue] Workflow error:") ||
-    line === "[flue] Done."
-  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

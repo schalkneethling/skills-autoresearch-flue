@@ -21,9 +21,7 @@ The harness should:
 
 ```text
 .flue/
-  workflows/autoresearch.ts   Flue workflow entrypoint.
-  workflows/determinize.ts    Read-only determinization workflow entrypoint.
-  profiles.ts                 Named producer, judge, researcher, and determinizer profiles.
+  roles/                      Application-level role labels and prompt context.
 catalog/
   deterministic-assets/       Repository-owned reusable asset catalog.
 docs/
@@ -39,7 +37,10 @@ src/
   project-layout.ts           Canonical generated-artifact paths and filenames.
   artifact-lifecycle.ts       Provider-independent transcript and research-artifact persistence.
   determinization/            Canonical opportunity analysis, artifacts, and transports.
-  flue-harness.ts             Autoresearch Flue adapters for producer/judge/researcher.
+  flue-agents.ts              Flue 2 producer, judge, researcher, and determinizer agents.
+  flue-runtime.ts             Application-owned Flue runtime and validated result dispatch.
+  flue-harness.ts             Autoresearch adapters for the Flue role dispatcher.
+  flue-runner.ts              CLI parsing, application events, and runtime lifecycle.
   model-agent.ts              Prompt builders, schemas, artifact application helpers.
   runner.ts                   Eval runner and concurrency helper.
   sandbox.ts                  Local readonly/write sandbox abstraction.
@@ -52,25 +53,11 @@ tests/
 
 ## Flue Integration
 
-Flue is not incidental here; it is the harness layer.
+Flue is not incidental here; it is the harness layer. Production uses Flue 2.0.3 through four addressable top-level functions in `src/flue-agents.ts`: producer, judge, researcher, and determinizer. Each has a schema-backed submit tool. `src/flue-runtime.ts` owns the `start()`/`init()`/`dispatch()`/`read()` boundary, requires exactly one value on the expected data channel, validates it again, and always stops the process-local, in-memory runtime in `finally`.
 
-The runnable workflow is:
+`src/flue-harness.ts` adapts application orchestration to that runtime, while `src/flue-runner.ts` owns CLI lifecycle directly. The Flue 2 migration removed beta workflows, profiles, `session.task`, `@flue/cli`, `flue build`, and direct `pnpm exec flue run <workflow>` invocation.
 
-```text
-.flue/workflows/autoresearch.ts
-```
-
-It initializes Flue with a local sandbox and calls `runFlueAutoresearch()`.
-
-The Flue adapter is:
-
-```text
-src/flue-harness.ts
-```
-
-It uses `session.task(..., { agent, result })` so Flue runs the named subagent profile and performs structured-output validation before the harness writes artifacts or scores.
-
-The determinizer does not use `src/flue-harness.ts`. Its separate `.flue/workflows/determinize.ts` workflow calls the transport-neutral determinization runner through the Flue transport in `src/determinization/transport.ts`.
+The agents deliberately declare no sandbox. Application code selects and bounds files, serializes their contents into prompts, validates model submissions, and alone writes approved artifacts. The determinizer remains read-only. Flue usage and cost returned through `useResponseFinish` metadata flow into existing accounting.
 
 ## Research Flow
 
@@ -124,7 +111,7 @@ When changing a schema:
 ## Runtime Sources Of Truth
 
 Keep public adapter spelling at the edge: the CLI translates kebab-case flags and
-the Flue workflow translates camelCase payload fields. Both must call
+the advanced `--payload` form uses camelCase fields. Both must call
 `normalizeRunOptions()` rather than reimplement defaults or cross-option checks.
 
 Generated workspace locations and artifact filenames belong in
@@ -223,6 +210,8 @@ Prefer focused tests for every behavior change.
 Useful existing test files:
 
 - `tests/flue-harness.test.ts`: Flue adapter behavior and structured prompts.
+- `tests/flue-runtime-v2.test.ts`: Flue 2 agents, role isolation, result extraction, usage, and lifecycle.
+- `tests/flue-runner.test.ts`: application-owned CLI and runtime integration.
 - `tests/e2e-dry-run.test.ts`: end-to-end orchestration with queued model responses.
 - `tests/model-agent.test.ts`: prompt builders, parsing, artifact writes, model client behavior.
 - `tests/sandbox-runner-orchestrator.test.ts`: sandbox, runner, and iteration loop behavior.
@@ -275,4 +264,4 @@ pnpm exec skills-autoresearch --project fixtures/projects/release-notes-alpha --
 - Cross-provider judging is planned but not implemented.
 - Resume/retry behavior is still basic.
 - The alpha fixture has one eval case and one track.
-- The CLI and Flue entrypoint overlap; Flue is the preferred harness path for alpha testing.
+- Flue persistence is process-local and in-memory. Beta conversation state was not migrated; durable submissions and runtime-level resume remain future work. Existing application artifact resume remains available.
