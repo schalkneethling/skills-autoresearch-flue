@@ -114,6 +114,7 @@ describe("Flue 2 role boundary compatibility", () => {
         expect(context?.systemPrompt).not.toContain("ROLE_BOUNDARY_PRODUCER_ONLY");
         expect(JSON.stringify(context?.messages)).toContain(judgeRequest);
         expect(JSON.stringify(context?.messages)).not.toContain(producerRequest);
+        expect(JSON.stringify(context?.messages)).not.toContain("A deterministic producer artifact.");
         expect(toolNames(context!)).toEqual(["submit_judge_result", "task"]);
       }
 
