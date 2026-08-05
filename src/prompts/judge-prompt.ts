@@ -16,7 +16,7 @@ export function buildJudgePrompt({
   rubricFiles,
   workspaceOutputFiles
 }: JudgePromptInput): string {
-  // Base judge behavior lives in the Flue subagent profile at .flue/profiles.ts.
+  // Base judge behavior lives in the addressable Flue 2 Judge agent.
   return [
     `Judge output for "${request.evalCase.title}" (${request.evalCase.id}).`,
     `Eval type: ${request.evalCase.eval_type}`,

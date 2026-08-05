@@ -153,7 +153,7 @@ Important fields:
 
 These role/model choices are starting suggestions, not requirements. Try different producer, judge, and researcher models for your project, then compare cost, speed, score stability, and the usefulness of the resulting candidate skill.
 
-Flue subagent profiles live in `.flue/profiles.ts`. The configured role labels are still passed through prompts as project context, while Flue behavior comes from the named `producer`, `judge`, and `researcher` profiles.
+The configured role labels are application-level prompt context; `.flue/roles/*.md` does not register Flue agents. Runtime behavior comes from the addressable producer, judge, researcher, and determinizer functions in `src/flue-agents.ts`.
 
 For a multi-skill project, use one track per skill or skill responsibility. For example, a security project might have an `audit` track that targets `skills/security-audit` and an `authoring` track that targets `skills/secure-authoring`.
 
@@ -200,7 +200,7 @@ Every Phase 1 asset is `suggested` and unverified. LanguageTool entries describe
 
 This stage produces no evidence findings, asset proposal, verification result, application plan, catalog change, or skill edit. Proposal, verification, apply, and adoption behavior are explicitly out of scope.
 
-The Flue wrapper provides the same read-only analysis through its `determinizer` profile:
+The application CLI provides the same read-only analysis through the Flue 2 determinizer agent:
 
 ```bash
 pnpm run build
@@ -229,7 +229,7 @@ Set `budget_usd` in `config.json` to cap observed spend for repeated runs, or pa
 varlock run -- pnpm run autoresearch -- research --project path/to/my-autoresearch-project --budget-usd 0.5
 ```
 
-The cap is based on observed provider usage. Direct Anthropic runs can include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Flue autoresearch runs currently record call counts only; the determinization report records the usage and model-registry-derived cost returned by Flue. Dollar-cost caps only take effect where the corresponding flow records cost data. Treat any dollar value as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
+The cap is based on observed provider usage. Flue 2 agents attach final usage and model-registry-derived cost through response-finish metadata, which feeds the current autoresearch and determinization accounting. Direct Anthropic runs can also include token usage and a narrow known-price estimate for the committed Claude 4.5/4.6 Haiku and Sonnet configs. Dollar-cost caps only take effect where the corresponding flow records cost data. Treat any dollar value as a guardrail, not an invoice: provider pricing, long-context pricing, regional routing, caching, batch discounts, and account-specific terms can change the actual bill.
 
 Each successful run writes:
 
@@ -370,11 +370,11 @@ The researcher does not have to put every improvement in `SKILL.md`. Each change
 
 This placement makes the candidate ready for skill-native progressive disclosure when it is adopted by an agent that can load or execute bundled resources on demand. Avoid duplicating the same material in `SKILL.md` and a bundled resource, and make every resource discoverable from `SKILL.md` with a short instruction explaining when to use it.
 
-The current alpha eval path still serializes all text candidate-skill files into the producer prompt so direct model clients and Flue sessions see the same deterministic context. Resource placement therefore improves candidate organization and portability today, but it does not yet reduce producer prompt size or execute candidate scripts. Script execution and lazy resource loading are separate future runtime capabilities.
+The current alpha eval path still serializes all text candidate-skill files into the producer prompt so direct model clients and Flue agents see the same deterministic context. Resource placement therefore improves candidate organization and portability today, but it does not yet reduce producer prompt size or execute candidate scripts. Script execution and lazy resource loading are separate future runtime capabilities.
 
 Changed JavaScript, TypeScript, shell, and Python files under `scripts/` receive a focused syntax check after the researcher patch is applied. `RESEARCH.md` records the validator and whether validation passed or failed. Validator executables are fixed by the harness, and candidate paths are passed as literal arguments without a shell. For another script type, or when a validator executable is unavailable, it records an explicit skipped result. These checks validate syntax, not full behavior; producer evals remain responsible for demonstrating that the candidate works.
 
-For Flue-backed runs, each phase executes from a small generated workspace containing only the files for that phase. These workspaces are written under `workspace/.phase-workspaces/` or the eval output directory's `.phase-workspaces/` folder and are also recorded in transcripts as `workspaceDir`. The judge workspace contains only `evals/rubric.md`, reference files, and producer output files; it does not mount the candidate skill or unrelated harness fixtures.
+For Flue-backed runs, the application builds a small generated workspace containing only the files for each phase. These workspaces are written under `workspace/.phase-workspaces/` or the eval output directory's `.phase-workspaces/` folder and are also recorded in transcripts as `workspaceDir`. Flue agents deliberately declare no sandbox: bounded selected inputs are serialized into prompts, and application code alone applies schema-validated outputs. The judge context contains only the rubric, reference material, and producer output; it excludes the candidate skill and producer request.
 
 The judge should not score skill instructions directly.
 
@@ -439,7 +439,7 @@ For your own project, run the following from the root of a local `skills-autores
 pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project
 ```
 
-This command imports and validates `workspace/baseline/`, then stops before research. It uses the repository's project-local Flue dependency and does not require a global `flue` CLI.
+This command imports and validates `workspace/baseline/`, then stops before research. The model-free smoke path bypasses Flue runtime startup and remains credential-free.
 
 The simple commands derive common payload fields for you:
 
@@ -461,9 +461,9 @@ By default, each invocation creates an append-only NDJSON log under:
 <projectRoot>/workspace/run-logs/<timestamp>-<sessionId>-<id>.ndjson
 ```
 
-When run-log writing is enabled, the log path is printed when the run starts and returned as `runLogPath`. The log captures the complete child-process stdout and stderr stream through success or failure. Phase-specific structured transcripts remain the canonical model audit artifacts.
+When run-log writing is enabled, the log path is printed when the run starts and returned as `runLogPath`. The log captures application events, the structured result, and errors through success or failure. It intentionally does not persist Flue `turn_request` events because those contain full prompts and tools. Phase-specific structured transcripts remain the canonical model audit artifacts.
 
-Run with full terminal detail when debugging:
+Print debug application events and the structured result when debugging:
 
 ```bash
 pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project --verbose
@@ -475,7 +475,7 @@ Disable the full local log only when you explicitly do not want that audit trail
 pnpm run autoresearch -- smoke --project path/to/my-autoresearch-project --no-run-log
 ```
 
-Run logs can contain prompts, model output, tool arguments, errors, and generated content. Treat them as sensitive audit artifacts and do not commit them. This repository ignores `**/workspace/run-logs/`, but that rule does not protect a separate external `projectRoot` repository. Add the following rule to the external project's `.gitignore`:
+Run logs can contain application inputs, results, errors, and generated artifact paths. Treat them as sensitive audit artifacts and do not commit them. This repository ignores `**/workspace/run-logs/`, but that rule does not protect a separate external `projectRoot` repository. Add the following rule to the external project's `.gitignore`:
 
 ```gitignore
 workspace/run-logs/
@@ -587,12 +587,14 @@ If the harness generated the baseline and you also intend to replace it, remove 
 
 Keep committed fixtures baseline-only unless you intentionally want to preserve a specific alpha run artifact.
 
-## Advanced Direct Flue Invocation
+## Advanced Payload Invocation
 
-The wrapper still accepts a complete payload when you need uncommon workflow fields or are debugging:
+The application CLI accepts a complete payload when you need uncommon fields or are debugging:
 
 ```bash
 varlock run -- pnpm run flue:run -- --payload '{"projectRoot":"path/to/my-autoresearch-project","withBaseline":true,"runResearch":true,"seedSkillDir":"path/to/my-autoresearch-project/seed-skill","sessionId":"my-research"}'
 ```
 
-Direct `pnpm exec flue run autoresearch --target node --root . --payload '...'` also remains available and retains Flue's unfiltered event stream. Payload fields use the camel-case names accepted by `.flue/workflows/autoresearch.ts`, including `projectRoot`, `withBaseline`, `runResearch`, `forceResearch`, `resume`, `withCleanup`, `seedSkillDir`, `guidanceSkillDir`, `budgetUsd`, and `sessionId`.
+Payload fields use camelCase, including `projectRoot`, `withBaseline`, `runResearch`, `forceResearch`, `resume`, `withCleanup`, `seedSkillDir`, `guidanceSkillDir`, `budgetUsd`, and `sessionId`. Flue 2 lifecycle is application-owned; beta `pnpm exec flue run <workflow>` syntax is no longer supported.
+
+When started, the Flue runtime is process-local, uses in-memory persistence, and is always stopped in `finally`. Beta persisted conversation state was not migrated. The application artifact resume described above remains available; durable Flue submissions and runtime-level recovery are future work.

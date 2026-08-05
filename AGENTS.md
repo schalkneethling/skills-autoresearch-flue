@@ -15,7 +15,7 @@ Keep this file short. Use it as orientation before reading deeper docs.
 ## Current Shape
 
 - Language/runtime: TypeScript ESM, Node `>=24`, pnpm.
-- Flue is the preferred alpha harness path; the CLI still exists but overlaps with the Flue entrypoint.
+- Flue 2.0.3 is the production harness runtime, owned directly by the application CLI.
 - Models are split by responsibility:
   - Researcher improves the candidate skill.
   - Producer runs the target skill and writes eval outputs.
@@ -24,10 +24,12 @@ Keep this file short. Use it as orientation before reading deeper docs.
 
 ## Key Code Paths
 
-- `.flue/agents/autoresearch.ts`: Flue agent entrypoint.
-- `.flue/roles/`: Flue roles for researcher, producer, and judge.
+- `src/flue-agents.ts`: addressable Flue 2 producer, judge, researcher, and determinizer functions.
+- `src/flue-runtime.ts`: application-owned Flue runtime and validated role dispatch.
+- `.flue/roles/`: application-level configured role labels and prompt context.
 - `src/orchestrator.ts`: baseline import/generation and research iteration loop.
-- `src/flue-harness.ts`: Flue session adapters and structured-result calls.
+- `src/flue-harness.ts`: orchestration adapters for Flue role dispatch.
+- `src/flue-runner.ts`: CLI and Flue runtime lifecycle.
 - `src/model-agent.ts`: prompt builders, model response schemas, and artifact application.
 - `src/runner.ts`: eval execution and concurrency helper.
 - `src/schemas.ts`: Valibot schemas and public data contracts.
@@ -43,7 +45,6 @@ pnpm run format:check
 pnpm run knip
 pnpm run typecheck
 pnpm run build
-pnpm run flue:build
 pnpm run alpha:smoke
 ```
 
@@ -85,6 +86,8 @@ Generated research output lands under `workspace/iterations/<n>/`. Do not commit
 - Score and summary writes often use exclusive file creation; rerun failures may indicate existing artifacts rather than logic failure.
 - Enforce bounded reads before allocation: when a file has a size limit, use `lstat`/`stat` and reject an oversized file before `readFile`. Keep a post-read byte check for races and encoding differences; checking only after a full read does not protect memory.
 - Keep `pnpm run check` and `alpha:smoke` credential-free. Do not route smoke runs through Varlock or require `op`; use Varlock only for model-backed commands.
+- Flue agents intentionally declare no sandbox: bounded inputs go into prompts, and application code alone applies schema-validated outputs.
+- Keep runtime persistence limits explicit: Flue state is process-local and in-memory; application artifact resume is separate from future durable submissions.
 
 ## What Is Still Alpha
 
@@ -97,6 +100,8 @@ Generated research output lands under `workspace/iterations/<n>/`. Do not commit
 ## Testing Pointers
 
 - `tests/flue-harness.test.ts`: Flue adapter behavior and structured prompts.
+- `tests/flue-runtime-v2.test.ts`: Flue 2 role isolation, validated extraction, usage, and lifecycle.
+- `tests/flue-runner.test.ts`: application-owned CLI and runtime integration.
 - `tests/e2e-dry-run.test.ts`: end-to-end orchestration with queued model responses.
 - `tests/model-agent.test.ts`: prompt builders, parsing, artifact writes, model client behavior.
 - `tests/sandbox-runner-orchestrator.test.ts`: sandbox, runner, and iteration loop behavior.

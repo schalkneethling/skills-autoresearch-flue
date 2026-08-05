@@ -6,10 +6,11 @@ The harness evaluates a seed skill against project fixtures, asks a researcher m
 
 ## Current Architecture
 
-- **Flue workflow entrypoint:** `.flue/workflows/autoresearch.ts`
-- **Flue subagent profiles:** `.flue/profiles.ts`
+- **Flue 2 agents:** `src/flue-agents.ts`
+- **Application-owned Flue runtime:** `src/flue-runtime.ts`
 - **Core orchestration:** `src/orchestrator.ts`
 - **Flue adapters:** `src/flue-harness.ts`
+- **CLI lifecycle:** `src/flue-runner.ts`
 - **Prompt and artifact helpers:** `src/model-agent.ts`
 - **Alpha fixture:** `fixtures/projects/release-notes-alpha/`
 
@@ -41,7 +42,6 @@ pnpm run env:check
 pnpm test
 pnpm run typecheck
 pnpm run build
-pnpm run flue:build
 pnpm run autoresearch -- smoke --project path/to/project
 varlock run -- pnpm run autoresearch -- research --project path/to/project
 node dist/src/cli.js determinize report --project path/to/project --response-file path/to/analysis-response.json
@@ -50,13 +50,13 @@ pnpm run alpha:research
 pnpm run alpha:determinize
 ```
 
-The `smoke` and `research` commands derive normal Flue payload fields and the session name, use `origin_skill` and model settings from the project config, and avoid inline JSON. Direct Flue payload invocation remains available for advanced debugging.
+The `smoke`, `research`, and `determinize` commands derive normal payload fields and the session name, use project configuration, and avoid inline JSON. The application CLI also accepts `--payload` for advanced debugging; Flue 2 is started, addressed, and stopped inside the process rather than through `flue run`.
 
 `alpha:smoke` imports a committed baseline and does not call a model.
 
 `alpha:research` runs the model-backed Flue harness through `varlock run`.
 
-Flue-backed commands are quiet by default and write a complete append-only process log under the target project's `workspace/run-logs/`. Pass `-- --verbose` to expose full Flue output in the terminal, or `-- --no-run-log` to explicitly opt out of the local log.
+Flue-backed commands are quiet by default and write append-only application events, results, and errors under the target project's `workspace/run-logs/`. Pass `-- --verbose` to print debug application events and the structured result, or `-- --no-run-log` to opt out. These logs intentionally exclude Flue's full prompt and tool stream.
 
 `determinize report` performs read-only analysis and writes an inspectable report plus its canonical opportunity data under `workspace/determinization/`. Use a recorded `--response-file` for a credential-free deterministic run, or run through Varlock for a direct Anthropic model call. The analysis only suggests unverified deterministic assets: it does not propose, verify, apply, or adopt them, and it never modifies the selected skill, external context, or repository-owned asset catalog.
 
