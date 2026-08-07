@@ -38,7 +38,7 @@
     "knip": "^6.31.0",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.65.0",
+    "typescript-eslint": "^8.66.0",
     "varlock": "^1.16.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.118.0"
