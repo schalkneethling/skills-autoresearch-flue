@@ -12,10 +12,16 @@ export async function writeFixture(root: string, config: unknown, evals: unknown
   await mkdir(join(root, "evals"), { recursive: true });
   await mkdir(join(root, "reference"), { recursive: true });
   await mkdir(join(root, "input"), { recursive: true });
+  await mkdir(join(root, "roles"), { recursive: true });
   await writeFile(join(root, "config.json"), `${JSON.stringify(config, null, 2)}\n`);
   await writeFile(join(root, "evals", "eval-cases.json"), `${JSON.stringify(evals, null, 2)}\n`);
   await writeFile(join(root, "evals", "rubric.md"), "# Rubric\n\nScore the configured dimensions.\n");
   await writeFile(join(root, "reference", "context.md"), "Reference material\n");
+  await Promise.all(
+    ["eval-judge", "skill-builder", "task-producer"].map((role) =>
+      writeFile(join(root, "roles", `${role}.md`), `# ${role}\n`)
+    )
+  );
 }
 
 export const securityConfig = {

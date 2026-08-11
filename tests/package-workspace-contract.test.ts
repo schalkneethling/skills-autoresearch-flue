@@ -78,8 +78,8 @@ test("the package manifest defines the CLI-only publication contract", async () 
     bugs: { url: "https://github.com/schalkneethling/skills-autoresearch-flue/issues" },
     publishConfig: { access: "public", provenance: true },
     bin: {
-      "skills-autoresearch": "./dist/cli.js",
-      "skills-autoresearch-flue": "./dist/flue-runner.js"
+      "skills-autoresearch": "./dist/bin/skills-autoresearch.js",
+      "skills-autoresearch-flue": "./dist/bin/skills-autoresearch-flue.js"
     }
   });
   expect(manifest.version).toMatch(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/);

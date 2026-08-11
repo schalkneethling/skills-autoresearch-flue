@@ -44,7 +44,7 @@ pnpm run typecheck
 pnpm run build
 pnpm run autoresearch -- smoke --project path/to/project
 varlock run -- pnpm run autoresearch -- research --project path/to/project
-node packages/skills-autoresearch/dist/cli.js determinize report --project path/to/project --response-file path/to/analysis-response.json
+node packages/skills-autoresearch/dist/bin/skills-autoresearch.js determinize report --project path/to/project --response-file path/to/analysis-response.json
 pnpm run alpha:smoke
 pnpm run alpha:research
 pnpm run alpha:determinize

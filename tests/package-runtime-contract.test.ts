@@ -80,7 +80,7 @@ test("role validation reads the selected project rather than the caller's workin
     },
     syntheticEvals
   );
-  await mkdir(join(projectRoot, "roles"));
+  await mkdir(join(projectRoot, "roles"), { recursive: true });
   await Promise.all(
     Object.values(roles).map((role) => writeFile(join(projectRoot, "roles", `${role}.md`), `# ${role}\n`))
   );

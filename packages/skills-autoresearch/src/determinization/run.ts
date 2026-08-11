@@ -1,6 +1,7 @@
 import { lstat, readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { estimateUsageCostUsd, type ModelUsage } from "../cost.js";
+import { resolveBundledCatalogRoot } from "../package-resources.js";
 import { GENERATED_SKILL_FILES, projectLayout } from "../project-layout.js";
 import { ProjectConfigSchema, parseWithSchema, type ModelConfig, type ProjectConfig } from "../schemas.js";
 import { buildDeterminizationAnalysisPrompt } from "./analysis-prompt.js";
@@ -267,7 +268,7 @@ export async function runDeterminizationReport(
   await assertRegularDirectory(projectRoot, "project");
   const config = await readConfig(projectRoot);
   const selected = await selectSkill(projectRoot, config, options.skillDir);
-  const catalogRoot = resolve(options.catalogRoot ?? join(process.cwd(), "catalog", "deterministic-assets"));
+  const catalogRoot = resolve(options.catalogRoot ?? resolveBundledCatalogRoot());
   const catalogIndexPath = join(catalogRoot, "catalog.json");
   await createSourceManifest([{ namespace: "catalog", root: catalogRoot, paths: [...CATALOG_FILES] }]);
   const catalog = await loadDeterministicAssetCatalog(catalogIndexPath);
@@ -315,7 +316,7 @@ export async function resumeDeterminizationReport(
   await assertRegularDirectory(projectRoot, "project");
   const config = await readConfig(projectRoot);
   const selected = await selectSkill(projectRoot, config, options.skillDir);
-  const catalogRoot = resolve(options.catalogRoot ?? join(process.cwd(), "catalog", "deterministic-assets"));
+  const catalogRoot = resolve(options.catalogRoot ?? resolveBundledCatalogRoot());
   const prepared = await prepareInputs(projectRoot, selected.dir, catalogRoot, options.contextRoot);
   const model = resolveDeterminizerModel(config);
   const catalog = await loadDeterministicAssetCatalog(join(catalogRoot, "catalog.json"));

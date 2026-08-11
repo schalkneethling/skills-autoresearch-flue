@@ -9,4 +9,6 @@ The package provides two commands:
 
 Run either command with `--help` for its complete options. Skills Autoresearch requires Node.js 24 or newer. Model-backed commands use locally supplied model credentials; credential-free smoke and recorded-response workflows do not require them.
 
+Determinization uses the package's bundled deterministic-asset catalog by default. Use `--catalog-root` only to supply an explicit alternative.
+
 Repository development, fixture authoring, and contributor documentation remain in the [Skills Autoresearch repository](https://github.com/schalkneethling/skills-autoresearch-flue).

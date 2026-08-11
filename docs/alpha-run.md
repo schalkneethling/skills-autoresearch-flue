@@ -88,14 +88,14 @@ For a live Flue-backed analysis with Anthropic credentials, build and run:
 
 ```bash
 pnpm run build
-varlock run -- node packages/skills-autoresearch/dist/flue-runner.js determinize \
+varlock run -- node packages/skills-autoresearch/dist/bin/skills-autoresearch-flue.js determinize \
   --project fixtures/projects/release-notes-alpha
 ```
 
 Determinization resume is available only through the direct `determinize report` CLI, not the Flue-backed `determinize` command. It validates current inputs and re-renders the existing immutable `opportunities.json` without another model call:
 
 ```bash
-node packages/skills-autoresearch/dist/cli.js determinize report \
+node packages/skills-autoresearch/dist/bin/skills-autoresearch.js determinize report \
   --project fixtures/projects/release-notes-alpha \
   --resume
 ```

@@ -8,6 +8,7 @@ import { orchestrateBaseline, OrchestrateOptions, RunEvent } from "./orchestrato
 import { createRunLog } from "./run-log.js";
 import { normalizeRunOptions, RunOptions } from "./run-options.js";
 import { determinizationUsage, runDeterminizationCli } from "./determinization/cli.js";
+import { readPackageVersion } from "./package-resources.js";
 
 export interface CliOptions extends RunOptions {
   scoreDir?: string;
@@ -38,6 +39,7 @@ function usage(): string {
     "  --verbose             Print debug-level run events.",
     "  --no-run-log          Do not write the complete local run log.",
     "  --json                Print the full orchestrator result as JSON.",
+    "  --version             Show the installed package version.",
     "  -h, --help            Show this help.",
     "",
     "Determinization:",
@@ -131,6 +133,10 @@ function parseModelClient(value: string | boolean | undefined): "anthropic" | un
 }
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
+  if (argv.length === 1 && argv[0] === "--version") {
+    console.log(await readPackageVersion());
+    return;
+  }
   if (argv[0] === "determinize") {
     if (argv[1] === "--help" || argv[1] === "-h") {
       createLogger().write("log", determinizationUsage());
@@ -327,11 +333,4 @@ export function formatEvent(event: RunEvent): { level: LogLevel; message: string
         message: `Budget reached after ${event.completedIterations} iteration(s): $${event.actualCostUsd.toFixed(4)} >= $${event.budgetUsd.toFixed(4)}`
       };
   }
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error: unknown) => {
-    createLogger().write("error", (error as Error).message);
-    process.exitCode = 1;
-  });
 }

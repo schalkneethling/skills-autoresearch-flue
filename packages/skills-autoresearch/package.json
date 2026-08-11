@@ -23,8 +23,8 @@
   "type": "module",
   "exports": {},
   "bin": {
-    "skills-autoresearch": "./dist/cli.js",
-    "skills-autoresearch-flue": "./dist/flue-runner.js"
+    "skills-autoresearch": "./dist/bin/skills-autoresearch.js",
+    "skills-autoresearch-flue": "./dist/bin/skills-autoresearch-flue.js"
   },
   "files": [
     "dist",

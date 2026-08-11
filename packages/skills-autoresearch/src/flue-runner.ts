@@ -9,6 +9,7 @@ import { withFlueRoleRuntime } from "./flue-runtime.js";
 import { orchestrateBaseline, type OrchestratorResult, type RunEvent } from "./orchestrator.js";
 import { createRunLog } from "./run-log.js";
 import { normalizeRunOptions } from "./run-options.js";
+import { readPackageVersion } from "./package-resources.js";
 
 export type RunnerMode = "smoke" | "research" | "determinize";
 
@@ -18,6 +19,7 @@ export type RunnerOptions = {
   payload: Record<string, unknown>;
   workflow?: "autoresearch" | "determinize";
   help?: boolean;
+  version?: boolean;
 };
 
 export interface FlueRunnerDependencies {
@@ -38,7 +40,7 @@ function usage(): string {
     "  --guidance-skill <dir>  Override config.json guidance_skill for this run.",
     "  --skill <dir>           Explicit skill directory for determinize.",
     "  --context-root <dir>    Optional external read-only context for determinize.",
-    "  --catalog-root <dir>    Deterministic-asset catalog root.",
+    "  --catalog-root <dir>    Override the bundled deterministic-asset catalog root.",
     "  --output <dir>          Determinization artifact root.",
     "  --session <name>        Override the derived project-mode session name.",
     "  --resume                Resume validated artifacts from an interrupted run.",
@@ -50,6 +52,7 @@ function usage(): string {
     "  --payload <json>        Advanced: pass a complete Flue payload directly.",
     "  --verbose               Print debug events and the structured result.",
     "  --no-run-log            Do not write the local event and result log.",
+    "  --version               Show the installed package version.",
     "  -h, --help              Show this help."
   ].join("\n");
 }
@@ -59,6 +62,10 @@ export async function runFlueCommand(
   dependencies: FlueRunnerDependencies = {}
 ): Promise<number> {
   const options = parseRunnerArgs(argv);
+  if (options.version) {
+    process.stdout.write(`${await readPackageVersion()}\n`);
+    return 0;
+  }
   if (options.help) {
     process.stdout.write(`${usage()}\n`);
     return 0;
@@ -225,11 +232,24 @@ export function parseRunnerArgs(argv: string[]): RunnerOptions {
       "with-cleanup": { type: "boolean" },
       "force-research": { type: "boolean" },
       "budget-usd": { type: "string" },
+      version: { type: "boolean" },
       help: { type: "boolean", short: "h" }
     },
     strict: true,
     allowPositionals: true
   });
+
+  if (values.version) {
+    if (runnerArgv.length !== 1 || runnerArgv[0] !== "--version") {
+      throw new Error("--version must be used on its own.");
+    }
+    return {
+      verbose: values.verbose ?? false,
+      writeRunLog: !(values["no-run-log"] ?? false),
+      payload: {},
+      version: true
+    };
+  }
 
   if (values.help) {
     return {
@@ -405,15 +425,4 @@ export function formatQuietResult(output: string, truncated = false): string | u
       ? "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
       : undefined;
   }
-}
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runFlueCommand()
-    .then((exitCode) => {
-      process.exitCode = exitCode;
-    })
-    .catch((error: unknown) => {
-      process.stderr.write(`${(error as Error).message}\n`);
-      process.exitCode = 1;
-    });
 }

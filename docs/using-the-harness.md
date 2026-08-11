@@ -165,11 +165,11 @@ Build the CLI, then analyze the project with either a recorded structured respon
 
 ```bash
 pnpm run build
-node packages/skills-autoresearch/dist/cli.js determinize report \
+node packages/skills-autoresearch/dist/bin/skills-autoresearch.js determinize report \
   --project path/to/my-autoresearch-project \
   --response-file path/to/analysis-response.json
 
-varlock run -- node packages/skills-autoresearch/dist/cli.js determinize report \
+varlock run -- node packages/skills-autoresearch/dist/bin/skills-autoresearch.js determinize report \
   --project path/to/my-autoresearch-project \
   --model-client anthropic
 ```
@@ -204,7 +204,7 @@ The application CLI provides the same read-only analysis through the Flue 2 dete
 
 ```bash
 pnpm run build
-node packages/skills-autoresearch/dist/flue-runner.js determinize --project path/to/my-autoresearch-project
+node packages/skills-autoresearch/dist/bin/skills-autoresearch-flue.js determinize --project path/to/my-autoresearch-project
 ```
 
 The Flue path is model-backed and requires the configured Anthropic credentials. The direct CLI's `--response-file` mode is the repeatable credential-free inspection path.

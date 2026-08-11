@@ -39,7 +39,7 @@ test("package scripts keep model-free smoke credential-free and remove the beta 
   };
 
   expect(packageJson.scripts.autoresearch).toBe(
-    "pnpm run build && node packages/skills-autoresearch/dist/flue-runner.js"
+    "pnpm run build && node packages/skills-autoresearch/dist/bin/skills-autoresearch-flue.js"
   );
   expect(packageJson.scripts["alpha:smoke"]).toContain("pnpm run autoresearch");
   expect(packageJson.scripts["alpha:research"]).toContain("varlock run --");
@@ -134,6 +134,7 @@ test("Flue runner rejects ambiguous modes and invalid concise overrides", () => 
   expect(() => parseRunnerArgs(["research", "--payload", "{}"])).toThrow(/either/u);
   expect(() => parseRunnerArgs(["research", "--budget-usd=-1"])).toThrow(/non-negative/u);
   expect(() => parseRunnerArgs(["research", "--budget-usd", ""])).toThrow(/non-negative/u);
+  expect(() => parseRunnerArgs(["research", "--version"])).toThrow(/must be used on its own/u);
   expect(() => parseRunnerArgs(["--payload", "[]"])).toThrow(/JSON object/u);
   expect(() => parseRunnerArgs(["determinize", "--resume"])).toThrow(/autoresearch-only/u);
   expect(() => parseRunnerArgs(["determinize", "--budget-usd", "1"])).toThrow(/autoresearch-only/u);
