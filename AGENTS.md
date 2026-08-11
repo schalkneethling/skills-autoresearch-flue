@@ -24,16 +24,16 @@ Keep this file short. Use it as orientation before reading deeper docs.
 
 ## Key Code Paths
 
-- `src/flue-agents.ts`: addressable Flue 2 producer, judge, researcher, and determinizer functions.
-- `src/flue-runtime.ts`: application-owned Flue runtime and validated role dispatch.
+- `packages/skills-autoresearch/src/flue-agents.ts`: addressable Flue 2 producer, judge, researcher, and determinizer functions.
+- `packages/skills-autoresearch/src/flue-runtime.ts`: application-owned Flue runtime and validated role dispatch.
 - `.flue/roles/`: application-level configured role labels and prompt context.
-- `src/orchestrator.ts`: baseline import/generation and research iteration loop.
-- `src/flue-harness.ts`: orchestration adapters for Flue role dispatch.
-- `src/flue-runner.ts`: CLI and Flue runtime lifecycle.
-- `src/model-agent.ts`: prompt builders, model response schemas, and artifact application.
-- `src/runner.ts`: eval execution and concurrency helper.
-- `src/schemas.ts`: Valibot schemas and public data contracts.
-- `src/project.ts`: project config and input loading.
+- `packages/skills-autoresearch/src/orchestrator.ts`: baseline import/generation and research iteration loop.
+- `packages/skills-autoresearch/src/flue-harness.ts`: orchestration adapters for Flue role dispatch.
+- `packages/skills-autoresearch/src/flue-runner.ts`: CLI and Flue runtime lifecycle.
+- `packages/skills-autoresearch/src/model-agent.ts`: prompt builders, model response schemas, and artifact application.
+- `packages/skills-autoresearch/src/runner.ts`: eval execution and concurrency helper.
+- `packages/skills-autoresearch/src/schemas.ts`: Valibot schemas and public data contracts.
+- `packages/skills-autoresearch/src/project.ts`: project config and input loading.
 - `tests/`: unit, integration, and dry-run coverage.
 
 ## Useful Commands

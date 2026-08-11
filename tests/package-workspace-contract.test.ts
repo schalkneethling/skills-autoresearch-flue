@@ -91,7 +91,7 @@ test("the package manifest defines the CLI-only publication contract", async () 
   expect(manifest).not.toHaveProperty("main");
   expect(manifest).not.toHaveProperty("module");
   expect(manifest).not.toHaveProperty("types");
-  expect(manifest).not.toHaveProperty("exports");
+  expect(manifest.exports).toEqual({});
 
   expect(manifest.dependencies).toEqual({
     "@flue/runtime": "2.0.3",

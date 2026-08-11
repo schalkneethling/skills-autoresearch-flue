@@ -15,11 +15,11 @@ import {
   parseSkillResearchPatch,
   validateChangedScripts,
   validateSkillResearchPatch
-} from "../src/model-agent.js";
-import { createEvalSandbox } from "../src/sandbox.js";
-import { trackForEval } from "../src/project.js";
+} from "../packages/skills-autoresearch/src/model-agent.js";
+import { createEvalSandbox } from "../packages/skills-autoresearch/src/sandbox.js";
+import { trackForEval } from "../packages/skills-autoresearch/src/project.js";
 import { score, syntheticConfig, syntheticEvals, tempProject, writeFixture } from "./helpers.js";
-import { loadProject } from "../src/project.js";
+import { loadProject } from "../packages/skills-autoresearch/src/project.js";
 
 class MemoryModelClient implements ModelClient {
   requests: ModelRequest[] = [];

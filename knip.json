@@ -5,7 +5,10 @@
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": ["src/index.ts", "tests/**/*.test.ts"]
+      "entry": ["tests/**/*.test.ts"]
+    },
+    "packages/skills-autoresearch": {
+      "entry": ["src/index.ts"]
     },
     "compat/flue2-role-boundary": {
       "entry": ["src/roles.ts", "tests/**/*.test.ts"]

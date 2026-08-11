@@ -1,8 +1,8 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withReadOnlyInputs } from "../src/determinization/read-only-snapshot.js";
-import type { SourceSelection } from "../src/determinization/source.js";
+import { withReadOnlyInputs } from "../packages/skills-autoresearch/src/determinization/read-only-snapshot.js";
+import type { SourceSelection } from "../packages/skills-autoresearch/src/determinization/source.js";
 
 async function selectedFile() {
   const root = await mkdtemp(join(tmpdir(), "det-read-only-snapshot-"));

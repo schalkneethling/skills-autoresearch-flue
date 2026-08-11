@@ -153,7 +153,7 @@ Important fields:
 
 These role/model choices are starting suggestions, not requirements. Try different producer, judge, and researcher models for your project, then compare cost, speed, score stability, and the usefulness of the resulting candidate skill.
 
-The configured role labels are application-level prompt context; `.flue/roles/*.md` does not register Flue agents. Runtime behavior comes from the addressable producer, judge, researcher, and determinizer functions in `src/flue-agents.ts`.
+The configured role labels are application-level prompt context; `.flue/roles/*.md` does not register Flue agents. Runtime behavior comes from the addressable producer, judge, researcher, and determinizer functions in `packages/skills-autoresearch/src/flue-agents.ts`.
 
 For a multi-skill project, use one track per skill or skill responsibility. For example, a security project might have an `audit` track that targets `skills/security-audit` and an `authoring` track that targets `skills/secure-authoring`.
 
@@ -165,11 +165,11 @@ Build the CLI, then analyze the project with either a recorded structured respon
 
 ```bash
 pnpm run build
-node dist/src/cli.js determinize report \
+node packages/skills-autoresearch/dist/cli.js determinize report \
   --project path/to/my-autoresearch-project \
   --response-file path/to/analysis-response.json
 
-varlock run -- node dist/src/cli.js determinize report \
+varlock run -- node packages/skills-autoresearch/dist/cli.js determinize report \
   --project path/to/my-autoresearch-project \
   --model-client anthropic
 ```
@@ -204,7 +204,7 @@ The application CLI provides the same read-only analysis through the Flue 2 dete
 
 ```bash
 pnpm run build
-node dist/src/flue-runner.js determinize --project path/to/my-autoresearch-project
+node packages/skills-autoresearch/dist/flue-runner.js determinize --project path/to/my-autoresearch-project
 ```
 
 The Flue path is model-backed and requires the configured Anthropic credentials. The direct CLI's `--response-file` mode is the repeatable credential-free inspection path.

@@ -6,12 +6,12 @@ The harness evaluates a seed skill against project fixtures, asks a researcher m
 
 ## Current Architecture
 
-- **Flue 2 agents:** `src/flue-agents.ts`
-- **Application-owned Flue runtime:** `src/flue-runtime.ts`
-- **Core orchestration:** `src/orchestrator.ts`
-- **Flue adapters:** `src/flue-harness.ts`
-- **CLI lifecycle:** `src/flue-runner.ts`
-- **Prompt and artifact helpers:** `src/model-agent.ts`
+- **Flue 2 agents:** `packages/skills-autoresearch/src/flue-agents.ts`
+- **Application-owned Flue runtime:** `packages/skills-autoresearch/src/flue-runtime.ts`
+- **Core orchestration:** `packages/skills-autoresearch/src/orchestrator.ts`
+- **Flue adapters:** `packages/skills-autoresearch/src/flue-harness.ts`
+- **CLI lifecycle:** `packages/skills-autoresearch/src/flue-runner.ts`
+- **Prompt and artifact helpers:** `packages/skills-autoresearch/src/model-agent.ts`
 - **Alpha fixture:** `fixtures/projects/release-notes-alpha/`
 
 The model-backed eval path is split into separate phases:
@@ -44,7 +44,7 @@ pnpm run typecheck
 pnpm run build
 pnpm run autoresearch -- smoke --project path/to/project
 varlock run -- pnpm run autoresearch -- research --project path/to/project
-node dist/src/cli.js determinize report --project path/to/project --response-file path/to/analysis-response.json
+node packages/skills-autoresearch/dist/cli.js determinize report --project path/to/project --response-file path/to/analysis-response.json
 pnpm run alpha:smoke
 pnpm run alpha:research
 pnpm run alpha:determinize

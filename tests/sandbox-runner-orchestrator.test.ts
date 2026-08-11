@@ -1,8 +1,12 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createEvalSandbox } from "../src/sandbox.js";
-import { runEval, runWithConcurrency, EvalAgent } from "../src/runner.js";
-import { copySkillSnapshot, orchestrateBaseline, SkillResearcher } from "../src/orchestrator.js";
+import { createEvalSandbox } from "../packages/skills-autoresearch/src/sandbox.js";
+import { runEval, runWithConcurrency, EvalAgent } from "../packages/skills-autoresearch/src/runner.js";
+import {
+  copySkillSnapshot,
+  orchestrateBaseline,
+  SkillResearcher
+} from "../packages/skills-autoresearch/src/orchestrator.js";
 import {
   score,
   securityConfig,

@@ -8,11 +8,16 @@ import {
   CatalogDomainDocumentSchema,
   loadDeterministicAssetCatalog,
   validateCatalogReferences
-} from "../src/determinization/catalog.js";
-import { createOpportunityId, createRecommendationId } from "../src/determinization/ids.js";
-import { parseAnalysisOpportunities } from "../src/determinization/schemas.js";
+} from "../packages/skills-autoresearch/src/determinization/catalog.js";
+import {
+  createOpportunityId,
+  createRecommendationId
+} from "../packages/skills-autoresearch/src/determinization/ids.js";
+import { parseAnalysisOpportunities } from "../packages/skills-autoresearch/src/determinization/schemas.js";
 
-const catalogIndex = fileURLToPath(new URL("../catalog/deterministic-assets/catalog.json", import.meta.url));
+const catalogIndex = fileURLToPath(
+  new URL("../packages/skills-autoresearch/catalog/deterministic-assets/catalog.json", import.meta.url)
+);
 
 function documentWithCatalogReference(catalog_asset_id: string) {
   const source_refs = [{ path: "seed-skill/SKILL.md", evidence_kind: "skill" as const }];

@@ -3,8 +3,8 @@ import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { RawDeterminizationAnalysis } from "../src/flue-agents.js";
-import type { FlueRoleDispatcher, FlueRoleRuntime } from "../src/flue-runtime.js";
+import type { RawDeterminizationAnalysis } from "../packages/skills-autoresearch/src/flue-agents.js";
+import type { FlueRoleDispatcher, FlueRoleRuntime } from "../packages/skills-autoresearch/src/flue-runtime.js";
 import {
   buildConfigDrivenPayload,
   formatFlueModelCallPreview,
@@ -12,14 +12,16 @@ import {
   parseRunnerArgs,
   runFlueCommand,
   type FlueRunnerDependencies
-} from "../src/flue-runner.js";
+} from "../packages/skills-autoresearch/src/flue-runner.js";
 import { tempProject } from "./helpers.js";
 
 const fixtureProject = fileURLToPath(new URL("../fixtures/projects/release-notes-alpha", import.meta.url));
 const fixtureResponse = fileURLToPath(
   new URL("../fixtures/expected/determinization/release-notes-alpha/analysis-response.json", import.meta.url)
 );
-const catalogRoot = fileURLToPath(new URL("../catalog/deterministic-assets", import.meta.url));
+const catalogRoot = fileURLToPath(
+  new URL("../packages/skills-autoresearch/catalog/deterministic-assets", import.meta.url)
+);
 
 test("Flue runner parses verbose and run-log opt-out flags without forwarding them", () => {
   expect(
@@ -36,7 +38,9 @@ test("package scripts keep model-free smoke credential-free and remove the beta 
     scripts: Record<string, string>;
   };
 
-  expect(packageJson.scripts.autoresearch).toBe("pnpm run build && node dist/src/flue-runner.js");
+  expect(packageJson.scripts.autoresearch).toBe(
+    "pnpm run build && node packages/skills-autoresearch/dist/flue-runner.js"
+  );
   expect(packageJson.scripts["alpha:smoke"]).toContain("pnpm run autoresearch");
   expect(packageJson.scripts["alpha:research"]).toContain("varlock run --");
   expect(packageJson.scripts["flue:build"]).toBeUndefined();

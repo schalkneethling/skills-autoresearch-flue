@@ -1,12 +1,15 @@
 import * as v from "valibot";
-import { createOpportunityId, createRecommendationId } from "../src/determinization/ids.js";
+import {
+  createOpportunityId,
+  createRecommendationId
+} from "../packages/skills-autoresearch/src/determinization/ids.js";
 import {
   AnalysisOpportunitiesDocumentSchema,
   AnalysisOpportunitySchema,
   DerivativeLineageHeaderSchema,
   assertLifecycleAuthority,
   parseAnalysisOpportunities
-} from "../src/determinization/schemas.js";
+} from "../packages/skills-autoresearch/src/determinization/schemas.js";
 
 function opportunity(overrides: Record<string, unknown> = {}) {
   const source_refs = [

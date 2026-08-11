@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtemp } from "node:fs/promises";
-import { EvalScore, ProjectConfig } from "../src/schemas.js";
+import { EvalScore, ProjectConfig } from "../packages/skills-autoresearch/src/schemas.js";
 
 export async function tempProject(prefix = "autoresearch-") {
   return mkdtemp(join(tmpdir(), prefix));

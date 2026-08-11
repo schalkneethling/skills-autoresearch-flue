@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { aggregateScores } from "../src/aggregate.js";
-import { importBaselineArtefacts } from "../src/baseline.js";
-import { parseEvalScore } from "../src/score.js";
-import { trackForEval } from "../src/project.js";
+import { aggregateScores } from "../packages/skills-autoresearch/src/aggregate.js";
+import { importBaselineArtefacts } from "../packages/skills-autoresearch/src/baseline.js";
+import { parseEvalScore } from "../packages/skills-autoresearch/src/score.js";
+import { trackForEval } from "../packages/skills-autoresearch/src/project.js";
 import { score, securityConfig, securityEvals, tempProject } from "./helpers.js";
 
 test("imports baseline artefacts and reports missing files without overwriting", async () => {

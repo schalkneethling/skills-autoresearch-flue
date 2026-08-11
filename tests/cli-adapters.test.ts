@@ -1,8 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { FileScoreAgent, SnapshotResearcher } from "../src/adapters.js";
-import { main, parseCliArgs } from "../src/cli.js";
-import { trackForEval } from "../src/project.js";
+import { FileScoreAgent, SnapshotResearcher } from "../packages/skills-autoresearch/src/adapters.js";
+import { main, parseCliArgs } from "../packages/skills-autoresearch/src/cli.js";
+import { trackForEval } from "../packages/skills-autoresearch/src/project.js";
 import {
   securityConfig,
   securityEvals,

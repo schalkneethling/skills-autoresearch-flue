@@ -5,18 +5,18 @@ import {
   assertAnalysisArtifactBoundary,
   resumeAnalysisArtifacts,
   writeAnalysisArtifacts
-} from "../src/determinization/artifacts.js";
-import { normalizeAnalysisResponse } from "../src/determinization/analyzer.js";
-import { serializeCanonical, sha256 } from "../src/determinization/canonical.js";
-import { loadDeterministicAssetCatalog } from "../src/determinization/catalog.js";
+} from "../packages/skills-autoresearch/src/determinization/artifacts.js";
+import { normalizeAnalysisResponse } from "../packages/skills-autoresearch/src/determinization/analyzer.js";
+import { serializeCanonical, sha256 } from "../packages/skills-autoresearch/src/determinization/canonical.js";
+import { loadDeterministicAssetCatalog } from "../packages/skills-autoresearch/src/determinization/catalog.js";
 import {
   canonicalAnalysisSha256,
   orderAnalysisOpportunities,
   serializeAnalysisOpportunities
-} from "../src/determinization/schemas.js";
-import type { SourceSelection } from "../src/determinization/source.js";
+} from "../packages/skills-autoresearch/src/determinization/schemas.js";
+import type { SourceSelection } from "../packages/skills-autoresearch/src/determinization/source.js";
 
-const catalogIndex = resolve("catalog/deterministic-assets/catalog.json");
+const catalogIndex = resolve("packages/skills-autoresearch/catalog/deterministic-assets/catalog.json");
 const catalogRoot = dirname(catalogIndex);
 const catalogPaths = ["catalog.json", "javascript-typescript.json", "language.json", "markdown.json"];
 

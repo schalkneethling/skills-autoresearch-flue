@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as v from "valibot";
 
-import { RawDeterminizationAnalysisSchema } from "../src/flue-agents.js";
-import { startFlueRoleRuntime, withFlueRoleRuntime } from "../src/flue-runtime.js";
+import { RawDeterminizationAnalysisSchema } from "../packages/skills-autoresearch/src/flue-agents.js";
+import { startFlueRoleRuntime, withFlueRoleRuntime } from "../packages/skills-autoresearch/src/flue-runtime.js";
 
 const providerName = "faux-production-runtime";
 const models = {

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
-import { createLogger, LogLevel, LogSink } from "../src/logger.js";
-import { formatEvent, writeEvents } from "../src/cli.js";
-import { createRunLog } from "../src/run-log.js";
+import { createLogger, LogLevel, LogSink } from "../packages/skills-autoresearch/src/logger.js";
+import { formatEvent, writeEvents } from "../packages/skills-autoresearch/src/cli.js";
+import { createRunLog } from "../packages/skills-autoresearch/src/run-log.js";
 import { tempProject } from "./helpers.js";
 
 function sink() {

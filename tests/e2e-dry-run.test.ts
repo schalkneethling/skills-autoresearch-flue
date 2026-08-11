@@ -6,8 +6,8 @@ import {
   ModelEvalAgent,
   ModelRequest,
   ModelSkillResearcher
-} from "../src/model-agent.js";
-import { orchestrateBaseline } from "../src/orchestrator.js";
+} from "../packages/skills-autoresearch/src/model-agent.js";
+import { orchestrateBaseline } from "../packages/skills-autoresearch/src/orchestrator.js";
 import { score, syntheticConfig, syntheticEvals, tempProject, writeFixture } from "./helpers.js";
 
 class QueueModelClient implements ModelClient {

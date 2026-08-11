@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadAvailableFlueRoles } from "../src/flue-roles.js";
+import { loadAvailableFlueRoles } from "../packages/skills-autoresearch/src/flue-roles.js";
 import { tempProject } from "./helpers.js";
 
 test("discovers sorted unique roles from roles and .flue/roles", async () => {

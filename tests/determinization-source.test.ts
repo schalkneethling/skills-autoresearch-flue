@@ -6,7 +6,7 @@ import {
   createSourceManifest,
   serializeSourceManifest,
   type AnalysisIdentity
-} from "../src/determinization/source.js";
+} from "../packages/skills-autoresearch/src/determinization/source.js";
 
 test("source manifests use logical namespaces and raw-byte hashes without machine paths", async () => {
   const one = await mkdtemp(join(tmpdir(), "det-source-one-"));

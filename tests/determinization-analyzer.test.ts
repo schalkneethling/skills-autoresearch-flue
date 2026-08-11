@@ -1,15 +1,17 @@
 import { fileURLToPath } from "node:url";
-import { normalizeAnalysisResponse } from "../src/determinization/analyzer.js";
-import { loadDeterministicAssetCatalog } from "../src/determinization/catalog.js";
-import { renderDeterminizationReport } from "../src/determinization/report.js";
+import { normalizeAnalysisResponse } from "../packages/skills-autoresearch/src/determinization/analyzer.js";
+import { loadDeterministicAssetCatalog } from "../packages/skills-autoresearch/src/determinization/catalog.js";
+import { renderDeterminizationReport } from "../packages/skills-autoresearch/src/determinization/report.js";
 import {
   DETERMINIZATION_SCHEMA_VERSION,
   canonicalAnalysisSha256,
   serializeAnalysisOpportunities
-} from "../src/determinization/schemas.js";
-import { validateCanonicalAnalysis } from "../src/determinization/validation.js";
+} from "../packages/skills-autoresearch/src/determinization/schemas.js";
+import { validateCanonicalAnalysis } from "../packages/skills-autoresearch/src/determinization/validation.js";
 
-const catalogPath = fileURLToPath(new URL("../catalog/deterministic-assets/catalog.json", import.meta.url));
+const catalogPath = fileURLToPath(
+  new URL("../packages/skills-autoresearch/catalog/deterministic-assets/catalog.json", import.meta.url)
+);
 
 function conciseResponse(recommendations?: unknown[]) {
   return {

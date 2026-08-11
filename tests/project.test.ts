@@ -1,7 +1,7 @@
-import { validateConfiguredFlueRoles } from "../src/flue-roles.js";
-import { loadProject, trackForEval } from "../src/project.js";
-import { resolveModel } from "../src/model.js";
-import { resolveDeterminizerModel } from "../src/determinization/run.js";
+import { validateConfiguredFlueRoles } from "../packages/skills-autoresearch/src/flue-roles.js";
+import { loadProject, trackForEval } from "../packages/skills-autoresearch/src/project.js";
+import { resolveModel } from "../packages/skills-autoresearch/src/model.js";
+import { resolveDeterminizerModel } from "../packages/skills-autoresearch/src/determinization/run.js";
 import {
   securityConfig,
   securityEvals,

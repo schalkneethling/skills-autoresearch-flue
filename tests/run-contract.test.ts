@@ -1,6 +1,6 @@
-import { normalizeRunOptions } from "../src/run-options.js";
-import { GENERATED_RESEARCH_ARTIFACTS, projectLayout } from "../src/project-layout.js";
-import { persistResearchArtifact } from "../src/artifact-lifecycle.js";
+import { normalizeRunOptions } from "../packages/skills-autoresearch/src/run-options.js";
+import { GENERATED_RESEARCH_ARTIFACTS, projectLayout } from "../packages/skills-autoresearch/src/project-layout.js";
+import { persistResearchArtifact } from "../packages/skills-autoresearch/src/artifact-lifecycle.js";
 import { join } from "node:path";
 
 test("run options normalize both adapter payload shapes into one contract", () => {

@@ -2,11 +2,7 @@
   "name": "skills-autoresearch-flue",
   "version": "0.1.0",
   "private": true,
-  "description": "Flue agent harness for autoresearching and evaluating agent skills.",
-  "bin": {
-    "skills-autoresearch": "./dist/src/cli.js",
-    "skills-autoresearch-flue": "./dist/src/flue-runner.js"
-  },
+  "description": "Development workspace for Skills Autoresearch.",
   "type": "module",
   "scripts": {
     "test": "vitest run",
@@ -17,17 +13,13 @@
     "typecheck": "tsc --noEmit",
     "compat:flue2": "pnpm --filter flue2-role-boundary-compatibility run check",
     "check": "pnpm run format:check && pnpm run lint && pnpm run knip && pnpm run typecheck && pnpm test && pnpm run compat:flue2 && pnpm run build && pnpm run alpha:smoke",
-    "build": "tsc -p tsconfig.json",
-    "autoresearch": "pnpm run build && node dist/src/flue-runner.js",
-    "flue:run": "pnpm run build && node dist/src/flue-runner.js",
+    "build": "pnpm --filter @schalkneethling/skills-autoresearch run build",
+    "autoresearch": "pnpm run build && node packages/skills-autoresearch/dist/flue-runner.js",
+    "flue:run": "pnpm run build && node packages/skills-autoresearch/dist/flue-runner.js",
     "alpha:smoke": "pnpm run autoresearch -- smoke --project fixtures/projects/release-notes-alpha --session alpha-smoke",
-    "alpha:determinize": "pnpm run build && node dist/src/cli.js determinize report --project fixtures/projects/release-notes-alpha --response-file fixtures/expected/determinization/release-notes-alpha/analysis-response.json --catalog-root catalog/deterministic-assets",
-    "alpha:research": "pnpm run build && varlock run -- node dist/src/flue-runner.js research --project fixtures/projects/release-notes-alpha --session alpha-research",
+    "alpha:determinize": "pnpm run build && node packages/skills-autoresearch/dist/cli.js determinize report --project fixtures/projects/release-notes-alpha --response-file fixtures/expected/determinization/release-notes-alpha/analysis-response.json --catalog-root packages/skills-autoresearch/catalog/deterministic-assets",
+    "alpha:research": "pnpm run build && varlock run -- node packages/skills-autoresearch/dist/flue-runner.js research --project fixtures/projects/release-notes-alpha --session alpha-research",
     "env:check": "varlock load"
-  },
-  "dependencies": {
-    "@flue/runtime": "2.0.3",
-    "valibot": "^1.4.2"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -39,6 +31,7 @@
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
+    "valibot": "^1.4.2",
     "varlock": "^1.16.0",
     "vitest": "^4.1.10",
     "wrangler": "^4.119.0"

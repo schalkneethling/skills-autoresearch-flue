@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", ".flue-dist/**", "node_modules/**", "fixtures/baseline/**"]
+    ignores: ["**/dist/**", ".flue-dist/**", "node_modules/**", "fixtures/baseline/**"]
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

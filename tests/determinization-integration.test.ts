@@ -1,21 +1,21 @@
 import { chmod, mkdir, readFile, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { main } from "../src/cli.js";
-import { runDeterminizationReport } from "../src/determinization/run.js";
+import { main } from "../packages/skills-autoresearch/src/cli.js";
+import { runDeterminizationReport } from "../packages/skills-autoresearch/src/determinization/run.js";
 import {
   DirectModelDeterminizationTransport,
   FlueDeterminizationTransport,
   StaticDeterminizationTransport,
   type DeterminizationTransport
-} from "../src/determinization/transport.js";
-import type { FlueRoleDispatcher } from "../src/flue-runtime.js";
-import type { ModelClient } from "../src/model-agent.js";
+} from "../packages/skills-autoresearch/src/determinization/transport.js";
+import type { FlueRoleDispatcher } from "../packages/skills-autoresearch/src/flue-runtime.js";
+import type { ModelClient } from "../packages/skills-autoresearch/src/model-agent.js";
 import { tempProject, writeFixture, syntheticConfig, syntheticEvals } from "./helpers.js";
 
 const fixtureProject = resolve("fixtures/projects/release-notes-alpha");
 const fixtureResponse = resolve("fixtures/expected/determinization/release-notes-alpha/analysis-response.json");
 const fixtureReport = resolve("fixtures/expected/determinization/release-notes-alpha/report.md");
-const catalogRoot = resolve("catalog/deterministic-assets");
+const catalogRoot = resolve("packages/skills-autoresearch/catalog/deterministic-assets");
 
 async function response() {
   return JSON.parse(await readFile(fixtureResponse, "utf8")) as unknown;

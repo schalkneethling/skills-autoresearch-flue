@@ -22,8 +22,6 @@ The harness should:
 ```text
 .flue/
   roles/                      Application-level role labels and prompt context.
-catalog/
-  deterministic-assets/       Repository-owned reusable asset catalog.
 docs/
   alpha-run.md                Alpha run and credential workflow.
   using-the-harness.md        User guide for running custom skill projects.
@@ -31,31 +29,35 @@ fixtures/
   baseline/                   Imported legacy baseline fixture data.
   projects/release-notes-alpha/
                               Committed alpha project fixture.
-src/
-  orchestrator.ts             Baseline and research iteration loop.
-  run-options.ts              Canonical normalized run options used by CLI and Flue adapters.
-  project-layout.ts           Canonical generated-artifact paths and filenames.
-  artifact-lifecycle.ts       Provider-independent transcript and research-artifact persistence.
-  determinization/            Canonical opportunity analysis, artifacts, and transports.
-  flue-agents.ts              Flue 2 producer, judge, researcher, and determinizer agents.
-  flue-runtime.ts             Application-owned Flue runtime and validated result dispatch.
-  flue-harness.ts             Autoresearch adapters for the Flue role dispatcher.
-  flue-runner.ts              CLI parsing, application events, and runtime lifecycle.
-  model-agent.ts              Prompt builders, schemas, artifact application helpers.
-  runner.ts                   Eval runner and concurrency helper.
-  sandbox.ts                  Local readonly/write sandbox abstraction.
-  schemas.ts                  Valibot schemas and public data contracts.
-  baseline.ts                 Imported baseline artifact parsing.
-  aggregate.ts                Score aggregation.
+packages/
+  skills-autoresearch/
+    catalog/deterministic-assets/
+                               Package-owned reusable asset catalog.
+    src/
+      orchestrator.ts          Baseline and research iteration loop.
+      run-options.ts           Canonical normalized run options used by CLI and Flue adapters.
+      project-layout.ts        Canonical generated-artifact paths and filenames.
+      artifact-lifecycle.ts    Provider-independent transcript and research-artifact persistence.
+      determinization/         Canonical opportunity analysis, artifacts, and transports.
+      flue-agents.ts           Flue 2 producer, judge, researcher, and determinizer agents.
+      flue-runtime.ts          Application-owned Flue runtime and validated result dispatch.
+      flue-harness.ts          Autoresearch adapters for the Flue role dispatcher.
+      flue-runner.ts           CLI parsing, application events, and runtime lifecycle.
+      model-agent.ts           Prompt builders, schemas, artifact application helpers.
+      runner.ts                Eval runner and concurrency helper.
+      sandbox.ts               Local readonly/write sandbox abstraction.
+      schemas.ts               Valibot schemas and public data contracts.
+      baseline.ts              Imported baseline artifact parsing.
+      aggregate.ts             Score aggregation.
 tests/
   *.test.ts                   Unit, integration, and dry-run coverage.
 ```
 
 ## Flue Integration
 
-Flue is not incidental here; it is the harness layer. Production uses Flue 2.0.3 through four addressable top-level functions in `src/flue-agents.ts`: producer, judge, researcher, and determinizer. Each has a schema-backed submit tool. `src/flue-runtime.ts` owns the `start()`/`init()`/`dispatch()`/`read()` boundary, requires exactly one value on the expected data channel, validates it again, and always stops the process-local, in-memory runtime in `finally`.
+Flue is not incidental here; it is the harness layer. Production uses Flue 2.0.3 through four addressable top-level functions in `packages/skills-autoresearch/src/flue-agents.ts`: producer, judge, researcher, and determinizer. Each has a schema-backed submit tool. `packages/skills-autoresearch/src/flue-runtime.ts` owns the `start()`/`init()`/`dispatch()`/`read()` boundary, requires exactly one value on the expected data channel, validates it again, and always stops the process-local, in-memory runtime in `finally`.
 
-`src/flue-harness.ts` adapts application orchestration to that runtime, while `src/flue-runner.ts` owns CLI lifecycle directly. The Flue 2 migration removed beta workflows, profiles, `session.task`, `@flue/cli`, `flue build`, and direct `pnpm exec flue run <workflow>` invocation.
+`packages/skills-autoresearch/src/flue-harness.ts` adapts application orchestration to that runtime, while `packages/skills-autoresearch/src/flue-runner.ts` owns CLI lifecycle directly. The Flue 2 migration removed beta workflows, profiles, `session.task`, `@flue/cli`, `flue build`, and direct `pnpm exec flue run <workflow>` invocation.
 
 The agents deliberately declare no sandbox. Application code selects and bounds files, serializes their contents into prompts, validates model submissions, and alone writes approved artifacts. The determinizer remains read-only. Flue usage and cost returned through `useResponseFinish` metadata flow into existing accounting.
 
@@ -89,7 +91,7 @@ Generated `workspace/iterations/` output should not be committed for normal fixt
 
 ## Data Contracts
 
-Schemas live in `src/schemas.ts`.
+Schemas live in `packages/skills-autoresearch/src/schemas.ts`.
 
 Important contracts:
 
@@ -104,7 +106,7 @@ Important contracts:
 When changing a schema:
 
 - Update fixture files if needed.
-- Update prompt examples in `src/model-agent.ts`.
+- Update prompt examples in `packages/skills-autoresearch/src/model-agent.ts`.
 - Update docs if user-facing config changes.
 - Add or update tests that parse and validate the new shape.
 
@@ -115,12 +117,12 @@ the advanced `--payload` form uses camelCase fields. Both must call
 `normalizeRunOptions()` rather than reimplement defaults or cross-option checks.
 
 Generated workspace locations and artifact filenames belong in
-`src/project-layout.ts`. Cleanup, resume, and persistence must consume that
+`packages/skills-autoresearch/src/project-layout.ts`. Cleanup, resume, and persistence must consume that
 manifest so a new generated artifact is declared once and remains auditable.
 
 Determinization has one canonical analysis source of truth: `workspace/determinization/opportunities.json`. Reports, research requests, prompts, and transcripts carry its SHA-256 hash and opportunity IDs. Preserve this lineage, stable IDs, canonical ordering, portable source paths, and the immutability of original analysis fields.
 
-Normal determinization runs are read-only for the selected skill, optional context root, and `catalog/deterministic-assets/`. Phase 1 may only mark assets `suggested`; do not add proposal, verification, apply, adoption, or catalog-mutation behavior to this stage. LanguageTool catalog entries are candidate capability families, not claims that a rule exists, is configured, or fully replaces editorial judgment.
+Normal determinization runs are read-only for the selected skill, optional context root, and `packages/skills-autoresearch/catalog/deterministic-assets/`. Phase 1 may only mark assets `suggested`; do not add proposal, verification, apply, adoption, or catalog-mutation behavior to this stage. LanguageTool catalog entries are candidate capability families, not claims that a rule exists, is configured, or fully replaces editorial judgment.
 
 ## Fixtures
 
