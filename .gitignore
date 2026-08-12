@@ -1,6 +1,7 @@
 # build output
 dist/
 .flue-dist/
+packages/schalkneethling-skills-autoresearch-*.tgz
 # generated types
 .astro/
 

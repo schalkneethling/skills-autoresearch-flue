@@ -1,13 +1,25 @@
+import { access, cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import {
+  cleanPackageBuildOutput,
+  packAuthoritativePackage,
   validateArchiveCandidates,
   validatePackedContract
 } from "../scripts/package-artifact.mjs";
 
+const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const archiveName = "schalkneethling-skills-autoresearch-0.1.0.tgz";
 
 const manifest = {
   name: "@schalkneethling/skills-autoresearch",
   version: "0.1.0",
+  type: "module",
+  exports: {},
+  files: ["dist", "catalog/deterministic-assets", "README.md", "CHANGELOG.md", "LICENSE"],
+  engines: { node: ">=24" },
   license: "MIT",
   repository: {
     type: "git",
@@ -29,12 +41,14 @@ test("archive discovery distinguishes the replaceable pre-pack artifact from the
   expect(validateArchiveCandidates([], archiveName, "before-pack")).toBeNull();
   expect(() => validateArchiveCandidates([], archiveName, "after-pack")).toThrow(/missing/i);
 
-  expect(
-    validateArchiveCandidates([{ name: archiveName, type: "file" }], archiveName, "before-pack")
-  ).toEqual({ name: archiveName, type: "file" });
-  expect(
-    validateArchiveCandidates([{ name: archiveName, type: "file" }], archiveName, "after-pack")
-  ).toEqual({ name: archiveName, type: "file" });
+  expect(validateArchiveCandidates([{ name: archiveName, type: "file" }], archiveName, "before-pack")).toEqual({
+    name: archiveName,
+    type: "file"
+  });
+  expect(validateArchiveCandidates([{ name: archiveName, type: "file" }], archiveName, "after-pack")).toEqual({
+    name: archiveName,
+    type: "file"
+  });
 });
 
 test("archive discovery rejects duplicates, unrelated names, and non-regular artifacts", () => {
@@ -57,9 +71,9 @@ test("archive discovery rejects duplicates, unrelated names, and non-regular art
     )
   ).toThrow(/unexpected archive/i);
 
-  expect(() =>
-    validateArchiveCandidates([{ name: archiveName, type: "symlink" }], archiveName, "before-pack")
-  ).toThrow(/regular file/i);
+  expect(() => validateArchiveCandidates([{ name: archiveName, type: "symlink" }], archiveName, "before-pack")).toThrow(
+    /regular file/i
+  );
 });
 
 test("packed validation compares manifest identity and the complete allowlisted inventory", () => {
@@ -99,4 +113,51 @@ test("packed validation compares manifest identity and the complete allowlisted 
       expectedFiles
     })
   ).toThrow(/not allowlisted/i);
+});
+
+test("package build cleanup removes stale output and refuses symlinked dist directories", async () => {
+  const temporaryRoot = await realpath(await mkdtemp(join(tmpdir(), "skills-autoresearch-artifact-test-")));
+  const packageRoot = join(temporaryRoot, "package");
+  const externalRoot = join(temporaryRoot, "external");
+  try {
+    await mkdir(join(packageRoot, "dist"), { recursive: true });
+    await writeFile(join(packageRoot, "dist", "stale.js"), "stale output\n", "utf8");
+
+    await expect(cleanPackageBuildOutput(packageRoot)).resolves.toBe(true);
+    await expect(access(join(packageRoot, "dist", "stale.js"))).rejects.toMatchObject({
+      code: "ENOENT"
+    });
+
+    await mkdir(externalRoot);
+    await writeFile(join(externalRoot, "keep.js"), "keep me\n", "utf8");
+    await symlink(externalRoot, join(packageRoot, "dist"), "dir");
+
+    await expect(cleanPackageBuildOutput(packageRoot)).rejects.toThrow(/regular directory/i);
+    await expect(access(join(externalRoot, "keep.js"))).resolves.toBeUndefined();
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test("authoritative packing rebuilds before deriving the packed inventory", async () => {
+  const temporaryRoot = await realpath(await mkdtemp(join(tmpdir(), "skills-autoresearch-pack-test-")));
+  const packageRoot = join(temporaryRoot, "packages", "skills-autoresearch");
+  const staleOutput = join(packageRoot, "dist", "stale-output.js");
+  try {
+    await mkdir(join(temporaryRoot, "packages"), { recursive: true });
+    await cp(join(repositoryRoot, "packages", "skills-autoresearch"), packageRoot, {
+      recursive: true
+    });
+    await symlink(join(repositoryRoot, "node_modules"), join(temporaryRoot, "node_modules"), "dir");
+    await writeFile(staleOutput, "stale output\n", "utf8");
+
+    const result = await packAuthoritativePackage({ repositoryRoot: temporaryRoot });
+
+    expect(result.path).toBe(join(temporaryRoot, "packages", archiveName));
+    expect(result.files).not.toContain("package/dist/stale-output.js");
+    await expect(access(staleOutput)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(access(result.path)).resolves.toBeUndefined();
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
 });

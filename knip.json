@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreFiles": ["fixtures/**/*.{js,jsx}"],
+  "ignoreFiles": ["fixtures/**/*.{js,jsx}", "scripts/package-artifact.d.mts"],
   "ignoreDependencies": ["@varlock/1password-plugin", "wrangler"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
