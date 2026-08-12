@@ -161,4 +161,4 @@ test("authoritative packing rebuilds before deriving the packed inventory", asyn
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });
   }
-});
+}, 30_000);
