@@ -149,6 +149,7 @@ test("authoritative packing rebuilds before deriving the packed inventory", asyn
       recursive: true
     });
     await symlink(join(repositoryRoot, "node_modules"), join(temporaryRoot, "node_modules"), "dir");
+    await mkdir(join(packageRoot, "dist"), { recursive: true });
     await writeFile(staleOutput, "stale output\n", "utf8");
 
     const result = await packAuthoritativePackage({ repositoryRoot: temporaryRoot });
