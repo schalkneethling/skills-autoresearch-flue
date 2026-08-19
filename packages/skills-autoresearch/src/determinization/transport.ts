@@ -38,17 +38,33 @@ export class DirectModelDeterminizationTransport implements DeterminizationTrans
   readonly name = "direct-model";
   readonly makesModelCall = true;
 
-  constructor(private readonly client: ModelClient) {}
+  constructor(
+    private readonly client: ModelClient,
+    private readonly timeoutMs = 60_000
+  ) {}
 
   async analyze(request: DeterminizationTransportRequest): Promise<DeterminizationTransportResult> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(new Error("Determinization model request timed out")), this.timeoutMs);
     const modelRequest: ModelRequest = {
       system: request.system,
       prompt: request.prompt,
       model: request.model,
       phase: "determinization analysis",
-      ...(request.cwd && { workspaceDir: request.cwd })
+      ...(request.cwd && { workspaceDir: request.cwd }),
+      signal: controller.signal
     };
-    const completion = await this.client.complete(modelRequest);
+    let completion: ModelCompletion;
+    try {
+      completion = await Promise.race([
+        this.client.complete(modelRequest),
+        new Promise<never>((_, reject) =>
+          controller.signal.addEventListener("abort", () => reject(controller.signal.reason), { once: true })
+        )
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
     const response = parseJsonResponse(completion);
     return {
       response,

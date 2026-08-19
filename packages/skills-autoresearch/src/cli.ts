@@ -6,7 +6,7 @@ import { createLogger, Logger, LogLevel } from "./logger.js";
 import { AnthropicMessagesClient, ModelEvalAgent, ModelSkillResearcher } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, RunEvent } from "./orchestrator.js";
 import { createRunLog } from "./run-log.js";
-import { normalizeRunOptions, RunOptions } from "./run-options.js";
+import { normalizeRunOptions, parseBudgetUsd, RunOptions } from "./run-options.js";
 import { determinizationUsage, runDeterminizationCli } from "./determinization/cli.js";
 import { readPackageVersion } from "./package-resources.js";
 
@@ -106,20 +106,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
   }
 
   return options;
-}
-
-function parseBudgetUsd(value: string | boolean | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== "string") {
-    throw new Error("--budget-usd must be a non-negative number.");
-  }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error("--budget-usd must be a non-negative number.");
-  }
-  return parsed;
 }
 
 function parseModelClient(value: string | boolean | undefined): "anthropic" | undefined {

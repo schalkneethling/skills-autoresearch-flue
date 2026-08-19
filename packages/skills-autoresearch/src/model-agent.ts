@@ -1,5 +1,5 @@
 import { execFile, type ExecFileException } from "node:child_process";
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { ModelCallRole, ModelUsage } from "./cost.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
@@ -42,6 +42,7 @@ export interface ModelRequest {
   model: ModelConfig;
   phase?: string;
   workspaceDir?: string;
+  signal?: AbortSignal;
 }
 
 export interface ModelCompletionResponse {
@@ -60,6 +61,8 @@ export interface AnthropicMessagesClientOptions {
   version?: string;
   maxTokens?: number;
   fetch?: typeof fetch;
+  timeoutMs?: number;
+  maxAttempts?: number;
 }
 
 export class AnthropicMessagesClient implements ModelClient {
@@ -67,6 +70,8 @@ export class AnthropicMessagesClient implements ModelClient {
   readonly #version: string;
   readonly #maxTokens: number;
   readonly #fetch: typeof fetch;
+  readonly #timeoutMs: number;
+  readonly #maxAttempts: number;
 
   constructor(options: AnthropicMessagesClientOptions = {}) {
     const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
@@ -77,6 +82,8 @@ export class AnthropicMessagesClient implements ModelClient {
     this.#version = options.version ?? "2023-06-01";
     this.#maxTokens = options.maxTokens ?? 4096;
     this.#fetch = options.fetch ?? fetch;
+    this.#timeoutMs = options.timeoutMs ?? 60_000;
+    this.#maxAttempts = options.maxAttempts ?? 3;
   }
 
   async complete(request: ModelRequest): Promise<ModelCompletion> {
@@ -84,24 +91,48 @@ export class AnthropicMessagesClient implements ModelClient {
       throw new Error(`AnthropicMessagesClient cannot run provider "${request.model.provider}"`);
     }
 
-    const response = await this.#fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": this.#apiKey,
-        "anthropic-version": this.#version
-      },
-      body: JSON.stringify({
-        model: request.model.name,
-        max_tokens: this.#maxTokens,
-        system: request.system,
-        messages: [{ role: "user", content: request.prompt }]
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic request failed with ${response.status}: ${await response.text()}`);
+    let response: Response | undefined;
+    let finalError: Error | undefined;
+    for (let attempt = 0; attempt < this.#maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const onAbort = () => controller.abort(request.signal?.reason);
+      request.signal?.addEventListener("abort", onAbort, { once: true });
+      const timeout = setTimeout(() => controller.abort(new Error("Anthropic request timed out")), this.#timeoutMs);
+      try {
+        response = await this.#fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": this.#apiKey,
+            "anthropic-version": this.#version
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: request.model.name,
+            max_tokens: this.#maxTokens,
+            system: request.system,
+            messages: [{ role: "user", content: request.prompt }]
+          })
+        });
+      } catch (error) {
+        finalError = error instanceof Error ? error : new Error(String(error));
+        if (attempt + 1 >= this.#maxAttempts || controller.signal.aborted) throw finalError;
+      } finally {
+        clearTimeout(timeout);
+        request.signal?.removeEventListener("abort", onAbort);
+      }
+      if (response?.ok) break;
+      if (response && response.status !== 429 && response.status !== 503) {
+        throw new Error(`Anthropic request failed with ${response.status}: ${await response.text()}`);
+      }
+      if (response) finalError = new Error(`Anthropic request failed with ${response.status}: ${await response.text()}`);
+      if (attempt + 1 < this.#maxAttempts) {
+        const retryAfter = Number(response?.headers.get("retry-after"));
+        const delayMs = Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter * 1000 : 250 * 2 ** attempt;
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, Math.min(delayMs, 5_000)));
+      }
     }
+    if (!response?.ok) throw finalError ?? new Error("Anthropic request failed");
 
     const body = (await response.json()) as {
       content?: Array<{ type?: string; text?: string }>;
@@ -665,10 +696,15 @@ async function readFilesFromMount(root: string | undefined): Promise<Array<{ pat
   }
   const files = await listTextFiles(root);
   return Promise.all(
-    files.map(async (path) => ({
-      path: relative(root, path),
-      contents: await readFile(path, "utf8")
-    }))
+    files.map(async (path) => {
+      const metadata = await lstat(path);
+      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > 1024 * 1024) {
+        throw new Error(`Mounted file exceeds the 1 MiB limit or is not a regular file: ${path}`);
+      }
+      const contents = await readFile(path, "utf8");
+      if (Buffer.byteLength(contents) > 1024 * 1024) throw new Error(`Mounted file exceeds the 1 MiB limit: ${path}`);
+      return { path: relative(root, path), contents };
+    })
   );
 }
 

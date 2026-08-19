@@ -114,11 +114,15 @@ test("aggregates arbitrary configured tracks", () => {
 });
 
 test("aggregates by track id before falling back to eval type", () => {
-  const report = aggregateScores(securityConfig, [
+  const scores = [
     score("audit-001", "detect-and-fix", "audit", 2, 2),
     score("legacy-001", "detect-and-fix", undefined as unknown as string, 1, 2),
     score("other-001", "detect-and-fix", "other", 2, 2)
-  ]);
+  ];
+  expect(() => aggregateScores(securityConfig, scores)).toThrow(
+    "Cannot aggregate scores without a configured track: other-001 (other)"
+  );
+  const report = aggregateScores(securityConfig, scores.slice(0, 2));
 
   expect(report.tracks.find((track) => track.trackId === "audit")).toMatchObject({
     score: 3,

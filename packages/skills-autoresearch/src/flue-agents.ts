@@ -66,34 +66,8 @@ const RawAnalysisOpportunitySchema = v.strictObject({
   limitations: NonEmptyTextListSchema
 });
 
-type RawDeterministicAssetRecommendation = {
-  relationship: v.InferOutput<typeof AssetRelationshipSchema>;
-  asset_kind: v.InferOutput<typeof DeterministicAssetKindSchema>;
-  catalog_asset_id?: string;
-  proposed_name?: string;
-  contribution: string;
-  confidence: "low" | "medium" | "high";
-  expected_improvement: string;
-  supporting_evidence: string[];
-  limitations: string[];
-  alternative_assessments: v.InferOutput<typeof AlternativeAssessmentSchema>[];
-  insufficiency_justification?: string;
-};
-
-type RawAnalysisOpportunity = {
-  source_refs: v.InferOutput<typeof SourceReferenceSchema>[];
-  normalized_requirement: string;
-  origin: "skill_guidance" | "evaluation_evidence" | "both";
-  classification:
-    "fully_deterministic" | "partially_deterministic" | "human_judgment_required" | "missing_prerequisite";
-  current_automation_potential: "none" | "low" | "medium" | "high";
-  remaining_human_judgment: string;
-  recommendations: RawDeterministicAssetRecommendation[];
-  confidence: "low" | "medium" | "high";
-  expected_improvement: string;
-  supporting_evidence: string[];
-  limitations: string[];
-};
+type RawDeterministicAssetRecommendation = v.InferOutput<typeof RawDeterministicAssetRecommendationSchema>;
+type RawAnalysisOpportunity = v.InferOutput<typeof RawAnalysisOpportunitySchema>;
 
 export type RawDeterminizationAnalysis = {
   schema_version: typeof DETERMINIZATION_SCHEMA_VERSION;

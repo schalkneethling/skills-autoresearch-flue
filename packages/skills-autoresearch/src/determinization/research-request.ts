@@ -1,15 +1,19 @@
 import { serializeCanonical } from "./canonical.js";
-import type { AnalysisOpportunitiesDocument } from "./schemas.js";
+import {
+  DETERMINIZATION_SCHEMA_VERSION,
+  type AnalysisOpportunitiesDocument,
+  type AssetRelationship
+} from "./schemas.js";
 
 export interface DerivativeLineage {
-  schema_version: "1.0.0";
+  schema_version: typeof DETERMINIZATION_SCHEMA_VERSION;
   source_opportunities_sha256: string;
   opportunity_ids: string[];
 }
 
 export interface ResearchAssetRequest {
   asset_id: string;
-  relationship: string;
+  relationship: AssetRelationship;
   asset_kind: string;
   catalog_asset_id?: string;
   contribution: string;
@@ -32,7 +36,11 @@ export interface ResearchRequest extends DerivativeLineage {
   constraints: string[];
 }
 
-function evidenceQuestions(relationship: string, assetName: string, catalogAssetId: string | undefined): string[] {
+function evidenceQuestions(
+  relationship: AssetRelationship,
+  assetName: string,
+  catalogAssetId: string | undefined
+): string[] {
   const identity = catalogAssetId ? `${assetName} (${catalogAssetId})` : assetName;
   const questions = [
     `Which authoritative sources establish whether ${identity} can contribute to this requirement?`,

@@ -72,7 +72,7 @@ function normalizeSourceReferences(value: unknown[], opportunityIndex: number) {
       }
       return {
         path: reference.path.normalize("NFC"),
-        ...(reference.locator !== undefined && { locator: reference.locator }),
+        ...(reference.locator !== undefined && { locator: reference.locator.normalize("NFC") }),
         evidence_kind: reference.evidence_kind
       };
     })
@@ -84,7 +84,7 @@ function normalizeSourceReferences(value: unknown[], opportunityIndex: number) {
     );
 }
 
-function assertOpportunityProvenance(document: AnalysisOpportunitiesDocument): void {
+export function assertOpportunityProvenance(document: AnalysisOpportunitiesDocument): void {
   for (const opportunity of document.opportunities) {
     for (const reference of opportunity.source_refs) {
       const namespace = reference.path.split("/", 1)[0];

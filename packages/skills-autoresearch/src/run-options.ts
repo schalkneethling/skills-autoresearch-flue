@@ -12,6 +12,16 @@ export interface RunOptions {
 
 export type RunOptionInput = Partial<RunOptions>;
 
+export function parseBudgetUsd(value: string | boolean | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error("--budget-usd must be a non-negative number.");
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error("--budget-usd must be a non-negative number.");
+  return parsed;
+}
+
 export function normalizeRunOptions(input: RunOptionInput, defaultProjectRoot = process.cwd()): RunOptions {
   const options: RunOptions = {
     projectRoot: input.projectRoot ?? defaultProjectRoot,
