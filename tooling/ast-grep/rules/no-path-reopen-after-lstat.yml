@@ -11,7 +11,9 @@ rule:
         pattern: await readFile($PATH, $$$ARGS)
         stopBy: end
     - follows:
-        has:
-          pattern: await lstat($PATH)
-          stopBy: end
+        all:
+          - kind: lexical_declaration
+          - has:
+              pattern: await lstat($PATH)
+              stopBy: end
         stopBy: end

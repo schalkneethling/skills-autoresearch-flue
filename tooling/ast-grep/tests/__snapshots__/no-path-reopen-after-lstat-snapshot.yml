@@ -20,7 +20,7 @@ snapshots:
         style: secondary
         start: 57
         end: 74
-      - source: await lstat(path)
+      - source: const metadata = await lstat(path);
         style: secondary
-        start: 57
-        end: 74
+        start: 40
+        end: 75
