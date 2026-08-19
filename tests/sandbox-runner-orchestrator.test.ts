@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createEvalSandbox } from "../packages/skills-autoresearch/src/sandbox.js";
 import { runEval, runWithConcurrency, EvalAgent } from "../packages/skills-autoresearch/src/runner.js";
@@ -147,13 +147,14 @@ test("orchestrator rejects missing configured judge role before baseline work", 
     },
     syntheticEvals
   );
+  await rm(join(root, "roles", "release-notes-judge.md"));
 
   await expect(orchestrateBaseline({ projectRoot: root, withBaseline: true })).rejects.toThrow(
     new RegExp(
       [
         "Configured Flue roles are not registered.",
         "release-notes-judge: roles.judge",
-        "Available roles: eval-judge, skill-builder, task-producer",
+        "Available roles: skill-builder, task-producer",
         "Define roles as markdown files in roles/ or .flue/roles/."
       ].join("(.|\n)*")
     )
@@ -178,6 +179,7 @@ test("orchestrator rejects missing producer track role before running evals", as
     },
     syntheticEvals
   );
+  await rm(join(root, "roles", "release-editor.md"));
   let agentRuns = 0;
   const agent: EvalAgent = {
     async run(request) {
