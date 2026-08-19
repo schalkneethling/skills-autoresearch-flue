@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, realpath, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import * as v from "valibot";
+import { readBoundedFileHandle } from "../bounded-file.js";
 import { normalizeAnalysisResponse } from "./analyzer.js";
 import { serializeCanonical, sha256 } from "./canonical.js";
 import { loadDeterministicAssetCatalog } from "./catalog.js";
@@ -232,20 +233,11 @@ async function readBoundedArtifactFile(path: string): Promise<string> {
     if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
       throw new Error(`Determinization artifact changed while opening: ${path}`);
     }
-    const buffer = Buffer.alloc(MAX_DETERMINIZATION_ARTIFACT_BYTES + 1);
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    if (bytesRead > MAX_DETERMINIZATION_ARTIFACT_BYTES) {
-      throw new Error(`Determinization artifact exceeds 4 MiB: ${path}`);
-    }
-    const finalMetadata = await handle.stat();
-    if (
-      finalMetadata.dev !== openedMetadata.dev ||
-      finalMetadata.ino !== openedMetadata.ino ||
-      finalMetadata.size > MAX_DETERMINIZATION_ARTIFACT_BYTES
-    ) {
-      throw new Error(`Determinization artifact changed while reading or exceeds 4 MiB: ${path}`);
-    }
-    return buffer.toString("utf8", 0, bytesRead);
+    const buffer = await readBoundedFileHandle(handle, openedMetadata, MAX_DETERMINIZATION_ARTIFACT_BYTES, {
+      changed: () => new Error(`Determinization artifact changed while reading or exceeds 4 MiB: ${path}`),
+      oversized: () => new Error(`Determinization artifact exceeds 4 MiB: ${path}`)
+    });
+    return buffer.toString("utf8");
   } finally {
     await handle.close();
   }
