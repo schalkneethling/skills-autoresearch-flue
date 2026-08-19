@@ -1,5 +1,6 @@
 import { execFile, type ExecFileException } from "node:child_process";
-import { cp, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { cp, lstat, mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, relative } from "node:path";
 import { ModelCallRole, ModelUsage } from "./cost.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
@@ -97,6 +98,7 @@ export class AnthropicMessagesClient implements ModelClient {
     let response: Response | undefined;
     let finalError: Error | undefined;
     for (let attempt = 0; attempt < this.#maxAttempts; attempt++) {
+      request.signal?.throwIfAborted();
       const controller = new AbortController();
       const onAbort = () => controller.abort(request.signal?.reason);
       request.signal?.addEventListener("abort", onAbort, { once: true });
@@ -133,7 +135,7 @@ export class AnthropicMessagesClient implements ModelClient {
       if (attempt + 1 < this.#maxAttempts) {
         const retryAfter = Number(response?.headers.get("retry-after"));
         const delayMs = Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter * 1000 : 250 * 2 ** attempt;
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, Math.min(delayMs, 5_000)));
+        await abortableDelay(Math.min(delayMs, 5_000), request.signal);
       }
     }
     if (!response?.ok) throw finalError ?? new Error("Anthropic request failed");
@@ -164,6 +166,21 @@ export class AnthropicMessagesClient implements ModelClient {
       }
     };
   }
+}
+
+function abortableDelay(delayMs: number, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
+  return new Promise((resolveDelay, reject) => {
+    const timeout = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolveDelay();
+    }, delayMs);
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(signal?.reason);
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 export class ModelEvalAgent implements EvalAgent {
@@ -693,9 +710,28 @@ async function readFilesFromMount(root: string | undefined): Promise<Array<{ pat
       if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > 1024 * 1024) {
         throw new Error(`Mounted file exceeds the 1 MiB limit or is not a regular file: ${path}`);
       }
-      const contents = await readFile(path, "utf8");
-      if (Buffer.byteLength(contents) > 1024 * 1024) throw new Error(`Mounted file exceeds the 1 MiB limit: ${path}`);
-      return { path: relative(root, path), contents };
+      const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const openedMetadata = await handle.stat();
+        if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
+          throw new Error(`Mounted file changed while opening or is not a regular file: ${path}`);
+        }
+        const buffer = Buffer.alloc(1024 * 1024 + 1);
+        const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+        if (bytesRead > 1024 * 1024) throw new Error(`Mounted file exceeds the 1 MiB limit: ${path}`);
+        const finalMetadata = await handle.stat();
+        if (
+          !finalMetadata.isFile() ||
+          finalMetadata.dev !== openedMetadata.dev ||
+          finalMetadata.ino !== openedMetadata.ino ||
+          finalMetadata.size > 1024 * 1024
+        ) {
+          throw new Error(`Mounted file changed while reading or exceeds the 1 MiB limit: ${path}`);
+        }
+        return { path: relative(root, path), contents: buffer.toString("utf8", 0, bytesRead) };
+      } finally {
+        await handle.close();
+      }
     })
   );
 }

@@ -15,6 +15,9 @@ import {
 
 test("parseCliArgs validates currently required adapters", () => {
   expect(parseCliArgs(["--help"])).toMatchObject({ help: true });
+  expect(parseCliArgs(["--help", "--budget-usd", "invalid", "--model-client", "unknown"])).toMatchObject({
+    help: true
+  });
   expect(parseCliArgs(["--project", "/tmp/project", "--with-baseline"])).toMatchObject({
     projectRoot: "/tmp/project",
     withBaseline: true,

@@ -1,4 +1,5 @@
-import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, mkdir, open, realpath, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import * as v from "valibot";
 import { normalizeAnalysisResponse } from "./analyzer.js";
@@ -225,11 +226,29 @@ async function readBoundedArtifactFile(path: string): Promise<string> {
   if (metadata.size > MAX_DETERMINIZATION_ARTIFACT_BYTES) {
     throw new Error(`Determinization artifact exceeds 4 MiB: ${path}`);
   }
-  const contents = await readFile(path, "utf8");
-  if (Buffer.byteLength(contents) > MAX_DETERMINIZATION_ARTIFACT_BYTES) {
-    throw new Error(`Determinization artifact exceeds 4 MiB: ${path}`);
+  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    const openedMetadata = await handle.stat();
+    if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
+      throw new Error(`Determinization artifact changed while opening: ${path}`);
+    }
+    const buffer = Buffer.alloc(MAX_DETERMINIZATION_ARTIFACT_BYTES + 1);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    if (bytesRead > MAX_DETERMINIZATION_ARTIFACT_BYTES) {
+      throw new Error(`Determinization artifact exceeds 4 MiB: ${path}`);
+    }
+    const finalMetadata = await handle.stat();
+    if (
+      finalMetadata.dev !== openedMetadata.dev ||
+      finalMetadata.ino !== openedMetadata.ino ||
+      finalMetadata.size > MAX_DETERMINIZATION_ARTIFACT_BYTES
+    ) {
+      throw new Error(`Determinization artifact changed while reading or exceeds 4 MiB: ${path}`);
+    }
+    return buffer.toString("utf8", 0, bytesRead);
+  } finally {
+    await handle.close();
   }
-  return contents;
 }
 
 async function readResumeJson(path: string): Promise<{ bytes: string; value: unknown }> {

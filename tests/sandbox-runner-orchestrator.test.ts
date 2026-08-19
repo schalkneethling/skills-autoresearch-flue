@@ -1,6 +1,7 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createEvalSandbox } from "../packages/skills-autoresearch/src/sandbox.js";
+import { resolveContainedPath } from "../packages/skills-autoresearch/src/contained-path.js";
 import { runEval, runWithConcurrency, EvalAgent } from "../packages/skills-autoresearch/src/runner.js";
 import {
   copySkillSnapshot,
@@ -49,6 +50,20 @@ test("sandbox rejects mutations in read-only mounts with EROFS", async () => {
 
   await sandbox.writeFile(join(sandbox.outputDir, "result.txt"), "ok");
   await expect(readFile(join(sandbox.outputDir, "result.txt"), "utf8")).resolves.toBe("ok");
+
+  const outside = join(root, "outside");
+  await mkdir(outside);
+  await symlink(outside, join(sandbox.outputDir, "redirect"));
+  await expect(sandbox.writeFile(join(sandbox.outputDir, "redirect", "escaped.txt"), "escape")).rejects.toMatchObject({
+    code: "EROFS"
+  });
+});
+
+test("contained paths accept dot-dot-prefixed names but reject parent traversal", async () => {
+  const root = await tempProject();
+  const messages = { absolute: (path: string) => path, outside: (path: string) => path };
+  expect(resolveContainedPath(root, "..metadata/file.json", messages)).toBe(join(root, "..metadata", "file.json"));
+  expect(() => resolveContainedPath(root, "../file.json", messages)).toThrow("../file.json");
 });
 
 test("runEval maps eval type to role and target skill through config", async () => {

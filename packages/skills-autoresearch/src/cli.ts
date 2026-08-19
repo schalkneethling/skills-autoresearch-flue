@@ -72,6 +72,16 @@ export function parseCliArgs(argv: string[]): CliOptions {
     allowPositionals: false
   });
 
+  if (parsed.values.help) {
+    return {
+      ...normalizeRunOptions({}),
+      json: false,
+      verbose: false,
+      writeRunLog: true,
+      help: true
+    };
+  }
+
   const options: CliOptions = {
     ...normalizeRunOptions({
       projectRoot: parsed.values.project,
@@ -91,8 +101,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
     writeRunLog: !(parsed.values["no-run-log"] ?? false),
     help: parsed.values.help ?? false
   };
-
-  if (options.help) return options;
 
   if (options.scoreDir && options.modelClient) {
     throw new Error("Use either --score-dir or --model-client, not both.");

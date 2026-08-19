@@ -110,8 +110,14 @@ test("reports both current and legacy schema failures for malformed baseline sco
 
   await expect(importBaselineArtefacts(baseline, [])).rejects.toMatchObject({
     name: "AggregateError",
-    errors: expect.arrayContaining([expect.any(Error), expect.any(Error)])
+    errors: expect.any(Array)
   });
+  const error = (await importBaselineArtefacts(baseline, []).catch((cause: unknown) => cause)) as AggregateError;
+  expect(error.errors).toHaveLength(2);
+  expect(error.errors[0]).toBeInstanceOf(Error);
+  expect(String((error.errors[0] as Error).message)).toContain("scores-7.json");
+  expect(error.errors[1]).toBeInstanceOf(Error);
+  expect(String((error.errors[1] as Error).message)).toMatch(/eval_id|scores/u);
 });
 
 test("aggregates arbitrary configured tracks", () => {

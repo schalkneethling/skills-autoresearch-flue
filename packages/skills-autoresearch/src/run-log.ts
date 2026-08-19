@@ -37,9 +37,10 @@ export function createRunLog(projectRoot: string, sessionId = "autoresearch"): R
   };
 }
 
-const SENSITIVE_KEY = /(?:api[-_]?key|authorization|cookie|password|secret|token|transcript|payload|response)/iu;
+const SENSITIVE_KEY =
+  /(?:api[-_]?key|authorization|cookie|password|private[-_]?key|secret|token|transcript|payload|response)/iu;
 const SECRET_VALUE =
-  /(?:sk-(?:ant-)?[A-Za-z0-9_-]{12,}|github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|xox[baprs]-[A-Za-z0-9-]+|AKIA[A-Z0-9]{16}|Bearer\s+\S+)/gu;
+  /(?:-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----|sk-(?:ant-)?[A-Za-z0-9_-]{12,}|github_pat_[A-Za-z0-9_]+|gh[pousr]_[A-Za-z0-9]+|xox[baprs]-[A-Za-z0-9-]+|AKIA[A-Z0-9]{16}|Bearer\s+\S+)/gu;
 const RUN_START_KEYS = new Set(["command", "workflow", "projectRoot", "sessionId"]);
 const RUN_RESULT_KEYS = new Set([
   "completedIterations",
