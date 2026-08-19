@@ -57,8 +57,16 @@ function parseScoreFile(raw: unknown, filePath: string): EvalScore[] {
 function parseBaselineScore(raw: unknown, filePath: string): EvalScore {
   try {
     return parseWithSchema(EvalScoreSchema, raw, filePath);
-  } catch {
-    return normalizeLegacyBaselineScore(raw, filePath);
+  } catch (schemaError) {
+    try {
+      return normalizeLegacyBaselineScore(raw, filePath);
+    } catch (legacyError) {
+      throw new AggregateError(
+        [schemaError, legacyError],
+        `Invalid baseline score ${filePath}: neither current nor legacy validation succeeded`,
+        { cause: legacyError }
+      );
+    }
   }
 }
 
@@ -79,13 +87,15 @@ function normalizeLegacyBaselineScore(raw: unknown, filePath: string): EvalScore
     throw new Error(`Invalid baseline score ${filePath}: missing eval_type or scores`);
   }
 
+  const evaluationNumberOffset = 1;
+  const filenameMatch = filePath.match(/scores-(\d+)\.json$/);
   const evalId =
     typeof score.eval_id === "number"
       ? `eval-${score.eval_id}`
       : typeof score.eval_id === "string"
         ? score.eval_id
-        : filePath.match(/scores-(\d+)\.json$/)
-          ? `eval-${Number(filePath.match(/scores-(\d+)\.json$/)?.[1]) + 1}`
+        : filenameMatch
+          ? `eval-${Number(filenameMatch[1]) + evaluationNumberOffset}`
           : "";
 
   if (!evalId) {

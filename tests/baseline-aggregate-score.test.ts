@@ -103,6 +103,17 @@ test("normalizes legacy baseline score totals and summaries", async () => {
   ]);
 });
 
+test("reports both current and legacy schema failures for malformed baseline scores", async () => {
+  const baseline = join(await tempProject(), "workspace", "baseline");
+  await mkdir(baseline, { recursive: true });
+  await writeFile(join(baseline, "scores-7.json"), JSON.stringify({ eval_id: false, scores: "invalid" }));
+
+  await expect(importBaselineArtefacts(baseline, [])).rejects.toMatchObject({
+    name: "AggregateError",
+    errors: expect.arrayContaining([expect.any(Error), expect.any(Error)])
+  });
+});
+
 test("aggregates arbitrary configured tracks", () => {
   const report = aggregateScores(securityConfig, [
     score("xss-001", "detect-and-fix", "audit", 2, 2),
@@ -114,11 +125,15 @@ test("aggregates arbitrary configured tracks", () => {
 });
 
 test("aggregates by track id before falling back to eval type", () => {
-  const report = aggregateScores(securityConfig, [
+  const scores = [
     score("audit-001", "detect-and-fix", "audit", 2, 2),
     score("legacy-001", "detect-and-fix", undefined as unknown as string, 1, 2),
     score("other-001", "detect-and-fix", "other", 2, 2)
-  ]);
+  ];
+  expect(() => aggregateScores(securityConfig, scores)).toThrow(
+    "Cannot aggregate scores without a configured track: other-001 (other)"
+  );
+  const report = aggregateScores(securityConfig, scores.slice(0, 2));
 
   expect(report.tracks.find((track) => track.trackId === "audit")).toMatchObject({
     score: 3,

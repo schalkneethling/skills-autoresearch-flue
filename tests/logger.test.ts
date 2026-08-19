@@ -101,7 +101,7 @@ test("formatEvent reports compact eval progress and artifact paths", () => {
 test("run logs append structured records without overwriting earlier entries", async () => {
   const root = await tempProject();
   const runLog = createRunLog(root, "test run");
-  runLog.append("run-start", { value: 1 });
+  runLog.append("run-start", { command: "smoke" });
   const firstRecord = await readFile(runLog.path, "utf8");
   runLog.append("run-event", { value: 2 });
   runLog.close();
@@ -112,9 +112,33 @@ test("run logs append structured records without overwriting earlier entries", a
   const records = completedLog
     .trim()
     .split("\n")
-    .map((line) => JSON.parse(line) as { type: string; data: { value: number } });
-  expect(records.map(({ type, data }) => [type, data.value])).toEqual([
-    ["run-start", 1],
+    .map((line) => JSON.parse(line) as { type: string; data: { command?: string; value?: number } });
+  expect(records.map(({ type, data }) => [type, data.command ?? data.value])).toEqual([
+    ["run-start", "smoke"],
     ["run-event", 2]
   ]);
+});
+
+test("run logs allowlist lifecycle metadata, redact secrets, and bound session filenames", async () => {
+  const root = await tempProject();
+  const runLog = createRunLog(root, `session-${"x".repeat(1_000_000)}`);
+  runLog.append("run-start", {
+    command: "research",
+    apiKey: "sk-ant-abcdefghijklmnop",
+    transcript: "private model transcript"
+  });
+  runLog.append("run-result", {
+    normalizedScore: 0.75,
+    response: "Bearer should-not-appear",
+    error: { stack: "github_pat_abcdefghijklmnop" }
+  });
+  runLog.append("run-event", { authorization: "Bearer also-secret", detail: "ghp_abcdefghijklmnop" });
+  runLog.close();
+
+  expect(runLog.path.split("/").at(-1)?.length).toBeLessThan(200);
+  const contents = await readFile(runLog.path, "utf8");
+  expect(contents).toContain('"command":"research"');
+  expect(contents).toContain('"normalizedScore":0.75');
+  expect(contents).toContain("[REDACTED]");
+  expect(contents).not.toMatch(/sk-ant-|transcript|should-not-appear|github_pat_|ghp_/);
 });

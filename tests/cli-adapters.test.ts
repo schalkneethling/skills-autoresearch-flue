@@ -14,6 +14,7 @@ import {
 } from "./helpers.js";
 
 test("parseCliArgs validates currently required adapters", () => {
+  expect(parseCliArgs(["--help"])).toMatchObject({ help: true });
   expect(parseCliArgs(["--project", "/tmp/project", "--with-baseline"])).toMatchObject({
     projectRoot: "/tmp/project",
     withBaseline: true,
@@ -61,6 +62,16 @@ test("parseCliArgs validates currently required adapters", () => {
   expect(() => parseCliArgs(["--model-client", "anthropic", "--budget-usd=-1"])).toThrow(/non-negative/);
   expect(() => parseCliArgs(["--model-client", "anthropic", "--budget-usd", "nope"])).toThrow(/non-negative/);
   expect(() => parseCliArgs(["--project"])).toThrow(/argument missing/);
+});
+
+test("main prints help and returns without requiring an adapter", async () => {
+  const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+  try {
+    await expect(main(["--help"])).resolves.toBeUndefined();
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("Usage: skills-autoresearch"));
+  } finally {
+    log.mockRestore();
+  }
 });
 
 test("JSON mode emits only JSON and includes the run-log path conditionally", async () => {

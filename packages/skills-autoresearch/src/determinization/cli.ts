@@ -58,10 +58,11 @@ export async function runDeterminizationCli(argv: string[]): Promise<void> {
   if (parsed.values.resume && (parsed.values["response-file"] || parsed.values["model-client"])) {
     throw new Error("--resume reuses canonical artifacts and cannot be combined with a model or response file.");
   }
+  if (!parsed.values.resume && !parsed.values["response-file"] && !parsed.values["model-client"]) {
+    throw new Error("Choose a determinization transport: --response-file, --resume, or --model-client anthropic.");
+  }
   const transport = parsed.values["response-file"]
-    ? new StaticDeterminizationTransport(
-        JSON.parse(await readFile(resolve(parsed.values["response-file"]), "utf8")) as unknown
-      )
+    ? new StaticDeterminizationTransport(await readRecordedResponse(parsed.values["response-file"]))
     : parsed.values.resume
       ? undefined
       : new DirectModelDeterminizationTransport(new AnthropicMessagesClient());
@@ -91,4 +92,13 @@ export async function runDeterminizationCli(argv: string[]): Promise<void> {
   );
   if (result.cost.costUsd !== undefined)
     logger.write("log", `Observed determinizer cost: $${result.cost.costUsd.toFixed(4)}`);
+}
+
+async function readRecordedResponse(path: string): Promise<unknown> {
+  const resolvedPath = resolve(path);
+  try {
+    return JSON.parse(await readFile(resolvedPath, "utf8")) as unknown;
+  } catch (error) {
+    throw new Error(`Cannot read --response-file JSON: ${resolvedPath}`, { cause: error });
+  }
 }

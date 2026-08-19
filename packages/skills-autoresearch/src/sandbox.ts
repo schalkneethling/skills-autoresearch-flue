@@ -1,5 +1,5 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, relative, resolve } from "node:path";
+import { appendFile, chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 
 export interface SandboxMount {
   source: string;
@@ -31,7 +31,7 @@ export interface CreateEvalSandboxOptions {
 
 function isWithin(parent: string, child: string): boolean {
   const rel = relative(resolve(parent), resolve(child));
-  return rel === "" || (!!rel && !rel.startsWith("..") && !rel.startsWith("/"));
+  return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel));
 }
 
 function erofs(path: string): NodeJS.ErrnoException {
@@ -76,7 +76,6 @@ export function createEvalSandbox(options: CreateEvalSandboxOptions): EvalSandbo
     },
     async appendFile(path, contents) {
       assertWritable(path);
-      const { appendFile } = await import("node:fs/promises");
       await mkdir(dirname(path), { recursive: true });
       await appendFile(path, contents, "utf8");
     },
@@ -86,18 +85,15 @@ export function createEvalSandbox(options: CreateEvalSandboxOptions): EvalSandbo
     },
     async rm(path) {
       assertWritable(path);
-      const { rm } = await import("node:fs/promises");
       await rm(path, { recursive: true, force: true });
     },
     async cp(from, to) {
       assertWritable(to);
-      const { cp } = await import("node:fs/promises");
       await mkdir(dirname(to), { recursive: true });
       await cp(from, to, { recursive: true });
     },
     async chmod(path, mode) {
       assertWritable(path);
-      const { chmod } = await import("node:fs/promises");
       await chmod(path, mode);
     }
   };

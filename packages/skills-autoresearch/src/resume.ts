@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, relative } from "node:path";
+import { resolveContainedPath } from "./contained-path.js";
 import { AggregateReport } from "./aggregate.js";
 import { JUDGE_TRANSCRIPTS, PRODUCER_TRANSCRIPTS, RESEARCH_TRANSCRIPTS } from "./project-layout.js";
 import {
@@ -385,15 +386,10 @@ function parseSnapshotManifest(value: unknown, markerPath: string, candidateSkil
 }
 
 function resolveContainedCandidatePath(root: string, path: string, markerPath: string): string {
-  if (isAbsolute(path)) {
-    throw new Error(`${markerPath} declares an absolute candidate path: ${path}`);
-  }
-  const destination = resolve(root, path);
-  const rel = relative(resolve(root), destination);
-  if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
-    throw new Error(`${markerPath} declares a candidate path outside its directory: ${path}`);
-  }
-  return destination;
+  return resolveContainedPath(root, path, {
+    absolute: (value) => `${markerPath} declares an absolute candidate path: ${value}`,
+    outside: (value) => `${markerPath} declares a candidate path outside its directory: ${value}`
+  });
 }
 
 function parseProducerTranscript(transcriptPath: string, contents: string, expectedEvalId: string): OutputFile[] {
@@ -410,15 +406,10 @@ async function validateOutputFiles(
 ): Promise<ArtifactInspection<never> | undefined> {
   const seen = new Set<string>();
   for (const outputFile of outputFiles) {
-    if (isAbsolute(outputFile.path)) {
-      throw new Error(`declares an absolute output path: ${outputFile.path}`);
-    }
-
-    const destination = resolve(outputDir, outputFile.path);
-    const rel = relative(resolve(outputDir), destination);
-    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
-      throw new Error(`declares an output path outside its eval directory: ${outputFile.path}`);
-    }
+    const destination = resolveContainedPath(outputDir, outputFile.path, {
+      absolute: (value) => `declares an absolute output path: ${value}`,
+      outside: (value) => `declares an output path outside its eval directory: ${value}`
+    });
     if (seen.has(destination)) {
       throw new Error(`declares the output path more than once: ${outputFile.path}`);
     }

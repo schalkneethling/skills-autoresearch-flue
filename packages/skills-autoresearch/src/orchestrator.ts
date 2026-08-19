@@ -435,8 +435,7 @@ async function runResearchIterations(
         if (iteration === 1) {
           previousSkillDir = await prepareInitialResearchSkillDir(project, seedSkillDir);
         }
-        await improveSkill(
-          options.researcher,
+        await improveSkill(options.researcher, {
           project,
           iteration,
           previousSkillDir,
@@ -447,7 +446,7 @@ async function runResearchIterations(
           previousScores,
           previousAggregate,
           costTracker
-        );
+        });
         emit({ type: "iteration-generated", iteration, candidateSkillDir });
       }
     } else {
@@ -457,8 +456,7 @@ async function runResearchIterations(
       if (iteration === 1) {
         previousSkillDir = await prepareInitialResearchSkillDir(project, seedSkillDir);
       }
-      await improveSkill(
-        options.researcher,
+      await improveSkill(options.researcher, {
         project,
         iteration,
         previousSkillDir,
@@ -469,7 +467,7 @@ async function runResearchIterations(
         previousScores,
         previousAggregate,
         costTracker
-      );
+      });
       emit({ type: "iteration-generated", iteration, candidateSkillDir });
     }
 
@@ -554,34 +552,11 @@ async function runResearchIterations(
   return { iterations, bestIteration };
 }
 
-async function improveSkill(
-  researcher: SkillResearcher,
-  project: ProjectInputs,
-  iteration: number,
-  previousSkillDir: string,
-  candidateSkillDir: string,
-  guidanceSkillDir: string | undefined,
-  guidanceLedgerPath: string | undefined,
-  baselineScores: EvalScore[],
-  previousScores: EvalScore[],
-  previousAggregate: AggregateReport,
-  costTracker: ModelRunCostTracker
-): Promise<void> {
-  await researcher.improve({
-    project,
-    iteration,
-    previousSkillDir,
-    candidateSkillDir,
-    guidanceSkillDir,
-    guidanceLedgerPath,
-    baselineScores,
-    previousScores,
-    previousAggregate,
-    costTracker
-  });
+async function improveSkill(researcher: SkillResearcher, request: SkillResearchRequest): Promise<void> {
+  await researcher.improve(request);
   await assertExists(
-    candidateSkillDir,
-    `Researcher did not create candidate skill directory for iteration ${iteration}`
+    request.candidateSkillDir,
+    `Researcher did not create candidate skill directory for iteration ${request.iteration}`
   );
 }
 
@@ -936,8 +911,8 @@ function resolveProjectConfigPath(project: ProjectInputs, path: string): string 
 async function assertExists(path: string, message: string): Promise<void> {
   try {
     await stat(path);
-  } catch {
-    throw new Error(message);
+  } catch (error) {
+    throw new Error(message, { cause: error });
   }
 }
 

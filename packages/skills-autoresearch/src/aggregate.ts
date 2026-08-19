@@ -21,12 +21,14 @@ export interface AggregateReport {
 }
 
 export function aggregateScores(config: ProjectConfig, scores: EvalScore[]): AggregateReport {
+  const matchedScores = new Set<EvalScore>();
   const tracks = config.tracks.map((track) => {
     const trackScores = scores.filter(
       (score) =>
         score.track_id === track.id ||
         ((score.track_id === null || score.track_id === undefined) && score.eval_type === track.eval_type)
     );
+    trackScores.forEach((item) => matchedScores.add(item));
     const score = trackScores.reduce((sum, item) => sum + item.total_score, 0);
     const maxScore = trackScores.reduce((sum, item) => sum + item.max_score, 0);
     return {
@@ -39,6 +41,15 @@ export function aggregateScores(config: ProjectConfig, scores: EvalScore[]): Agg
       evalCount: trackScores.length
     };
   });
+
+  const unmatchedScores = scores.filter((item) => !matchedScores.has(item));
+  if (unmatchedScores.length > 0) {
+    throw new Error(
+      `Cannot aggregate scores without a configured track: ${unmatchedScores
+        .map((item) => `${item.eval_id} (${item.track_id ?? item.eval_type})`)
+        .join(", ")}`
+    );
+  }
 
   const score = tracks.reduce((sum, track) => sum + track.score, 0);
   const maxScore = tracks.reduce((sum, track) => sum + track.maxScore, 0);

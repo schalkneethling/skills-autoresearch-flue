@@ -1,10 +1,13 @@
 import { execFile, type ExecFileException } from "node:child_process";
-import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, relative, resolve } from "node:path";
+import { cp, lstat, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, join, relative } from "node:path";
 import { ModelCallRole, ModelUsage } from "./cost.js";
 import { SkillResearcher, SkillResearchRequest } from "./orchestrator.js";
 import { persistResearchArtifact, persistTranscript, withArtifactStage } from "./artifact-lifecycle.js";
 import { projectLayout } from "./project-layout.js";
+import { DEFAULT_MODEL } from "./model.js";
+import { resolveContainedPath as resolveContained } from "./contained-path.js";
+import { extractScoreJson, validateEvalScore } from "./score.js";
 import { EvalAgent, EvalAgentRequest } from "./runner.js";
 import { buildJudgePrompt } from "./prompts/judge-prompt.js";
 import { buildProducePrompt } from "./prompts/produce-prompt.js";
@@ -42,6 +45,7 @@ export interface ModelRequest {
   model: ModelConfig;
   phase?: string;
   workspaceDir?: string;
+  signal?: AbortSignal;
 }
 
 export interface ModelCompletionResponse {
@@ -60,6 +64,8 @@ export interface AnthropicMessagesClientOptions {
   version?: string;
   maxTokens?: number;
   fetch?: typeof fetch;
+  timeoutMs?: number;
+  maxAttempts?: number;
 }
 
 export class AnthropicMessagesClient implements ModelClient {
@@ -67,6 +73,8 @@ export class AnthropicMessagesClient implements ModelClient {
   readonly #version: string;
   readonly #maxTokens: number;
   readonly #fetch: typeof fetch;
+  readonly #timeoutMs: number;
+  readonly #maxAttempts: number;
 
   constructor(options: AnthropicMessagesClientOptions = {}) {
     const apiKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY;
@@ -77,6 +85,8 @@ export class AnthropicMessagesClient implements ModelClient {
     this.#version = options.version ?? "2023-06-01";
     this.#maxTokens = options.maxTokens ?? 4096;
     this.#fetch = options.fetch ?? fetch;
+    this.#timeoutMs = options.timeoutMs ?? 60_000;
+    this.#maxAttempts = options.maxAttempts ?? 3;
   }
 
   async complete(request: ModelRequest): Promise<ModelCompletion> {
@@ -84,24 +94,49 @@ export class AnthropicMessagesClient implements ModelClient {
       throw new Error(`AnthropicMessagesClient cannot run provider "${request.model.provider}"`);
     }
 
-    const response = await this.#fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": this.#apiKey,
-        "anthropic-version": this.#version
-      },
-      body: JSON.stringify({
-        model: request.model.name,
-        max_tokens: this.#maxTokens,
-        system: request.system,
-        messages: [{ role: "user", content: request.prompt }]
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic request failed with ${response.status}: ${await response.text()}`);
+    let response: Response | undefined;
+    let finalError: Error | undefined;
+    for (let attempt = 0; attempt < this.#maxAttempts; attempt++) {
+      const controller = new AbortController();
+      const onAbort = () => controller.abort(request.signal?.reason);
+      request.signal?.addEventListener("abort", onAbort, { once: true });
+      const timeout = setTimeout(() => controller.abort(new Error("Anthropic request timed out")), this.#timeoutMs);
+      try {
+        response = await this.#fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-api-key": this.#apiKey,
+            "anthropic-version": this.#version
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: request.model.name,
+            max_tokens: this.#maxTokens,
+            system: request.system,
+            messages: [{ role: "user", content: request.prompt }]
+          })
+        });
+      } catch (error) {
+        finalError = error instanceof Error ? error : new Error(String(error));
+        if (attempt + 1 >= this.#maxAttempts || controller.signal.aborted) throw finalError;
+      } finally {
+        clearTimeout(timeout);
+        request.signal?.removeEventListener("abort", onAbort);
+      }
+      if (response?.ok) break;
+      if (response && response.status !== 429 && response.status !== 503) {
+        throw new Error(`Anthropic request failed with ${response.status}: ${await response.text()}`);
+      }
+      if (response)
+        finalError = new Error(`Anthropic request failed with ${response.status}: ${await response.text()}`);
+      if (attempt + 1 < this.#maxAttempts) {
+        const retryAfter = Number(response?.headers.get("retry-after"));
+        const delayMs = Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter * 1000 : 250 * 2 ** attempt;
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, Math.min(delayMs, 5_000)));
+      }
     }
+    if (!response?.ok) throw finalError ?? new Error("Anthropic request failed");
 
     const body = (await response.json()) as {
       content?: Array<{ type?: string; text?: string }>;
@@ -305,13 +340,13 @@ export function parseModelProduceResponse(response: string): ModelProduceRespons
 }
 
 export function parseModelJudgeResponse(response: string, evalCase: EvalCase, track: Track): EvalScore {
-  const score = parseWithSchema(EvalScoreSchema, parseJson(response, "Model judge response"), "model judge response");
-  validateEvalScore(score, evalCase, track);
-  return score;
+  return validateModelJudgeResponse(extractScoreJson(response), evalCase, track);
 }
 
-export function validateModelProduceResponse(response: ModelProduceResponse): ModelProduceResponse {
-  return response;
+export function validateModelJudgeResponse(response: unknown, evalCase: EvalCase, track: Track): EvalScore {
+  const score = parseWithSchema(EvalScoreSchema, response, "model judge response");
+  validateEvalScore(score, evalCase, track);
+  return score;
 }
 
 export async function applyOutputFiles(outputDir: string, files: OutputFile[]): Promise<void> {
@@ -330,8 +365,7 @@ export async function buildResearchModelRequest(request: SkillResearchRequest): 
   const evalFiles = await readFilesFromMount(join(workspaceDir, "evals"));
   const guidanceLedger = await readGuidanceLedger(request.guidanceLedgerPath);
   return checkedModelRequest({
-    model: request.project.config.models?.researcher ??
-      request.project.config.model ?? { provider: "anthropic", name: "claude-sonnet-4-6" },
+    model: request.project.config.models?.researcher ?? request.project.config.model ?? DEFAULT_MODEL,
     system: request.project.config.roles.skill_builder,
     phase: `research iteration ${request.iteration}`,
     workspaceDir,
@@ -493,31 +527,10 @@ function resolveSkillPath(skillDir: string, path: string): string {
 }
 
 function resolveContainedPath(rootDir: string, path: string, label: string): string {
-  const root = resolve(rootDir);
-  const destination = resolve(root, path);
-  const rel = relative(root, destination);
-  if (rel === "" || rel.startsWith("..") || rel.startsWith("/")) {
-    throw new Error(`${label} escapes target directory: ${path}`);
-  }
-  return destination;
-}
-
-function validateEvalScore(score: EvalScore, evalCase: EvalCase, track: Track): void {
-  const knownDimensions = new Set(evalCase.scoring_dimensions.map((dimension) => dimension.id));
-  const unknown = score.dimensions.filter((dimension) => !knownDimensions.has(dimension.id));
-
-  if (score.eval_id !== evalCase.id) {
-    throw new Error(`Judge score eval_id "${score.eval_id}" does not match "${evalCase.id}"`);
-  }
-  if (score.eval_type !== evalCase.eval_type) {
-    throw new Error(`Judge score eval_type "${score.eval_type}" does not match "${evalCase.eval_type}"`);
-  }
-  if (score.track_id !== track.id) {
-    throw new Error(`Judge score track_id "${score.track_id}" does not match "${track.id}"`);
-  }
-  if (unknown.length > 0) {
-    throw new Error(`Judge score included unknown dimensions: ${unknown.map((dimension) => dimension.id).join(", ")}`);
-  }
+  return resolveContained(rootDir, path, {
+    absolute: (value) => `${label} escapes target directory: ${value}`,
+    outside: (value) => `${label} escapes target directory: ${value}`
+  });
 }
 
 export function formatResearchSummary(
@@ -571,7 +584,7 @@ export async function validateChangedScripts(
           return runScriptValidation(change.path, path, "javascript", "node --check");
         }
         if ([".ts", ".mts", ".cts"].includes(extension)) {
-          return runScriptValidation(change.path, path, "typescript", "node --experimental-strip-types --check");
+          return runScriptValidation(change.path, path, "typescript", "TypeScript parser");
         }
         if ([".sh", ".bash"].includes(extension)) {
           return runScriptValidation(change.path, path, "shell", "/bin/bash -n");
@@ -634,7 +647,17 @@ function executeScriptValidator(validator: ScriptValidator, absolutePath: string
         execFile("node", ["--check", absolutePath], options, complete);
         break;
       case "typescript":
-        execFile("node", ["--experimental-strip-types", "--check", absolutePath], options, complete);
+        execFile(
+          process.execPath,
+          [
+            "--input-type=module",
+            "--eval",
+            "import ts from 'typescript'; import fs from 'node:fs'; const p=process.argv[1]; const s=fs.readFileSync(p,'utf8'); const k=p.endsWith('.tsx')?ts.ScriptKind.TSX:ts.ScriptKind.TS; const d=ts.createSourceFile(p,s,ts.ScriptTarget.Latest,true,k).parseDiagnostics; if(d.length){console.error(d.map(x=>ts.flattenDiagnosticMessageText(x.messageText,'\\n')).join('\\n'));process.exitCode=1;}",
+            absolutePath
+          ],
+          options,
+          complete
+        );
         break;
       case "shell":
         execFile("/bin/bash", ["-n", absolutePath], options, complete);
@@ -665,10 +688,15 @@ async function readFilesFromMount(root: string | undefined): Promise<Array<{ pat
   }
   const files = await listTextFiles(root);
   return Promise.all(
-    files.map(async (path) => ({
-      path: relative(root, path),
-      contents: await readFile(path, "utf8")
-    }))
+    files.map(async (path) => {
+      const metadata = await lstat(path);
+      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > 1024 * 1024) {
+        throw new Error(`Mounted file exceeds the 1 MiB limit or is not a regular file: ${path}`);
+      }
+      const contents = await readFile(path, "utf8");
+      if (Buffer.byteLength(contents) > 1024 * 1024) throw new Error(`Mounted file exceeds the 1 MiB limit: ${path}`);
+      return { path: relative(root, path), contents };
+    })
   );
 }
 

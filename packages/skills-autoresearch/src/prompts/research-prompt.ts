@@ -125,6 +125,7 @@ function formatRegressionContext(
 }
 
 function scoreRegressions(baselineScores: EvalScore[], previousScores: EvalScore[]) {
+  // Prompt context walks every baseline eval; a missing previous score is a 0/0 regression.
   const previousByEval = new Map(previousScores.map((score) => [score.eval_id, score]));
   return baselineScores
     .map((baseline) => {
