@@ -1,0 +1,16 @@
+id: no-unabortable-delay-in-loop
+message: Retry delays inside loops must observe the caller's AbortSignal.
+severity: error
+language: TypeScript
+files:
+  - packages/skills-autoresearch/src/**/*.ts
+rule:
+  all:
+    - pattern: await new Promise(($RESOLVE) => setTimeout($RESOLVE, $DELAY))
+    - inside:
+        any:
+          - kind: for_statement
+          - kind: for_in_statement
+          - kind: while_statement
+          - kind: do_statement
+        stopBy: end

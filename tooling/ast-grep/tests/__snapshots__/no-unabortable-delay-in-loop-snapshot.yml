@@ -1,0 +1,20 @@
+id: no-unabortable-delay-in-loop
+snapshots:
+  ? |
+    async function retry() {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+  : labels:
+      - source: await new Promise((resolve) => setTimeout(resolve, 250))
+        style: primary
+        start: 79
+        end: 135
+      - source: |-
+          for (let attempt = 0; attempt < 3; attempt++) {
+              await new Promise((resolve) => setTimeout(resolve, 250));
+            }
+        style: secondary
+        start: 27
+        end: 140

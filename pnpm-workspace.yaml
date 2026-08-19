@@ -3,6 +3,7 @@ packages:
   - "compat/flue2-role-boundary"
 
 allowBuilds:
+  "@ast-grep/cli": false
   "@google/genai": true
   "@mongodb-js/zstd": true
   esbuild: true

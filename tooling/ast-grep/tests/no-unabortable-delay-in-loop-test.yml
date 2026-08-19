@@ -1,0 +1,19 @@
+id: no-unabortable-delay-in-loop
+valid:
+  - |
+    async function retry(signal: AbortSignal) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await abortableDelay(250, signal);
+      }
+    }
+  - |
+    async function oneShot() {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+invalid:
+  - |
+    async function retry() {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
