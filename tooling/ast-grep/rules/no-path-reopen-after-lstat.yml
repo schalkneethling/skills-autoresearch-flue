@@ -1,0 +1,15 @@
+id: no-path-reopen-after-lstat
+message: Open and bound the validated file through one descriptor instead of reopening its path with readFile.
+severity: error
+language: TypeScript
+files:
+  - packages/skills-autoresearch/src/**/*.ts
+rule:
+  all:
+    - pattern: await readFile($PATH, $$$ARGS)
+    - inside:
+        kind: function_declaration
+        has:
+          pattern: await lstat($PATH)
+          stopBy: end
+        stopBy: end

@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "lint": "eslint .",
+    "lint": "eslint . && pnpm run lint:ast",
+    "lint:ast": "ast-grep scan && ast-grep test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "knip": "knip",
@@ -26,6 +27,7 @@
     "env:check": "varlock load"
   },
   "devDependencies": {
+    "@ast-grep/cli": "0.45.1",
     "@earendil-works/pi-ai": "0.83.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.1.2",

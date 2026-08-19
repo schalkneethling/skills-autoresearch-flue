@@ -13,7 +13,7 @@ import {
   type AnalysisArtifactResult
 } from "./artifacts.js";
 import { loadDeterministicAssetCatalog } from "./catalog.js";
-import { createSourceManifest, MAX_DETERMINIZATION_SOURCE_FILE_BYTES, type SourceSelection } from "./source.js";
+import { createSourceManifest, readBoundedDeterminizationFile, type SourceSelection } from "./source.js";
 import type { DeterminizationTransport } from "./transport.js";
 
 const MAX_TOTAL_BYTES = 2 * 1024 * 1024;
@@ -243,15 +243,8 @@ async function prepareInputs(
   for (const selection of selections.filter(({ namespace }) => namespace !== "catalog")) {
     for (const path of selection.paths) {
       const absolute = join(selection.root, ...path.split("/"));
-      const metadata = await lstat(absolute);
-      if (metadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
-        throw new Error(`Determinization input exceeds 256 KiB: ${path}`);
-      }
-      const contents = await readFile(absolute, "utf8");
+      const contents = (await readBoundedDeterminizationFile(absolute, path)).toString("utf8");
       const bytes = Buffer.byteLength(contents);
-      if (bytes > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
-        throw new Error(`Determinization input exceeds 256 KiB: ${path}`);
-      }
       totalBytes += bytes;
       if (totalBytes > MAX_TOTAL_BYTES) throw new Error("Determinization inputs exceed the 2 MiB total limit");
       files.push({ path: `${selection.namespace}/${path}`, contents });
