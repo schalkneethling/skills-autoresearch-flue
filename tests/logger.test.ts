@@ -132,7 +132,12 @@ test("run logs allowlist lifecycle metadata, redact secrets, and bound session f
     response: "Bearer should-not-appear",
     error: { stack: "github_pat_abcdefghijklmnop" }
   });
-  runLog.append("run-event", { authorization: "Bearer also-secret", detail: "ghp_abcdefghijklmnop" });
+  runLog.append("run-event", {
+    authorization: "Bearer also-secret",
+    detail: "ghp_abcdefghijklmnop",
+    privateKey: "must-not-appear",
+    pem: "-----BEGIN PRIVATE KEY-----\nprivate-material\n-----END PRIVATE KEY-----"
+  });
   runLog.close();
 
   expect(runLog.path.split("/").at(-1)?.length).toBeLessThan(200);
@@ -140,5 +145,7 @@ test("run logs allowlist lifecycle metadata, redact secrets, and bound session f
   expect(contents).toContain('"command":"research"');
   expect(contents).toContain('"normalizedScore":0.75');
   expect(contents).toContain("[REDACTED]");
-  expect(contents).not.toMatch(/sk-ant-|transcript|should-not-appear|github_pat_|ghp_/);
+  expect(contents).not.toMatch(
+    /sk-ant-|transcript|should-not-appear|github_pat_|ghp_|must-not-appear|private-material/
+  );
 });

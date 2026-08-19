@@ -1,5 +1,6 @@
 import { appendFile, chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { assertNoSymlinkPathComponents } from "./contained-path.js";
 
 export interface SandboxMount {
   source: string;
@@ -31,7 +32,7 @@ export interface CreateEvalSandboxOptions {
 
 function isWithin(parent: string, child: string): boolean {
   const rel = relative(resolve(parent), resolve(child));
-  return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel));
+  return rel === "" || (!!rel && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
 function erofs(path: string): NodeJS.ErrnoException {
@@ -60,6 +61,11 @@ export function createEvalSandbox(options: CreateEvalSandboxOptions): EvalSandbo
       throw erofs(path);
     }
     if (!isWithin(outputDir, absolute)) {
+      throw erofs(path);
+    }
+    try {
+      assertNoSymlinkPathComponents(outputDir, absolute);
+    } catch {
       throw erofs(path);
     }
   };

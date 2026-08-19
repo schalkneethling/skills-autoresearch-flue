@@ -265,6 +265,19 @@ test("quiet result formatting preserves autoresearch and determinization summari
     "Determinization report: /tmp/project/workspace/determinization/report.md; opportunities 2; " +
       "deterministic assets 3; model calls 1; observed cost $0.0042"
   );
+  expect(
+    formatQuietResult(
+      JSON.stringify({
+        paths: { report: "/tmp/project/workspace/determinization/report.md" },
+        opportunityCount: 2,
+        recommendationCount: 3,
+        cost: { actualCalls: 1 }
+      })
+    )
+  ).toBe(
+    "Determinization report: /tmp/project/workspace/determinization/report.md; opportunities 2; " +
+      "deterministic assets 3; model calls 1"
+  );
 });
 
 function createRuntime(overrides: Partial<FlueRoleDispatcher>): FlueRoleRuntime {

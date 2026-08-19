@@ -648,4 +648,19 @@ test("AnthropicMessagesClient retries rate limits and aborts a timed-out attempt
       request
     )
   ).rejects.toThrow("Anthropic request timed out");
+
+  let backoffAttempts = 0;
+  const backoffFetch: typeof fetch = async () => {
+    backoffAttempts += 1;
+    return new Response("busy", { status: 503, headers: { "retry-after": "5" } });
+  };
+  const controller = new AbortController();
+  const completion = new AnthropicMessagesClient({ apiKey: "test-key", fetch: backoffFetch }).complete({
+    ...request,
+    signal: controller.signal
+  });
+  await vi.waitFor(() => expect(backoffAttempts).toBe(1));
+  controller.abort(new Error("caller cancelled"));
+  await expect(completion).rejects.toThrow("caller cancelled");
+  expect(backoffAttempts).toBe(1);
 });
