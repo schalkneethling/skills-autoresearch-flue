@@ -3,6 +3,7 @@ import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { beforeAll } from "vitest";
 import { runDeterminizationReport } from "../packages/skills-autoresearch/src/determinization/run.js";
 import { StaticDeterminizationTransport } from "../packages/skills-autoresearch/src/determinization/transport.js";
 import { loadAvailableFlueRoles } from "../packages/skills-autoresearch/src/flue-roles.js";
@@ -23,6 +24,14 @@ const fixtureResponse = join(
   "analysis-response.json"
 );
 const execFileAsync = promisify(execFile);
+
+beforeAll(async () => {
+  await execFileAsync(process.execPath, [
+    join(repositoryRoot, "node_modules", "typescript", "bin", "tsc"),
+    "-p",
+    join(packageRoot, "tsconfig.json")
+  ]);
+}, 15_000);
 
 type PackageManifest = {
   version: string;
@@ -125,11 +134,6 @@ test("the release-notes fixture carries every Flue role named by its configurati
 test("both public CLI entrypoints report the package version from a directory with spaces", async () => {
   const manifest = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as PackageManifest;
   expect(Object.keys(manifest.bin).sort()).toEqual(["skills-autoresearch", "skills-autoresearch-flue"]);
-  await execFileAsync(process.execPath, [
-    join(repositoryRoot, "node_modules", "typescript", "bin", "tsc"),
-    "-p",
-    join(packageRoot, "tsconfig.json")
-  ]);
 
   for (const [name, binary] of Object.entries(manifest.bin)) {
     const binaryPath = join(packageRoot, binary);
