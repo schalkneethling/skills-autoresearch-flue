@@ -6,7 +6,7 @@ import {
   buildJudgeModelRequest,
   buildProduceModelRequest,
   buildResearchModelRequest,
-  parseModelJudgeResponse,
+  validateModelJudgeResponse,
   researchArtifactOperations
 } from "./model-agent.js";
 import { persistResearchArtifact, persistTranscript } from "./artifact-lifecycle.js";
@@ -68,7 +68,7 @@ export class FlueEvalAgent implements EvalAgent {
       judgeRequest,
       scoreResult
     );
-    const validated = parseModelJudgeResponse(JSON.stringify(score), request.evalCase, request.track);
+    const validated = validateModelJudgeResponse(score, request.evalCase, request.track);
     await persistTranscript(join(request.sandbox.outputDir, "judge-flue-transcript.json"), judgeRequest, validated);
     return validated;
   }

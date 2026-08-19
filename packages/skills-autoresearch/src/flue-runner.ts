@@ -8,7 +8,7 @@ import { runFlueAutoresearch, type FlueWorkflowResult } from "./flue-harness.js"
 import { withFlueRoleRuntime } from "./flue-runtime.js";
 import { orchestrateBaseline, type OrchestratorResult, type RunEvent } from "./orchestrator.js";
 import { createRunLog } from "./run-log.js";
-import { normalizeRunOptions } from "./run-options.js";
+import { normalizeRunOptions, parseBudgetUsd } from "./run-options.js";
 import { readPackageVersion } from "./package-resources.js";
 
 export type RunnerMode = "smoke" | "research" | "determinize";
@@ -287,7 +287,7 @@ export function parseRunnerArgs(argv: string[]): RunnerOptions {
   }
 
   if (positionals.length !== 1 || !isRunnerMode(positionals[0])) {
-    throw new Error("Choose a config-driven command: smoke or research, or determinize. Use --help for usage.");
+    throw new Error("Choose a config-driven command: smoke, research, or determinize. Use --help for usage.");
   }
 
   const mode = positionals[0];
@@ -374,39 +374,32 @@ function parsePayload(value: string): Record<string, unknown> {
   return payload as Record<string, unknown>;
 }
 
-function parseBudgetUsd(value: string | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (value.trim() === "") {
-    throw new Error("--budget-usd must be a non-negative number.");
-  }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error("--budget-usd must be a non-negative number.");
-  }
-  return parsed;
-}
-
 export function formatFlueModelCallPreview(workflow: "autoresearch" | "determinize"): string | undefined {
   return workflow === "determinize" ? "Determinizer model call preview: 1 planned call(s)." : undefined;
 }
 
-export function formatQuietResult(output: string, truncated = false): string | undefined {
+type QuietDeterminizationResult = {
+  paths: { report: string };
+  opportunityCount?: number;
+  recommendationCount?: number;
+  cost?: { actualCalls?: number; costUsd?: number };
+};
+
+type QuietAutoresearchResult = Partial<FlueWorkflowResult>;
+
+function isQuietDeterminizationResult(
+  result: QuietAutoresearchResult | QuietDeterminizationResult
+): result is QuietDeterminizationResult {
+  return "paths" in result;
+}
+
+export function formatQuietResult(output: string): string | undefined {
   const jsonStart = output.indexOf("{");
-  if (jsonStart === -1) {
-    return truncated
-      ? "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
-      : undefined;
-  }
+  if (jsonStart === -1) return undefined;
   try {
-    const result = JSON.parse(output.slice(jsonStart)) as Partial<FlueWorkflowResult> & {
-      paths?: { report?: string };
-      opportunityCount?: number;
-      recommendationCount?: number;
-    };
-    if (result.paths?.report) {
-      const determinizationCost = (result as unknown as { cost?: { actualCalls?: number; costUsd?: number } }).cost;
+    const result = JSON.parse(output.slice(jsonStart)) as QuietAutoresearchResult | QuietDeterminizationResult;
+    if (isQuietDeterminizationResult(result)) {
+      const determinizationCost = result.cost;
       return (
         `Determinization report: ${result.paths.report}; opportunities ${result.opportunityCount ?? "unknown"}; ` +
         `deterministic assets ${result.recommendationCount ?? "unknown"}; model calls ${determinizationCost?.actualCalls ?? "unknown"}` +
@@ -421,8 +414,6 @@ export function formatQuietResult(output: string, truncated = false): string | u
       (result.bestSkillDir ? `; best skill ${result.bestSkillDir}` : "")
     );
   } catch {
-    return truncated
-      ? "Run completed, but its structured result exceeded the 1 MiB quiet-mode buffer; inspect the run log or rerun with --verbose."
-      : undefined;
+    return undefined;
   }
 }

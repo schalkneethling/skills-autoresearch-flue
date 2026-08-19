@@ -45,7 +45,7 @@ export const securityConfig = {
   skill_name: "frontend-security",
   topic_group: "frontend-injection-and-defence",
   origin_skill: "~/dev/claude-toolkit/skills/frontend-security",
-  target_score: 2.7,
+  target_score: 0.9,
   max_iterations: 5,
   max_concurrency: 2,
   model: {

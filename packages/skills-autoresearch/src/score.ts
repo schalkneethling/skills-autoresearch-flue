@@ -12,6 +12,11 @@ export function extractScoreJson(response: string): unknown {
 
 export function parseEvalScore(response: string, evalCase: EvalCase, track: Track): EvalScore {
   const score = parseWithSchema(EvalScoreSchema, extractScoreJson(response), "judge score");
+  validateEvalScore(score, evalCase, track);
+  return score;
+}
+
+export function validateEvalScore(score: EvalScore, evalCase: EvalCase, track: Track): void {
   const knownDimensions = new Set(evalCase.scoring_dimensions.map((dimension) => dimension.id));
   const unknown = score.dimensions.filter((dimension) => !knownDimensions.has(dimension.id));
 
@@ -27,6 +32,4 @@ export function parseEvalScore(response: string, evalCase: EvalCase, track: Trac
   if (unknown.length > 0) {
     throw new Error(`Judge score included unknown dimensions: ${unknown.map((dimension) => dimension.id).join(", ")}`);
   }
-
-  return score;
 }

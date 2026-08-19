@@ -58,6 +58,14 @@ async function readBoundedHandle(handle: FileHandle, label: string): Promise<Buf
 
 export async function readBoundedDeterminizationFile(path: string, label: string): Promise<Buffer> {
   const metadata = await lstat(path);
+  return readBoundedRegularFile(path, label, metadata);
+}
+
+async function readBoundedRegularFile(
+  path: string,
+  label: string,
+  metadata: Awaited<ReturnType<typeof lstat>>
+): Promise<Buffer> {
   if (!metadata.isFile() || metadata.isSymbolicLink()) {
     throw new Error(`Only regular files are valid determinization inputs: ${label}`);
   }
@@ -172,23 +180,11 @@ export async function createSourceManifest(
           throw new Error(`Symbolic links are not valid determinization inputs: ${logicalPath}`);
         }
       }
-      if (!metadata.isFile()) throw new Error(`Only regular files are valid determinization inputs: ${logicalPath}`);
-      if (metadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
-        throw oversizedInputError(logicalPath);
-      }
-      const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW);
-      try {
-        const openedMetadata = await handle.stat();
-        if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
-          throw new Error(`Source input changed during determinization: ${logicalPath}`);
-        }
-        if (openedMetadata.size > MAX_DETERMINIZATION_SOURCE_FILE_BYTES) {
-          throw oversizedInputError(logicalPath);
-        }
-        entries.push({ path: logicalPath, sha256: sha256(await readBoundedHandle(handle, logicalPath)) });
-      } finally {
-        await handle.close();
-      }
+      // Directory components can be replaced between lstat and open; Node has no openat-style
+      // resolution to close that race. This is limited to local writes inside the project tree,
+      // and O_NOFOLLOW below protects only the final component.
+      const contents = await readBoundedRegularFile(target, logicalPath, metadata);
+      entries.push({ path: logicalPath, sha256: sha256(contents) });
     }
   }
   entries.sort((left, right) => compareCodePoints(left.path, right.path));

@@ -540,6 +540,30 @@ test("validateChangedScripts records failed syntax checks without executing gene
   ]);
 });
 
+test.each(["ts", "mts", "cts"])("validateChangedScripts parses valid .%s TypeScript syntax", async (extension) => {
+  const root = await tempProject();
+  await mkdir(join(root, "scripts"));
+  const relativePath = `scripts/valid.${extension}`;
+  const contents = "interface Result { readonly value: number }\nconst result = { value: 1 } satisfies Result;\n";
+  await writeFile(join(root, relativePath), contents);
+  const patch = parseSkillResearchPatch(
+    JSON.stringify({
+      summary: "Add typed deterministic logic.",
+      resource_decisions: [{ path: relativePath, placement: "script", reason: "Reuse deterministic logic." }],
+      changes: [{ path: relativePath, contents }]
+    })
+  );
+
+  await expect(validateChangedScripts(root, patch)).resolves.toEqual([
+    {
+      path: relativePath,
+      status: "passed",
+      validator: "TypeScript parser",
+      note: "Focused syntax validation passed."
+    }
+  ]);
+});
+
 test("validateChangedScripts passes shell metacharacters as literal path arguments", async () => {
   const root = await tempProject();
   const scriptPath = "scripts/check; echo not-a-command.js";
@@ -595,4 +619,33 @@ test("AnthropicMessagesClient posts messages request and extracts text response"
     system: "system prompt",
     messages: [{ role: "user", content: "user prompt" }]
   });
+});
+
+test("AnthropicMessagesClient retries rate limits and aborts a timed-out attempt", async () => {
+  let attempts = 0;
+  const retryingFetch: typeof fetch = async () => {
+    attempts += 1;
+    if (attempts === 1) return new Response("busy", { status: 429, headers: { "retry-after": "0" } });
+    return new Response(JSON.stringify({ content: [{ type: "text", text: "Recovered" }] }), { status: 200 });
+  };
+  const request = {
+    model: { provider: "anthropic" as const, name: "claude-sonnet-4-6" },
+    system: "system prompt",
+    prompt: "user prompt"
+  };
+
+  await expect(
+    new AnthropicMessagesClient({ apiKey: "test-key", fetch: retryingFetch, maxAttempts: 2 }).complete(request)
+  ).resolves.toMatchObject({ text: "Recovered" });
+  expect(attempts).toBe(2);
+
+  const hangingFetch: typeof fetch = async (_url, init) =>
+    new Promise((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+    });
+  await expect(
+    new AnthropicMessagesClient({ apiKey: "test-key", fetch: hangingFetch, timeoutMs: 5, maxAttempts: 1 }).complete(
+      request
+    )
+  ).rejects.toThrow("Anthropic request timed out");
 });

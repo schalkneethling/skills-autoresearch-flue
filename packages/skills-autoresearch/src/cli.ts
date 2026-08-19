@@ -6,7 +6,7 @@ import { createLogger, Logger, LogLevel } from "./logger.js";
 import { AnthropicMessagesClient, ModelEvalAgent, ModelSkillResearcher } from "./model-agent.js";
 import { orchestrateBaseline, OrchestrateOptions, RunEvent } from "./orchestrator.js";
 import { createRunLog } from "./run-log.js";
-import { normalizeRunOptions, RunOptions } from "./run-options.js";
+import { normalizeRunOptions, parseBudgetUsd, RunOptions } from "./run-options.js";
 import { determinizationUsage, runDeterminizationCli } from "./determinization/cli.js";
 import { readPackageVersion } from "./package-resources.js";
 
@@ -17,6 +17,7 @@ export interface CliOptions extends RunOptions {
   json: boolean;
   verbose: boolean;
   writeRunLog: boolean;
+  help: boolean;
 }
 
 function usage(): string {
@@ -71,11 +72,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
     allowPositionals: false
   });
 
-  if (parsed.values.help) {
-    createLogger().write("log", usage());
-    process.exit(0);
-  }
-
   const options: CliOptions = {
     ...normalizeRunOptions({
       projectRoot: parsed.values.project,
@@ -92,8 +88,11 @@ export function parseCliArgs(argv: string[]): CliOptions {
     modelClient: parseModelClient(parsed.values["model-client"]),
     json: parsed.values.json ?? false,
     verbose: parsed.values.verbose ?? false,
-    writeRunLog: !(parsed.values["no-run-log"] ?? false)
+    writeRunLog: !(parsed.values["no-run-log"] ?? false),
+    help: parsed.values.help ?? false
   };
+
+  if (options.help) return options;
 
   if (options.scoreDir && options.modelClient) {
     throw new Error("Use either --score-dir or --model-client, not both.");
@@ -106,20 +105,6 @@ export function parseCliArgs(argv: string[]): CliOptions {
   }
 
   return options;
-}
-
-function parseBudgetUsd(value: string | boolean | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (typeof value !== "string") {
-    throw new Error("--budget-usd must be a non-negative number.");
-  }
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error("--budget-usd must be a non-negative number.");
-  }
-  return parsed;
 }
 
 function parseModelClient(value: string | boolean | undefined): "anthropic" | undefined {
@@ -146,6 +131,10 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     return;
   }
   const cli = parseCliArgs(argv);
+  if (cli.help) {
+    createLogger().write("log", usage());
+    return;
+  }
   const logger = createLogger(console, { verbose: cli.verbose });
   const runLog = cli.writeRunLog ? createRunLog(cli.projectRoot, "standalone-cli") : undefined;
   if (runLog) {

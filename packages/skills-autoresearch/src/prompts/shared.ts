@@ -29,9 +29,13 @@ export function formatFileSet(files: MountedFile[], label: string): string {
   }
 
   if (omittedFiles > 0) {
-    formatted.push(
-      `[${omittedFiles} file(s) omitted from ${label}; ${MAX_FILE_SET_CHARS} char file-set budget exhausted.]`
-    );
+    let notice = `[${omittedFiles} file(s) omitted from ${label}; ${MAX_FILE_SET_CHARS} char file-set budget exhausted.]`;
+    while (formatted.length > 0 && [...formatted, notice].join("\n\n").length > MAX_FILE_SET_CHARS) {
+      formatted.pop();
+      omittedFiles++;
+      notice = `[${omittedFiles} file(s) omitted from ${label}; ${MAX_FILE_SET_CHARS} char file-set budget exhausted.]`;
+    }
+    formatted.push(notice);
   }
 
   return formatted.join("\n\n");

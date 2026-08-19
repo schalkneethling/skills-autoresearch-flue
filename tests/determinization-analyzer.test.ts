@@ -143,17 +143,20 @@ test("sorts source references canonically and preserves the same bytes and hash"
   expect(canonicalAnalysisSha256(normalizedForward)).toBe(canonicalAnalysisSha256(normalizedReversed));
 });
 
-test("normalizes composed and decomposed source-reference paths to the same canonical identity", async () => {
+test("normalizes composed and decomposed source-reference paths and locators to the same canonical identity", async () => {
   const catalog = await loadDeterministicAssetCatalog(catalogPath);
   const composed = conciseResponse();
   composed.opportunities[0].source_refs[0].path = "skill/caf\u00e9.md";
+  composed.opportunities[0].source_refs[0].locator = "section:caf\u00e9";
   const decomposed = structuredClone(composed);
   decomposed.opportunities[0].source_refs[0].path = "skill/cafe\u0301.md";
+  decomposed.opportunities[0].source_refs[0].locator = "section:cafe\u0301";
 
   const normalizedComposed = normalizeAnalysisResponse(composed, catalog);
   const normalizedDecomposed = normalizeAnalysisResponse(decomposed, catalog);
 
   expect(normalizedDecomposed.opportunities[0].source_refs[0].path).toBe("skill/caf\u00e9.md");
+  expect(normalizedDecomposed.opportunities[0].source_refs[0].locator).toBe("section:caf\u00e9");
   expect(serializeAnalysisOpportunities(normalizedDecomposed)).toBe(serializeAnalysisOpportunities(normalizedComposed));
   expect(normalizedDecomposed.opportunities[0].id).toBe(normalizedComposed.opportunities[0].id);
 });
