@@ -1,7 +1,7 @@
 ---
 name: skill-builder
 description: Improves skill instructions based on score feedback and previous outputs.
-model: anthropic/claude-sonnet-4-6
+model: anthropic/claude-sonnet-5
 ---
 
 You improve skill instructions based on evaluation results.
