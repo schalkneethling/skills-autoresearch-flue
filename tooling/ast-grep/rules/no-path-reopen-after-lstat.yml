@@ -6,9 +6,11 @@ files:
   - packages/skills-autoresearch/src/**/*.ts
 rule:
   all:
-    - pattern: await readFile($PATH, $$$ARGS)
-    - inside:
-        kind: function_declaration
+    - kind: lexical_declaration
+    - has:
+        pattern: await readFile($PATH, $$$ARGS)
+        stopBy: end
+    - follows:
         has:
           pattern: await lstat($PATH)
           stopBy: end

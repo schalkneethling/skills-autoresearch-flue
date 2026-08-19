@@ -230,10 +230,11 @@ pnpm run format
 pnpm run format:check
 ```
 
-Linting is ESLint with TypeScript support.
+The standard lint command runs ESLint with TypeScript support and the ast-grep scan and rule tests through `lint:ast`.
 
 ```bash
 pnpm run lint
+pnpm run lint:ast # run ast-grep scan and rule tests directly
 ```
 
 Run these before pushing.

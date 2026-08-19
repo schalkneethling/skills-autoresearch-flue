@@ -13,6 +13,7 @@ import { EvalAgent, EvalAgentRequest } from "./runner.js";
 import { buildJudgePrompt } from "./prompts/judge-prompt.js";
 import { buildProducePrompt } from "./prompts/produce-prompt.js";
 import { buildResearchPrompt } from "./prompts/research-prompt.js";
+import { readBoundedFileHandle } from "./bounded-file.js";
 import {
   EvalCase,
   EvalScore,
@@ -716,19 +717,11 @@ async function readFilesFromMount(root: string | undefined): Promise<Array<{ pat
         if (!openedMetadata.isFile() || openedMetadata.dev !== metadata.dev || openedMetadata.ino !== metadata.ino) {
           throw new Error(`Mounted file changed while opening or is not a regular file: ${path}`);
         }
-        const buffer = Buffer.alloc(1024 * 1024 + 1);
-        const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-        if (bytesRead > 1024 * 1024) throw new Error(`Mounted file exceeds the 1 MiB limit: ${path}`);
-        const finalMetadata = await handle.stat();
-        if (
-          !finalMetadata.isFile() ||
-          finalMetadata.dev !== openedMetadata.dev ||
-          finalMetadata.ino !== openedMetadata.ino ||
-          finalMetadata.size > 1024 * 1024
-        ) {
-          throw new Error(`Mounted file changed while reading or exceeds the 1 MiB limit: ${path}`);
-        }
-        return { path: relative(root, path), contents: buffer.toString("utf8", 0, bytesRead) };
+        const buffer = await readBoundedFileHandle(handle, openedMetadata, 1024 * 1024, {
+          changed: () => new Error(`Mounted file changed while reading or exceeds the 1 MiB limit: ${path}`),
+          oversized: () => new Error(`Mounted file exceeds the 1 MiB limit: ${path}`)
+        });
+        return { path: relative(root, path), contents: buffer.toString("utf8") };
       } finally {
         await handle.close();
       }
