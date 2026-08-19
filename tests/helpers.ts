@@ -17,11 +17,28 @@ export async function writeFixture(root: string, config: unknown, evals: unknown
   await writeFile(join(root, "evals", "eval-cases.json"), `${JSON.stringify(evals, null, 2)}\n`);
   await writeFile(join(root, "evals", "rubric.md"), "# Rubric\n\nScore the configured dimensions.\n");
   await writeFile(join(root, "reference", "context.md"), "Reference material\n");
-  await Promise.all(
-    ["eval-judge", "skill-builder", "task-producer"].map((role) =>
-      writeFile(join(root, "roles", `${role}.md`), `# ${role}\n`)
-    )
-  );
+  const configuredRoles = referencedRoles(config);
+  await Promise.all(configuredRoles.map((role) => writeFile(join(root, "roles", `${role}.md`), `# ${role}\n`)));
+}
+
+function referencedRoles(config: unknown): string[] {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return [];
+  const value = config as Record<string, unknown>;
+  const roles = value.roles;
+  const tracks = value.tracks;
+  const names = [
+    ...(roles !== null && typeof roles === "object" && !Array.isArray(roles)
+      ? Object.values(roles).filter((role): role is string => typeof role === "string")
+      : []),
+    ...(Array.isArray(tracks)
+      ? tracks.flatMap((track) =>
+          track !== null && typeof track === "object" && !Array.isArray(track) && typeof track.role === "string"
+            ? [track.role]
+            : []
+        )
+      : [])
+  ];
+  return [...new Set(names)].sort();
 }
 
 export const securityConfig = {
