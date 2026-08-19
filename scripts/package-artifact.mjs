@@ -276,6 +276,7 @@ export async function cleanPackageBuildOutput(packageRoot) {
     fail(`Package build output must be a direct, non-symlinked descendant: ${distPath}`);
   }
 
+  // The discarded inventory validates that dist contains only regular files safe to remove.
   await collectRegularFiles(distPath);
   await rm(distPath, { recursive: true, force: false });
   try {
@@ -447,6 +448,16 @@ async function inspectArchive(archivePath, contract) {
   if (!before.isFile() || before.isSymbolicLink()) fail(`Archive must be a regular file: ${archivePath}`);
   if (before.size === 0) fail(`Archive is empty: ${archivePath}`);
 
+  const verboseListing = await runCommand("tar", ["-tvzf", archivePath], {
+    cwd: contract.repositoryRoot,
+    maximumStdoutBytes: TAR_LIST_MAX_BYTES
+  });
+  for (const entry of verboseListing.stdout.split(/\r?\n/u).filter(Boolean)) {
+    const type = entry[0];
+    if (type !== "-" && type !== "d") {
+      fail(`Archive contains a non-regular file entry (${type ?? "unknown"}): ${entry}`);
+    }
+  }
   const listing = await runCommand("tar", ["-tzf", archivePath], {
     cwd: contract.repositoryRoot,
     maximumStdoutBytes: TAR_LIST_MAX_BYTES

@@ -1,9 +1,13 @@
+import { execFile } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+import * as artifact from "../scripts/package-artifact.mjs";
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
-const artifactLibraryUrl = new URL("../scripts/package-artifact.mjs", import.meta.url);
+const execFileAsync = promisify(execFile);
 
 type RootManifest = {
   scripts: Record<string, string>;
@@ -11,19 +15,6 @@ type RootManifest = {
 };
 
 type PackageManifest = { name: string; version: string };
-
-type PackageArtifactLibrary = {
-  PACKAGE_NAME: string;
-  PACKAGE_DIRECTORY: string;
-  PACKED_MANIFEST_PATH: string;
-  canonicalArchiveName(version: string): string;
-  CLEAN_ROOM_PROOF_REQUIREMENTS: {
-    offlineInstall: true;
-    ignoreScripts: true;
-    smoke: { score: number; modelCalls: number };
-    determinization: { opportunities: number; recommendations: number; modelCalls: number; artifactCount: number };
-  };
-};
 
 async function readJson<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, "utf8")) as T;
@@ -50,16 +41,17 @@ test("package artifact tooling and phase-one demo/progress documents have stable
     access(join(repositoryRoot, "docs", "progress", "phase-1-installable-package.md"))
   ]);
 
-  const demo = await readFile(join(repositoryRoot, "scripts", "demo-phase-1-installable-package.mjs"), "utf8");
-  expect(demo).toContain("--keep");
+  const demo = await execFileAsync("node", [
+    join(repositoryRoot, "scripts", "demo-phase-1-installable-package.mjs"),
+    "--help"
+  ]);
+  expect(demo.stdout).toContain("--keep");
 });
 
 test("the package artifact boundary fixes archive identity and proof expectations", async () => {
   const packageManifest = await readJson<PackageManifest>(
     join(repositoryRoot, "packages", "skills-autoresearch", "package.json")
   );
-  const artifact = (await import(artifactLibraryUrl.href)) as PackageArtifactLibrary;
-
   expect(artifact.PACKAGE_NAME).toBe("@schalkneethling/skills-autoresearch");
   expect(artifact.PACKAGE_DIRECTORY).toBe("packages/skills-autoresearch");
   expect(artifact.PACKED_MANIFEST_PATH).toBe("package/package.json");

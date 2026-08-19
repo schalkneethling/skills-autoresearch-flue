@@ -36,7 +36,15 @@ const FIXTURE_COPY_ENTRIES = [
   "seed-skill",
   "workspace/baseline"
 ];
-const PROJECT_SNAPSHOT_ENTRIES = ["config.json", "evals", "input", "reference", "roles", "seed-skill"];
+const PROJECT_SNAPSHOT_ENTRIES = [
+  "config.json",
+  "evals",
+  "input",
+  "reference",
+  "roles",
+  "seed-skill",
+  "workspace/baseline"
+];
 const DEPLOYED_PACKAGE_FILES = ["dist", "catalog", "README.md", "CHANGELOG.md", "LICENSE"];
 
 const HELP = `Prove the packed Skills Autoresearch CLI in an offline clean room.
@@ -420,7 +428,9 @@ export async function runCleanRoomPackageProof({
 
     const after = await snapshotProtectedInputs(projectRoot, installedCatalogRoot);
     if (!isDeepStrictEqual(after, before)) {
-      fail("The skill, configuration, evals, inputs, references, roles, or installed catalog changed during proof.");
+      fail(
+        "The skill, configuration, evals, inputs, references, roles, imported baseline, or installed catalog changed during proof."
+      );
     }
 
     const result = {
@@ -474,7 +484,7 @@ function formatHumanResult(result) {
     `Flue smoke: score ${result.smoke.score.toFixed(3)}; model calls ${result.smoke.modelCalls}`,
     `Determinization: ${result.determinization.opportunities} opportunity; ${result.determinization.recommendations} recommendations; model calls ${result.determinization.modelCalls}`,
     `Artifacts: ${result.determinization.artifactFiles.length} files; report ${result.determinization.report}`,
-    "Protected project inputs and installed catalog: unchanged",
+    "Protected project inputs, imported baseline, and installed catalog: unchanged",
     `Workspace: ${result.workspace.path} (${result.workspace.preserved ? "preserved" : "cleaned"})`
   ].join("\n");
 }

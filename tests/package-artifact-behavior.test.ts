@@ -1,7 +1,9 @@
+import { execFile } from "node:child_process";
 import { access, cp, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import {
   cleanPackageBuildOutput,
@@ -12,6 +14,7 @@ import {
 
 const repositoryRoot = fileURLToPath(new URL("..", import.meta.url));
 const archiveName = "schalkneethling-skills-autoresearch-0.1.0.tgz";
+const execFileAsync = promisify(execFile);
 
 const manifest = {
   name: "@schalkneethling/skills-autoresearch",
@@ -140,6 +143,7 @@ test("package build cleanup removes stale output and refuses symlinked dist dire
 });
 
 test("authoritative packing rebuilds before deriving the packed inventory", async () => {
+  await expect(execFileAsync("npm", ["--version"])).resolves.toBeDefined();
   const temporaryRoot = await realpath(await mkdtemp(join(tmpdir(), "skills-autoresearch-pack-test-")));
   const packageRoot = join(temporaryRoot, "packages", "skills-autoresearch");
   const staleOutput = join(packageRoot, "dist", "stale-output.js");

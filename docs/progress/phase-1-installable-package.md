@@ -35,7 +35,7 @@ The proof then:
 2. runs the Flue smoke workflow with `--no-run-log`, asserts score `0.600`, and asserts zero model calls;
 3. runs static recorded-response determinization without `--catalog-root`;
 4. asserts one opportunity, three deterministic-asset recommendations, zero calls, the expected report, and exactly six output artifacts;
-5. compares before-and-after SHA-256 snapshots of the skill, config, evals, input, reference, roles, and installed catalog.
+5. compares before-and-after SHA-256 snapshots of the skill, config, evals, input, reference, roles, imported baseline, and installed catalog.
 
 Commands have timeouts and bounded captured output so an unexpected child process cannot grow memory indefinitely or hang CI. File reads with explicit limits are checked with `lstat` before allocation and checked again after reading.
 

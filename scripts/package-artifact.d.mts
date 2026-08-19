@@ -32,7 +32,7 @@ export type ValidatedPackageManifest = Record<string, unknown> & {
     "skills-autoresearch": "./dist/bin/skills-autoresearch.js";
     "skills-autoresearch-flue": "./dist/bin/skills-autoresearch-flue.js";
   };
-  dependencies: { "@flue/runtime": "2.0.3"; valibot: "^1.4.2" };
+  dependencies: Record<string, string>;
 };
 
 export type PackageBuildContract = {

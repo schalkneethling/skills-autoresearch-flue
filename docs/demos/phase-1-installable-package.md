@@ -26,6 +26,6 @@ The demo prints the archive's absolute path, SHA-256, byte size, file count, smo
 4. Both `skills-autoresearch` and `skills-autoresearch-flue` run from the resulting installed binary shims and report the packed version.
 5. The Flue smoke path imports the fixture baseline, scores `0.600`, and makes zero model calls.
 6. Recorded-response determinization uses the bundled catalog without `--catalog-root`, finds one opportunity and three recommendations, and writes exactly six artifacts.
-7. Hash snapshots prove the skill, config, evals, input, reference, roles, and installed catalog are byte-identical after both runs.
+7. Hash snapshots prove the skill, config, evals, input, reference, roles, imported baseline, and installed catalog are byte-identical after both runs.
 
 The proof runs with lifecycle scripts disabled and provider credentials removed from child processes. It does not publish to npm or perform credential-backed model validation.
