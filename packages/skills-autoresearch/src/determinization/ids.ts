@@ -17,18 +17,14 @@ function normalizeIdentityText(value: string): string {
   return value.replace(/\r\n?/g, "\n").normalize("NFC").trim().replace(/\s+/gu, " ");
 }
 
-export function isPortableSourcePath(path: string): boolean {
-  return !(
-    path.startsWith("/") ||
-    path.startsWith("\\") ||
-    /^[A-Za-z]:[\\/]/u.test(path) ||
-    path.includes("\\") ||
-    path.split("/").some((segment) => !segment || segment === "." || segment === "..")
-  );
-}
-
 function sourceIdentity(source: { path: string; locator?: string }): string {
-  if (!isPortableSourcePath(source.path)) {
+  if (
+    source.path.startsWith("/") ||
+    source.path.startsWith("\\") ||
+    /^[A-Za-z]:[\\/]/u.test(source.path) ||
+    source.path.includes("\\") ||
+    source.path.split("/").some((segment) => !segment || segment === "." || segment === "..")
+  ) {
     throw new Error(`Stable IDs require a normalized source-relative POSIX path: ${source.path}`);
   }
   return JSON.stringify([source.path.normalize("NFC"), normalizeIdentityText(source.locator ?? "")]);

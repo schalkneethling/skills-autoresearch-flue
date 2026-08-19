@@ -129,8 +129,8 @@ test("Flue runner builds config-driven smoke, research, and determinize payloads
 });
 
 test("Flue runner rejects ambiguous modes and invalid concise overrides", () => {
-  expect(() => parseRunnerArgs([])).toThrow(/smoke, research, or determinize/u);
-  expect(() => parseRunnerArgs(["unknown"])).toThrow(/smoke, research, or determinize/u);
+  expect(() => parseRunnerArgs([])).toThrow(/smoke or research/u);
+  expect(() => parseRunnerArgs(["unknown"])).toThrow(/smoke or research/u);
   expect(() => parseRunnerArgs(["research", "--payload", "{}"])).toThrow(/either/u);
   expect(() => parseRunnerArgs(["research", "--budget-usd=-1"])).toThrow(/non-negative/u);
   expect(() => parseRunnerArgs(["research", "--budget-usd", ""])).toThrow(/non-negative/u);

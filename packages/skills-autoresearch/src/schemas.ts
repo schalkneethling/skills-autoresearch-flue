@@ -33,7 +33,7 @@ export const ProjectConfigSchema = v.object({
   origin_skill: v.optional(v.pipe(v.string(), v.minLength(1))),
   research_start: v.optional(v.picklist(["seed", "empty"])),
   guidance_skill: v.optional(v.pipe(v.string(), v.minLength(1))),
-  target_score: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
+  target_score: v.pipe(v.number(), v.minValue(0)),
   max_iterations: v.pipe(v.number(), v.integer(), v.minValue(1)),
   max_concurrency: v.pipe(v.number(), v.integer(), v.minValue(1)),
   budget_usd: v.optional(v.pipe(v.number(), v.minValue(0))),

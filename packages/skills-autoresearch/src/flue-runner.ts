@@ -8,7 +8,7 @@ import { runFlueAutoresearch, type FlueWorkflowResult } from "./flue-harness.js"
 import { withFlueRoleRuntime } from "./flue-runtime.js";
 import { orchestrateBaseline, type OrchestratorResult, type RunEvent } from "./orchestrator.js";
 import { createRunLog } from "./run-log.js";
-import { normalizeRunOptions, parseBudgetUsd } from "./run-options.js";
+import { normalizeRunOptions } from "./run-options.js";
 import { readPackageVersion } from "./package-resources.js";
 
 export type RunnerMode = "smoke" | "research" | "determinize";
@@ -287,7 +287,7 @@ export function parseRunnerArgs(argv: string[]): RunnerOptions {
   }
 
   if (positionals.length !== 1 || !isRunnerMode(positionals[0])) {
-    throw new Error("Choose a config-driven command: smoke, research, or determinize. Use --help for usage.");
+    throw new Error("Choose a config-driven command: smoke or research, or determinize. Use --help for usage.");
   }
 
   const mode = positionals[0];
@@ -372,6 +372,20 @@ function parsePayload(value: string): Record<string, unknown> {
     throw new Error("--payload must be a JSON object.");
   }
   return payload as Record<string, unknown>;
+}
+
+function parseBudgetUsd(value: string | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value.trim() === "") {
+    throw new Error("--budget-usd must be a non-negative number.");
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error("--budget-usd must be a non-negative number.");
+  }
+  return parsed;
 }
 
 export function formatFlueModelCallPreview(workflow: "autoresearch" | "determinize"): string | undefined {

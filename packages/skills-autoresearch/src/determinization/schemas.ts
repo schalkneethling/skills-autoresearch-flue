@@ -1,6 +1,6 @@
 import * as v from "valibot";
 import { compareCanonicalIds, serializeCanonical, sha256 } from "./canonical.js";
-import { createOpportunityId, createRecommendationId, isPortableSourcePath } from "./ids.js";
+import { createOpportunityId, createRecommendationId } from "./ids.js";
 
 export const DETERMINIZATION_SCHEMA_VERSION = "1.0.0" as const;
 export const DeterminizationSchemaVersionSchema = v.literal(DETERMINIZATION_SCHEMA_VERSION);
@@ -25,7 +25,12 @@ export const LIFECYCLE_STATUS_BY_STAGE = {
 const PortablePathSchema = v.pipe(
   v.string(),
   v.minLength(1),
-  v.check(isPortableSourcePath, "Expected a normalized, source-relative POSIX path")
+  v.check((path) => {
+    if (path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:[\\/]/u.test(path)) return false;
+    if (path.includes("\\")) return false;
+    const segments = path.split("/");
+    return segments.every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+  }, "Expected a normalized, source-relative POSIX path")
 );
 
 export const NonEmptyTextSchema = v.pipe(
@@ -43,7 +48,6 @@ export const SourceReferenceSchema = v.strictObject({
 });
 
 export const AssetRelationshipSchema = v.picklist(["existing", "configurable", "extensible", "new"]);
-export type AssetRelationship = v.InferOutput<typeof AssetRelationshipSchema>;
 export const DeterministicAssetKindSchema = v.picklist([
   "languagetool",
   "vale",

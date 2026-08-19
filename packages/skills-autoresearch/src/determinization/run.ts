@@ -17,6 +17,7 @@ import { createSourceManifest, MAX_DETERMINIZATION_SOURCE_FILE_BYTES, type Sourc
 import type { DeterminizationTransport } from "./transport.js";
 
 const MAX_TOTAL_BYTES = 2 * 1024 * 1024;
+const CATALOG_FILES = ["catalog.json", "javascript-typescript.json", "language.json", "markdown.json"];
 const DETERMINIZER_SYSTEM_PROMPT = "You are the read-only determinizer for an agent-skill evaluation harness.";
 
 export interface RunDeterminizationReportOptions {
@@ -176,8 +177,7 @@ async function prepareInputs(
   projectRoot: string,
   skillDir: string,
   catalogRoot: string,
-  contextRoot: string | undefined,
-  catalogFiles: string[]
+  contextRoot?: string
 ): Promise<PreparedInputs> {
   const selections: SourceSelection[] = [];
   const skillPaths = (await listRegularFiles(skillDir)).filter(
@@ -232,7 +232,7 @@ async function prepareInputs(
       throw new Error("--context-root contains no allowlisted AGENTS.md, README.md, or package.json");
     selections.push({ namespace: "context", root: resolvedContext, paths: contextPaths });
   }
-  selections.push({ namespace: "catalog", root: catalogRoot, paths: catalogFiles });
+  selections.push({ namespace: "catalog", root: catalogRoot, paths: [...CATALOG_FILES] });
 
   // Validate roots, every path component, and current bytes before any selected
   // content is placed in a model prompt.
@@ -270,10 +270,9 @@ export async function runDeterminizationReport(
   const selected = await selectSkill(projectRoot, config, options.skillDir);
   const catalogRoot = resolve(options.catalogRoot ?? resolveBundledCatalogRoot());
   const catalogIndexPath = join(catalogRoot, "catalog.json");
+  await createSourceManifest([{ namespace: "catalog", root: catalogRoot, paths: [...CATALOG_FILES] }]);
   const catalog = await loadDeterministicAssetCatalog(catalogIndexPath);
-  const catalogFiles = ["catalog.json", ...catalog.files];
-  await createSourceManifest([{ namespace: "catalog", root: catalogRoot, paths: catalogFiles }]);
-  const prepared = await prepareInputs(projectRoot, selected.dir, catalogRoot, options.contextRoot, catalogFiles);
+  const prepared = await prepareInputs(projectRoot, selected.dir, catalogRoot, options.contextRoot);
   await assertAnalysisArtifactBoundary(
     options.outputRoot ?? projectLayout(projectRoot).determinizationDir,
     prepared.selections
@@ -281,7 +280,6 @@ export async function runDeterminizationReport(
   const model = options.modelOverride ?? resolveDeterminizerModel(config);
   const request = buildAnalysisRequest(prepared, catalog, model);
   const completion = await options.transport.analyze(request);
-  const expectedAnalysisRequest = buildAnalysisRequest(prepared, catalog, model);
   const result = await writeAnalysisArtifacts({
     outputRoot: options.outputRoot ?? projectLayout(projectRoot).determinizationDir,
     selections: prepared.selections,
@@ -292,7 +290,7 @@ export async function runDeterminizationReport(
       model: { provider: model.provider, name: model.name }
     },
     analysisResponse: completion.response,
-    expectedAnalysisRequest,
+    expectedAnalysisRequest: request,
     transcript: completion.transcript
   });
   const costUsd = completion.costUsd ?? estimateUsageCostUsd(model, completion.usage);
@@ -319,10 +317,9 @@ export async function resumeDeterminizationReport(
   const config = await readConfig(projectRoot);
   const selected = await selectSkill(projectRoot, config, options.skillDir);
   const catalogRoot = resolve(options.catalogRoot ?? resolveBundledCatalogRoot());
+  const prepared = await prepareInputs(projectRoot, selected.dir, catalogRoot, options.contextRoot);
   const model = resolveDeterminizerModel(config);
   const catalog = await loadDeterministicAssetCatalog(join(catalogRoot, "catalog.json"));
-  const catalogFiles = ["catalog.json", ...catalog.files];
-  const prepared = await prepareInputs(projectRoot, selected.dir, catalogRoot, options.contextRoot, catalogFiles);
   const result = await resumeAnalysisArtifacts({
     outputRoot: options.outputRoot ?? projectLayout(projectRoot).determinizationDir,
     selections: prepared.selections,

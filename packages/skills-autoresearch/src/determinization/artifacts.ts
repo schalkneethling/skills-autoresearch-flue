@@ -34,8 +34,6 @@ export interface DeterminizationArtifactPaths {
   transcript: string;
 }
 
-const MAX_DETERMINIZATION_ARTIFACT_BYTES = 4 * 1024 * 1024;
-
 export interface WriteAnalysisArtifactsOptions {
   outputRoot: string;
   selections: SourceSelection[];
@@ -219,28 +217,6 @@ async function assertSafeArtifactFile(path: string): Promise<void> {
   }
 }
 
-async function readBoundedArtifactFile(path: string): Promise<string> {
-  await assertSafeArtifactFile(path);
-  const metadata = await lstat(path);
-  if (metadata.size > MAX_DETERMINIZATION_ARTIFACT_BYTES) {
-    throw new Error(`Determinization artifact exceeds 4 MiB: ${path}`);
-  }
-  const contents = await readFile(path, "utf8");
-  if (Buffer.byteLength(contents) > MAX_DETERMINIZATION_ARTIFACT_BYTES) {
-    throw new Error(`Determinization artifact exceeds 4 MiB: ${path}`);
-  }
-  return contents;
-}
-
-async function readResumeJson(path: string): Promise<{ bytes: string; value: unknown }> {
-  try {
-    const bytes = await readBoundedArtifactFile(path);
-    return { bytes, value: JSON.parse(bytes) as unknown };
-  } catch (error) {
-    throw new Error(`Cannot resume determinization: failed to read or parse ${path}`, { cause: error });
-  }
-}
-
 function assertKnownSourceReferences(
   document: ReturnType<typeof orderAnalysisOpportunities>,
   manifest: SourceManifest
@@ -266,7 +242,7 @@ async function ensureExactFile(outputRoot: string, path: string, contents: strin
     if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
     await assertSafeDirectoryChain(outputRoot, parent, true);
     await assertSafeArtifactFile(path);
-    const existing = await readBoundedArtifactFile(path);
+    const existing = await readFile(path, "utf8");
     if (existing !== contents) {
       throw new Error(`Existing determinization artifact does not match canonical bytes: ${path}`, { cause: error });
     }
@@ -437,9 +413,8 @@ export async function resumeAnalysisArtifacts(
   await assertOutputSeparate(options.outputRoot, options.selections);
   return withReadOnlyInputs(options.selections, async () => {
     const artifactPaths = paths(options.outputRoot);
-    const sourceArtifact = await readResumeJson(artifactPaths.source);
-    const existingSource = sourceArtifact.bytes;
-    const recordedSource = sourceArtifact.value as { analysis?: AnalysisIdentity };
+    const existingSource = await readFile(artifactPaths.source, "utf8");
+    const recordedSource = JSON.parse(existingSource) as { analysis?: AnalysisIdentity };
     if (
       options.expectedModel &&
       (recordedSource.analysis?.model?.provider !== options.expectedModel.provider ||
@@ -452,10 +427,9 @@ export async function resumeAnalysisArtifacts(
       throw new Error("Cannot resume determinization: source or catalog manifest is stale");
     }
     const catalog = await loadDeterministicAssetCatalog(options.catalogIndexPath);
-    const opportunitiesArtifact = await readResumeJson(artifactPaths.opportunities);
-    const opportunitiesBytes = opportunitiesArtifact.bytes;
+    const opportunitiesBytes = await readFile(artifactPaths.opportunities, "utf8");
     const analysis = orderAnalysisOpportunities(
-      validateCanonicalAnalysis(opportunitiesArtifact.value, catalog)
+      validateCanonicalAnalysis(JSON.parse(opportunitiesBytes) as unknown, catalog)
     );
     if (serializeAnalysisOpportunities(analysis) !== opportunitiesBytes) {
       throw new Error("Cannot resume determinization: opportunities.json is not canonical or was modified");
@@ -467,9 +441,8 @@ export async function resumeAnalysisArtifacts(
       source_opportunities_sha256: opportunitiesHash,
       opportunity_ids: analysis.opportunities.map(({ id }) => id)
     };
-    const transcriptArtifact = await readResumeJson(artifactPaths.transcript);
-    const transcriptBytes = transcriptArtifact.bytes;
-    const transcript = parseAnalysisTranscript(transcriptArtifact.value);
+    const transcriptBytes = await readFile(artifactPaths.transcript, "utf8");
+    const transcript = parseAnalysisTranscript(JSON.parse(transcriptBytes) as unknown);
     const expectedRequest = JSON.parse(JSON.stringify(options.expectedAnalysisRequest)) as unknown;
     if (
       transcript.schema_version !== DETERMINIZATION_SCHEMA_VERSION ||
