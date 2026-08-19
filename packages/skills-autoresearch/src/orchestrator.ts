@@ -130,7 +130,7 @@ export async function orchestrateBaseline(options: OrchestrateOptions): Promise<
   const emit = createEventSink(events, options.onEvent);
   const project = await loadProject(runOptions.projectRoot);
   emit({ type: "project-loaded", root: project.root });
-  validateConfiguredFlueRoles(project.config, await loadAvailableFlueRoles());
+  validateConfiguredFlueRoles(project.config, await loadAvailableFlueRoles(project.root));
   const costTracker = new ModelRunCostTracker(
     createModelCallPreview(project, {
       withBaseline: runOptions.withBaseline,

@@ -1,14 +1,34 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ModelRunCostTracker, type ModelCallPreview, type ModelUsage } from "../src/cost.js";
-import { FlueEvalAgent, FlueSkillResearcher, runFlueAutoresearch } from "../src/flue-harness.js";
-import type { RawDeterminizationAnalysis } from "../src/flue-agents.js";
-import type { FlueRoleDispatcher, FlueRoleRequest, FlueRoleResult } from "../src/flue-runtime.js";
-import { buildJudgeModelRequest, buildProduceModelRequest, buildResearchModelRequest } from "../src/model-agent.js";
-import { loadProject, trackForEval } from "../src/project.js";
-import type { EvalAgentRequest } from "../src/runner.js";
-import { createEvalSandbox } from "../src/sandbox.js";
-import type { EvalScore, ModelProduceResponse, SkillResearchPatch } from "../src/schemas.js";
+import {
+  ModelRunCostTracker,
+  type ModelCallPreview,
+  type ModelUsage
+} from "../packages/skills-autoresearch/src/cost.js";
+import {
+  FlueEvalAgent,
+  FlueSkillResearcher,
+  runFlueAutoresearch
+} from "../packages/skills-autoresearch/src/flue-harness.js";
+import type { RawDeterminizationAnalysis } from "../packages/skills-autoresearch/src/flue-agents.js";
+import type {
+  FlueRoleDispatcher,
+  FlueRoleRequest,
+  FlueRoleResult
+} from "../packages/skills-autoresearch/src/flue-runtime.js";
+import {
+  buildJudgeModelRequest,
+  buildProduceModelRequest,
+  buildResearchModelRequest
+} from "../packages/skills-autoresearch/src/model-agent.js";
+import { loadProject, trackForEval } from "../packages/skills-autoresearch/src/project.js";
+import type { EvalAgentRequest } from "../packages/skills-autoresearch/src/runner.js";
+import { createEvalSandbox } from "../packages/skills-autoresearch/src/sandbox.js";
+import type {
+  EvalScore,
+  ModelProduceResponse,
+  SkillResearchPatch
+} from "../packages/skills-autoresearch/src/schemas.js";
 import { score, syntheticConfig, syntheticEvals, tempProject, writeFixture } from "./helpers.js";
 
 type MockRole = "producer" | "judge" | "researcher" | "determinizer";

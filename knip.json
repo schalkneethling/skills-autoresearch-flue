@@ -1,11 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreFiles": ["fixtures/**/*.{js,jsx}"],
+  "ignoreFiles": ["fixtures/**/*.{js,jsx}", "scripts/package-artifact.d.mts"],
   "ignoreDependencies": ["@varlock/1password-plugin", "wrangler"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {
-      "entry": ["src/index.ts", "tests/**/*.test.ts"]
+      "entry": ["tests/**/*.test.ts"]
+    },
+    "packages/skills-autoresearch": {
+      "entry": ["src/index.ts"]
     },
     "compat/flue2-role-boundary": {
       "entry": ["src/roles.ts", "tests/**/*.test.ts"]

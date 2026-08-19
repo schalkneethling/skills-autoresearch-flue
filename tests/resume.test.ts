@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { aggregateScores } from "../src/aggregate.js";
+import { aggregateScores } from "../packages/skills-autoresearch/src/aggregate.js";
 import {
   createResearchSnapshotManifest,
   findUnexpectedScoreFiles,
@@ -9,7 +9,7 @@ import {
   inspectResearchArtifact,
   inspectScoreArtifact,
   inspectSummaryArtifact
-} from "../src/resume.js";
+} from "../packages/skills-autoresearch/src/resume.js";
 import { syntheticConfig, syntheticEvals, score, tempProject } from "./helpers.js";
 
 const evalCase = syntheticEvals.evals[0];

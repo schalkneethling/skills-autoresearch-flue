@@ -1,5 +1,6 @@
-dist/
+**/dist/
 .flue-dist/
 node_modules/
+.pnpm-store/
 fixtures/baseline/
 pnpm-lock.yaml

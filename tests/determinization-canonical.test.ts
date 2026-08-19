@@ -1,11 +1,14 @@
-import { canonicalSha256, serializeCanonical } from "../src/determinization/canonical.js";
-import { createOpportunityId, createRecommendationId } from "../src/determinization/ids.js";
+import { canonicalSha256, serializeCanonical } from "../packages/skills-autoresearch/src/determinization/canonical.js";
+import {
+  createOpportunityId,
+  createRecommendationId
+} from "../packages/skills-autoresearch/src/determinization/ids.js";
 import {
   canonicalAnalysisSha256,
   orderAnalysisOpportunities,
   parseAnalysisOpportunities,
   serializeAnalysisOpportunities
-} from "../src/determinization/schemas.js";
+} from "../packages/skills-autoresearch/src/determinization/schemas.js";
 
 test("canonical JSON normalizes Unicode and line endings, sorts keys by code point, and writes one final LF", () => {
   const composed = serializeCanonical({ "\u{1f600}": "e\u0301\r\nline\r", a: 1, Z: [2, 1] });

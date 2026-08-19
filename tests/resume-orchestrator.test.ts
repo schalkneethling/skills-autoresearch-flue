@@ -1,9 +1,18 @@
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { ModelClient, ModelCompletion, ModelEvalAgent, ModelRequest } from "../src/model-agent.js";
-import { copySkillSnapshot, orchestrateBaseline, SkillResearcher } from "../src/orchestrator.js";
-import { createResearchSnapshotManifest } from "../src/resume.js";
-import { EvalAgent } from "../src/runner.js";
+import {
+  ModelClient,
+  ModelCompletion,
+  ModelEvalAgent,
+  ModelRequest
+} from "../packages/skills-autoresearch/src/model-agent.js";
+import {
+  copySkillSnapshot,
+  orchestrateBaseline,
+  SkillResearcher
+} from "../packages/skills-autoresearch/src/orchestrator.js";
+import { createResearchSnapshotManifest } from "../packages/skills-autoresearch/src/resume.js";
+import { EvalAgent } from "../packages/skills-autoresearch/src/runner.js";
 import { score, syntheticConfig, syntheticEvals, tempProject, writeFixture } from "./helpers.js";
 
 class QueueModelClient implements ModelClient {

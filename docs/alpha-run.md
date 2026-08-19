@@ -4,9 +4,9 @@ The model-backed alpha run uses Varlock to inject provider credentials into the 
 
 The current alpha harness is Flue-first:
 
-- `src/flue-agents.ts` defines addressable producer, judge, researcher, and determinizer agents for Flue 2.0.3.
-- `src/flue-runtime.ts` owns the application-level `start()`/`init()`/`dispatch()`/`read()` boundary.
-- `src/flue-harness.ts` adapts role dispatch into the autoresearch loop, and `src/flue-runner.ts` owns CLI lifecycle.
+- `packages/skills-autoresearch/src/flue-agents.ts` defines addressable producer, judge, researcher, and determinizer agents for Flue 2.0.3.
+- `packages/skills-autoresearch/src/flue-runtime.ts` owns the application-level `start()`/`init()`/`dispatch()`/`read()` boundary.
+- `packages/skills-autoresearch/src/flue-harness.ts` adapts role dispatch into the autoresearch loop, and `packages/skills-autoresearch/src/flue-runner.ts` owns CLI lifecycle.
 - `fixtures/projects/release-notes-alpha/` is the committed alpha fixture.
 
 Role Markdown files are application-level configured labels and prompt context; they do not register Flue agents. Project-local roles may live in either supported directory; discovery combines both locations, removes duplicates, and sorts the role names:
@@ -88,14 +88,14 @@ For a live Flue-backed analysis with Anthropic credentials, build and run:
 
 ```bash
 pnpm run build
-varlock run -- node dist/src/flue-runner.js determinize \
+varlock run -- node packages/skills-autoresearch/dist/bin/skills-autoresearch-flue.js determinize \
   --project fixtures/projects/release-notes-alpha
 ```
 
 Determinization resume is available only through the direct `determinize report` CLI, not the Flue-backed `determinize` command. It validates current inputs and re-renders the existing immutable `opportunities.json` without another model call:
 
 ```bash
-node dist/src/cli.js determinize report \
+node packages/skills-autoresearch/dist/bin/skills-autoresearch.js determinize report \
   --project fixtures/projects/release-notes-alpha \
   --resume
 ```

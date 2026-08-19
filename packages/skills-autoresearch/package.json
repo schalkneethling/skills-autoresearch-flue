@@ -1,0 +1,50 @@
+{
+  "name": "@schalkneethling/skills-autoresearch",
+  "version": "0.1.0",
+  "description": "CLI harness for autoresearching and evaluating agent skills.",
+  "keywords": [
+    "agent-skills",
+    "autoresearch",
+    "cli",
+    "evaluation",
+    "flue"
+  ],
+  "homepage": "https://github.com/schalkneethling/skills-autoresearch-flue#readme",
+  "bugs": {
+    "url": "https://github.com/schalkneethling/skills-autoresearch-flue/issues"
+  },
+  "license": "MIT",
+  "author": "Schalk Neethling",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/schalkneethling/skills-autoresearch-flue.git",
+    "directory": "packages/skills-autoresearch"
+  },
+  "type": "module",
+  "exports": {},
+  "bin": {
+    "skills-autoresearch": "./dist/bin/skills-autoresearch.js",
+    "skills-autoresearch-flue": "./dist/bin/skills-autoresearch-flue.js"
+  },
+  "files": [
+    "dist",
+    "catalog/deterministic-assets",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@flue/runtime": "2.0.3",
+    "valibot": "^1.4.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

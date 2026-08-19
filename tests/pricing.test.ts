@@ -1,4 +1,4 @@
-import { pricingForModel } from "../src/pricing.js";
+import { pricingForModel } from "../packages/skills-autoresearch/src/pricing.js";
 
 test("pricingForModel matches only intended full Anthropic model names", () => {
   expect(pricingForModel({ provider: "anthropic", name: "claude-haiku-4-5" })).toBeDefined();

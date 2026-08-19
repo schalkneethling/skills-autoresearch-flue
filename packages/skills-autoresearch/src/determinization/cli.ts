@@ -16,7 +16,7 @@ export function determinizationUsage(): string {
     "  --context-root <dir>   Optional external repository context (read-only allowlist).",
     "  --response-file <file> Use a recorded structured response without a model call.",
     "  --model-client <name>  Model client for analysis. Supported: anthropic.",
-    "  --catalog-root <dir>   Deterministic-asset catalog root. Defaults to ./catalog/deterministic-assets.",
+    "  --catalog-root <dir>   Override the bundled deterministic-asset catalog root.",
     "  --output <dir>         Artifact root. Defaults to workspace/determinization.",
     "  --resume               Re-render from validated immutable opportunities without a model call.",
     "  --json                 Print the structured result as JSON.",
