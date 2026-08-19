@@ -39,7 +39,7 @@
     "valibot": "^1.4.2",
     "varlock": "^1.16.0",
     "vitest": "^4.1.10",
-    "wrangler": "^4.119.0"
+    "wrangler": "^4.123.0"
   },
   "engines": {
     "node": ">=24"
