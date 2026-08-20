@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "0.83.0",
+    "@earendil-works/pi-ai": "0.84.2",
     "@flue/runtime": "2.0.3",
     "valibot": "1.4.2"
   },
