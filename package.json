@@ -33,7 +33,7 @@
     "@types/node": "^26.2.0",
     "@varlock/1password-plugin": "^2.0.3",
     "eslint": "^10.8.1",
-    "knip": "^6.32.0",
+    "knip": "^6.32.2",
     "prettier": "^3.9.6",
     "publint": "0.3.23",
     "typescript": "^6.0.3",
