@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@ast-grep/cli": "0.45.1",
-    "@earendil-works/pi-ai": "0.83.0",
+    "@earendil-works/pi-ai": "0.84.2",
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.2.0",
     "@varlock/1password-plugin": "^2.0.3",
