@@ -35,7 +35,7 @@
     "eslint": "^10.8.1",
     "knip": "^6.32.0",
     "prettier": "^3.9.6",
-    "publint": "0.3.23",
+    "publint": "0.3.24",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
     "valibot": "^1.4.2",
