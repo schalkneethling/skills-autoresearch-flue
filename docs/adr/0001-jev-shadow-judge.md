@@ -23,6 +23,10 @@ A model that returns typed judgments and probability distributions rather than g
 
 Add Jev as a **shadow judge**: it runs alongside the existing Claude Judge, its output is recorded, and it has **no gating effect** on the loop. `EvalScore`, aggregation, regression detection, best-iteration selection and target comparison stay exactly as they are.
 
+### Failure isolation
+
+The shadow judge is best-effort. A failed Jev request, a response that fails schema validation, or a failed shadow artifact write must never alter or discard the Claude Judge result, and must never stop the loop from completing. Each of those failures is caught at the shadow-judge boundary and recorded as a failed shadow status, with the reason, in the shadow artifact; a run with no key configured records a skipped status. When the artifact write itself is what failed, the failure is surfaced through the run log instead, since there is nothing left to write the status into. Caller-initiated aborts are the exception: they propagate as they do for the Judge.
+
 ### Shape of the shadow request
 
 For each producer output that the Judge scores, the shadow judge issues one Jev request whose question set is built in code from the eval case:
@@ -30,6 +34,8 @@ For each producer output that the Judge scores, the shadow judge issues one Jev 
 - one Score question per entry in `evalCase.scoring_dimensions` (`packages/skills-autoresearch/src/schemas.ts:45-49`);
 - one Noul question per bullet of the project's `evals/rubric.md`;
 - one Noul question per entry of the `must_include` expectation, where the eval case declares one. `expectations` is an open record (`packages/skills-autoresearch/src/schemas.ts:53`), so the code must tolerate its absence.
+
+Question keys are deterministic and prefixed by their source (scoring dimension, rubric bullet, or `must_include` entry), so a dimension id can never overwrite a rubric or expectation question that happens to share its name, and the same eval case yields the same keys on every run. Keys are for code only; the docs state that question IDs are not sent to the model (<https://docs.typesafe.ai/primitives.md>). Before the request is issued, the builder checks the full generated set for duplicate keys and rejects the question set on any collision rather than letting a later entry silently replace an earlier one. A rejected question set is a shadow failure under the isolation rule above. The exact key format is to be decided in implementation.
 
 `state` carries the producer output plus the relevant rubric and reference text, filtered in code. Jev's documented budget is 64k tokens per request with 32k for `state` plus the longest single question (<https://docs.typesafe.ai/models.md>), which is far tighter than the harness's existing 180,000-token prompt budget in `checkedModelRequest` (`packages/skills-autoresearch/src/model-agent.ts:762-779`), so the shadow judge needs its own bound rather than reuse of that one.
 
@@ -39,7 +45,7 @@ How a Jev Score maps onto a dimension's `max_score` is deliberately left open. T
 
 Because the question set is constructed in code, the expected answer shape is known before the request is sent. Two schemas follow from that, both owned by this repository:
 
-1. **A response schema derived from the question set.** Every expected question key present, the correct answer type for each key (a Score answer for dimension questions, a Noul answer for rubric and expectation questions), probabilities and confidence within range, and no unknown keys. This mirrors what the Judge path already does: `parseWithSchema` runs a Valibot `safeParse` and throws a labelled error on failure (`packages/skills-autoresearch/src/schemas.ts:153-165`), and `validateEvalScore` additionally rejects dimensions the eval case did not declare (`packages/skills-autoresearch/src/score.ts:19-35`). The determinization path shows the stricter form to copy, rejecting unknown keys outright via `exactKeys` (`packages/skills-autoresearch/src/determinization/analyzer.ts:115`).
+1. **A response schema derived from the question set.** Every expected question key present, the correct answer type for each key (a Score answer for dimension questions, a Noul answer for rubric and expectation questions), per-type value checks, and no unknown keys. A Score answer validates `confidence` within [0, 1] and each entry of `probabilities` within [0, 1]; a Noul answer validates `noul` within [0, 1] and carries no `confidence` (<https://docs.typesafe.ai/confidence.md>, <https://docs.typesafe.ai/api.md>). The docs do not state that `probabilities` sum to 1, so the schema does not assert it. This mirrors what the Judge path already does: `parseWithSchema` runs a Valibot `safeParse` and throws a labelled error on failure (`packages/skills-autoresearch/src/schemas.ts:153-165`), and `validateEvalScore` additionally rejects dimensions the eval case did not declare (`packages/skills-autoresearch/src/score.ts:19-35`). The determinization path shows the stricter form to copy, rejecting unknown keys outright via `exactKeys` (`packages/skills-autoresearch/src/determinization/analyzer.ts:115`).
 
 2. **An artifact schema for the persisted shadow record**, covering the audit record for one eval and the per-dimension agreement summary. Determinization artifacts carry a `schema_version` literal (`packages/skills-autoresearch/src/determinization/artifacts.ts:72`) while `EvalScoreSchema` does not; the shadow artifact should follow the versioned determinization convention, since it is a new artifact with no back-compatibility debt. Field names are to be decided in implementation.
 
